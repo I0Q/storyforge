@@ -138,7 +138,7 @@ class Record:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--manifest', default='manifests/assets.yaml')
-    ap.add_argument('--outdir', default='assets/sfx/freesound')
+    ap.add_argument('--outdir', default='assets/sfx')
     ap.add_argument('--index', default='assets/credits/index.jsonl')
     ap.add_argument('--limit', type=int, default=200)
     ap.add_argument('--dry-run', action='store_true')
