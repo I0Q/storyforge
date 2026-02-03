@@ -48,10 +48,12 @@ def main() -> None:
 
     outdir = Path(args.outdir).resolve()
 
-    # Fetch index.jsonl first
-    index_rel = args.index
-    index_url = urljoin(base, index_rel)
-    index_path = outdir / index_rel
+    # Fetch index.jsonl first.
+    # URL is relative to the *assets base*.
+    index_url = urljoin(base, args.index)
+
+    # Always write locally into repo-style path so tooling is consistent.
+    index_path = outdir / "assets/credits/index.jsonl"
     index_path.parent.mkdir(parents=True, exist_ok=True)
     _download(index_url, index_path)
 
@@ -89,8 +91,14 @@ def main() -> None:
 
     t0 = time.time()
 
-    def task(rel: str) -> str:
-        url = urljoin(base, rel)
+    def task(local_path: str) -> str:
+        # local_path is like 'assets/sfx/...' but base already points at .../assets/
+        rel = local_path
+        if rel.startswith('assets/'):
+            rel_url = rel[len('assets/'):]
+        else:
+            rel_url = rel
+        url = urljoin(base, rel_url)
         out = outdir / rel
         _download(url, out)
         return rel
