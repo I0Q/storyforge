@@ -181,63 +181,64 @@ def main() -> None:
         for snd in results:
             if downloaded >= args.limit or got >= per_query_limit:
                 break
-                lic_url = snd.get('license') or ''
-                if not allowed_license(lic_url, allowed):
-                    continue
 
-                previews = snd.get('previews') or {}
-                dl = None
-                for k in prefer:
-                    if k in previews:
-                        dl = previews[k]
-                        break
-                if not dl:
-                    continue
+            lic_url = snd.get('license') or ''
+            if not allowed_license(lic_url, allowed):
+                continue
 
-                sid = str(snd.get('id'))
-                title = snd.get('name') or f'freesound-{sid}'
-                user = snd.get('username') or 'unknown'
+            previews = snd.get('previews') or {}
+            dl = None
+            for k in prefer:
+                if k in previews:
+                    dl = previews[k]
+                    break
+            if not dl:
+                continue
 
-                ext = '.mp3' if 'mp3' in (dl or '') else '.ogg'
-                fname = f"fs-{sid}__{slug(title)}__{slug(user)}__{normalize_license(lic_url).lower()}{ext}"
-                dest = outdir / fname
+            sid = str(snd.get('id'))
+            title = snd.get('name') or f'freesound-{sid}'
+            user = snd.get('username') or 'unknown'
 
-                if dest.exists() and dest.stat().st_size > 0:
-                    got += 1
-                    continue
+            ext = '.mp3' if 'mp3' in (dl or '') else '.ogg'
+            fname = f"fs-{sid}__{slug(title)}__{slug(user)}__{normalize_license(lic_url).lower()}{ext}"
+            dest = outdir / fname
 
-                if args.dry_run:
-                    print('DRY', qid, sid, title, dl)
-                    got += 1
-                    continue
-
-                try:
-                    http_download(dl, dest)
-                except Exception as e:
-                    print('WARN download failed', sid, e, file=sys.stderr)
-                    continue
-
-                h = sha256_file(dest)
-                rec = Record(
-                    kind='sfx',
-                    source='freesound',
-                    id=sid,
-                    title=title,
-                    creator=user,
-                    license=normalize_license(lic_url),
-                    license_url=lic_url,
-                    source_url=snd.get('url') or f'https://freesound.org/s/{sid}/',
-                    download_url=dl,
-                    local_path=str(dest.relative_to(root)),
-                    sha256=h,
-                    tags=list(set((q.get('tags') or []) + (snd.get('tags') or [])))[:40],
-                    fetched_at=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                )
-                index_path.open('a', encoding='utf-8').write(json.dumps(rec.__dict__) + '\n')
-
-                downloaded += 1
+            if dest.exists() and dest.stat().st_size > 0:
                 got += 1
-                print(f"OK {downloaded}/{args.limit} {qid} {sid} {dest.name}")
+                continue
+
+            if args.dry_run:
+                print('DRY', qid, sid, title, dl)
+                got += 1
+                continue
+
+            try:
+                http_download(dl, dest)
+            except Exception as e:
+                print('WARN download failed', sid, e, file=sys.stderr)
+                continue
+
+            h = sha256_file(dest)
+            rec = Record(
+                kind='sfx',
+                source='freesound',
+                id=sid,
+                title=title,
+                creator=user,
+                license=normalize_license(lic_url),
+                license_url=lic_url,
+                source_url=snd.get('url') or f'https://freesound.org/s/{sid}/',
+                download_url=dl,
+                local_path=str(dest.relative_to(root)),
+                sha256=h,
+                tags=list(set((q.get('tags') or []) + (snd.get('tags') or [])))[:40],
+                fetched_at=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            )
+            index_path.open('a', encoding='utf-8').write(json.dumps(rec.__dict__) + '\n')
+
+            downloaded += 1
+            got += 1
+            print(f"OK {downloaded}/{args.limit} {qid} {sid} {dest.name}")
 
         time.sleep(0.35)
 
