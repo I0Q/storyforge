@@ -1,29 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BUCKET="${STORYFORGE_ASSETS_BUCKET:-storyforge-assets}"
-REGION="${STORYFORGE_ASSETS_REGION:-sfo3}"
-PREFIX="${STORYFORGE_ASSETS_PREFIX:-assets}"
-OUTDIR="${STORYFORGE_ASSETS_OUTDIR:-assets}"
+# Public, no-auth fetch. Uses credits index as the canonical file list.
 
-ENDPOINT="https://${REGION}.digitaloceanspaces.com"
+BASE="${STORYFORGE_ASSETS_BASE:-https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/}"
+OUTDIR="${STORYFORGE_ASSETS_OUTDIR:-.}"
 
-if ! command -v aws >/dev/null; then
-  echo "ERROR: awscli not installed. Install awscli first." >&2
-  exit 1
-fi
+echo "Fetching Storyforge assets over HTTPS..."
+echo "  base:   $BASE"
+echo "  outdir: $OUTDIR"
 
-mkdir -p "$OUTDIR"
-
-echo "Syncing Storyforge assets from DigitalOcean Spaces (public)..."
-echo "  s3://${BUCKET}/${PREFIX} -> ${OUTDIR}"
-
-ws() {
-  AWS_EC2_METADATA_DISABLED=true AWS_DEFAULT_REGION=us-east-1 \
-    aws --endpoint-url "$ENDPOINT" --region us-east-1 "$@"
-}
-
-# Public bucket: unsigned requests
-ws s3 sync "s3://${BUCKET}/${PREFIX}" "$OUTDIR" --no-sign-request
+python3 ./tools/fetch_assets_http.py --base "$BASE" --outdir "$OUTDIR"
 
 echo "Done."
