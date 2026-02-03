@@ -178,9 +178,9 @@ def main() -> None:
         if not results:
             continue
 
-            for snd in results:
-                if downloaded >= args.limit or got >= per_query_limit:
-                    break
+        for snd in results:
+            if downloaded >= args.limit or got >= per_query_limit:
+                break
                 lic_url = snd.get('license') or ''
                 if not allowed_license(lic_url, allowed):
                     continue
