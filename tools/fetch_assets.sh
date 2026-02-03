@@ -18,6 +18,12 @@ mkdir -p "$OUTDIR"
 echo "Syncing Storyforge assets from DigitalOcean Spaces (public)..."
 echo "  s3://${BUCKET}/${PREFIX} -> ${OUTDIR}"
 
-aws --endpoint-url "$ENDPOINT" s3 sync "s3://${BUCKET}/${PREFIX}" "$OUTDIR" --no-sign-request
+a ws() {
+  AWS_EC2_METADATA_DISABLED=true AWS_DEFAULT_REGION=us-east-1 \
+    aws --endpoint-url "$ENDPOINT" --region us-east-1 "$@"
+}
+
+# Public bucket: unsigned requests
+ws s3 sync "s3://${BUCKET}/${PREFIX}" "$OUTDIR" --no-sign-request
 
 echo "Done."
