@@ -36,7 +36,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default=os.environ.get("STORYFORGE_ASSETS_BASE") or "https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/")
     ap.add_argument("--outdir", default=os.environ.get("STORYFORGE_ASSETS_OUTDIR") or ".")
-    ap.add_argument("--index", default="assets/credits/index.jsonl")
+    # Path relative to the assets base URL
+    ap.add_argument("--index", default="credits/index.jsonl")
     ap.add_argument("--max", type=int, default=0, help="Limit number of files (0=all)")
     ap.add_argument("--workers", type=int, default=12)
     args = ap.parse_args()
@@ -56,7 +57,7 @@ def main() -> None:
 
     # Also fetch SOURCES.md if present
     try:
-        _download(urljoin(base, "assets/credits/SOURCES.md"), outdir / "assets/credits/SOURCES.md")
+        _download(urljoin(base, "credits/SOURCES.md"), outdir / "assets/credits/SOURCES.md")
     except Exception:
         pass
 
