@@ -1,2 +1,18 @@
 # storyforge
 Storyforge: a GPU-accelerated, open-source story audio engine for generating narrated bedtime stories with distinct character voices, background music, and sound effects from a simple script/markup.
+
+## Assets
+
+Audio assets are **not committed** to this repository.
+
+They live in a public DigitalOcean Spaces bucket and can be fetched after cloning:
+
+```bash
+./tools/fetch_assets.sh
+```
+
+Environment overrides:
+- `STORYFORGE_ASSETS_BUCKET` (default `storyforge-assets`)
+- `STORYFORGE_ASSETS_REGION` (default `sfo3`)
+- `STORYFORGE_ASSETS_PREFIX` (default `assets`)
+- `STORYFORGE_ASSETS_OUTDIR` (default `assets`)
