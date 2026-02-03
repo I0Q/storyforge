@@ -1,0 +1,80 @@
+# Storyforge Voice Roster (placeholder reference clips)
+#
+# Color-coded codenames + gender + short description.
+# These entries point at open-licensed/public datasets (placeholder refs only).
+#
+# Reference audio locations (DigitalOcean Spaces):
+#   https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/
+
+voices:
+  # --- NARRATORS ---
+  - id: ruby
+    name: Ruby
+    sex: female
+    role: narrator
+    description: "Warm, clear US English narrator; good default bedtime tone."
+    source: cmu_arctic
+    speaker_id: slt
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/slt/ref.wav
+    tags: [narrator, warm, clear, us]
+
+  - id: sapphire
+    name: Sapphire
+    sex: female
+    role: narrator
+    description: "Slightly brighter US English narrator; good for youthful story tone."
+    source: cmu_arctic
+    speaker_id: clb
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/clb/ref.wav
+    tags: [narrator, bright, us]
+
+  # --- CHARACTERS (MALE) ---
+  - id: onyx
+    name: Onyx
+    sex: male
+    role: character
+    description: "Deeper US English male voice; steady and calm."
+    source: cmu_arctic
+    speaker_id: bdl
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/bdl/ref.wav
+    tags: [character, male, deep, us]
+
+  - id: slate
+    name: Slate
+    sex: male
+    role: character
+    description: "Mid-range US English male voice; friendly, flexible."
+    source: cmu_arctic
+    speaker_id: rms
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/rms/ref.wav
+    tags: [character, male, mid, us]
+
+  - id: moss
+    name: Moss
+    sex: male
+    role: character
+    description: "Scottish-accent English male; great for whimsical side characters."
+    source: cmu_arctic
+    speaker_id: awb
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/awb/ref.wav
+    tags: [character, male, scottish, accent]
+
+  - id: copper
+    name: Copper
+    sex: male
+    role: character
+    description: "Canadian-accent English male; gentle, story-friendly."
+    source: cmu_arctic
+    speaker_id: jmk
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/jmk/ref.wav
+    tags: [character, male, canadian, accent]
+
+  - id: ember
+    name: Ember
+    sex: male
+    role: character
+    description: "Indian-accent English male; energetic but controllable for bedtime."
+    source: cmu_arctic
+    speaker_id: ksp
+    ref_url: https://storyforge-assets.sfo3.digitaloceanspaces.com/assets/voices/refs/cmu_arctic/ksp/ref.wav
+    tags: [character, male, indian, accent]

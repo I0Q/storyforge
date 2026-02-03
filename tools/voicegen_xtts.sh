@@ -59,8 +59,9 @@ OUT_BASENAME="$(basename "$OUT")"
 
 # Run
 
-docker run --rm \
+docker run --rm -i \
   "${GPU_ARGS[@]}" \
+  -e COQUI_TOS_AGREED=1 \
   -e TEXT="$TEXT" \
   -e LANG="$LANG" \
   -e MODEL="$MODEL_NAME" \

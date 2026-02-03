@@ -2,6 +2,7 @@
 assets/music/
 assets/sfx/
 assets/narrators/
+assets/voices/
 
 # But keep credits + manifests in repo
 !assets/credits/
