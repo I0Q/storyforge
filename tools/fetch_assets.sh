@@ -3,27 +3,28 @@ set -euo pipefail
 
 BUCKET="${STORYFORGE_ASSETS_BUCKET:-storyforge-assets}"
 REGION="${STORYFORGE_ASSETS_REGION:-sfo3}"
-PREFIX="${STORYFORGE_ASSETS_PREFIX:-assets}"
+OBJECT_KEY="${STORYFORGE_ASSETS_OBJECT:-assets.tar.gz}"
 OUTDIR="${STORYFORGE_ASSETS_OUTDIR:-assets}"
 
-ENDPOINT="https://${REGION}.digitaloceanspaces.com"
-
-if ! command -v aws >/dev/null; then
-  echo "ERROR: awscli not installed. Install awscli first." >&2
-  exit 1
-fi
+URL="https://${BUCKET}.${REGION}.digitaloceanspaces.com/${OBJECT_KEY}"
 
 mkdir -p "$OUTDIR"
 
-echo "Downloading Storyforge assets from DigitalOcean Spaces..."
-echo "  bucket: $BUCKET"
-echo "  endpoint: $ENDPOINT"
-echo "  prefix: $PREFIX"
-echo "  outdir: $OUTDIR"
+tmp=$(mktemp -t storyforge-assets-XXXXXX.tar.gz)
+trap 'rm -f "$tmp"' EXIT
 
-a ws() { aws --endpoint-url "$ENDPOINT" "$@"; }
+echo "Downloading assets archive: $URL"
 
-# Public bucket: do unsigned requests
-ws s3 sync "s3://${BUCKET}/${PREFIX}" "$OUTDIR" --no-sign-request
+if command -v curl >/dev/null; then
+  curl -fL --retry 3 --retry-delay 2 -o "$tmp" "$URL"
+elif command -v wget >/dev/null; then
+  wget -O "$tmp" "$URL"
+else
+  echo "ERROR: need curl or wget" >&2
+  exit 1
+fi
+
+echo "Extracting into: $OUTDIR"
+tar -xzf "$tmp" -C "$OUTDIR"
 
 echo "Done."
