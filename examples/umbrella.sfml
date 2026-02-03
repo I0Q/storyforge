@@ -1,0 +1,23 @@
+@sfml: 0.1
+@title: The Umbrella of Paper Stars
+@mix target_lufs=-16 truepeak_db=-1.0
+@defaults music_gain_db=-20 ambience_gain_db=-24 sfx_gain_db=-10
+
+@voice NARRATOR sex=female voice_id=ivory
+@voice MIRA sex=female voice_id=amber
+@voice CLOCKMAKER sex=male voice_id=onyx
+
+@ambience id=amb_rain_soft gain_db=-24 loop=true fade_in=2.0
+@music id=music_sb_echoes_soft gain_db=-18 loop=true fade_in=2.0
+
+NARRATOR: The rain was gentle tonight—like a blanket for the city.
+SFX: id=rain_window_tap at=last_start +0.40 gain_db=-14
+
+MIRA: (whisper) {intonation kind=question}Do you see them?{/intonation}
+PAUSE: 0.5
+
+NARRATOR: {prosody rate=0.92}Tiny clockwork fireflies{/prosody} drifted past the window.
+SFX: id=soft_chime at=last_end +0.10 gain_db=-12
+
+@music off
+@ambience off

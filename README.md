@@ -16,3 +16,8 @@ Environment overrides:
 - `STORYFORGE_ASSETS_REGION` (default `sfo3`)
 - `STORYFORGE_ASSETS_PREFIX` (default `assets`)
 - `STORYFORGE_ASSETS_OUTDIR` (default `assets`)
+
+
+## Markup
+
+See `docs/storyforge-markup.md` and `examples/umbrella.sfml`.
