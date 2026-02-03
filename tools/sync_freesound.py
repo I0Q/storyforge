@@ -76,21 +76,46 @@ def http_download(url: str, out: Path, timeout: int = 60) -> None:
 
 
 def search_freesound(token: str, query: str, max_duration: int, page: int, page_size: int = 50) -> dict:
-    url = 'https://freesound.org/apiv2/search/text/'
+    # Freesound pagination uses /apiv2/search/ ("text" endpoint's next links currently point there)
+    url = 'https://freesound.org/apiv2/search/'
     params = {
         'query': query,
+            # Freesound's /apiv2/search/ endpoint expects a weights param (even empty) for pagination.
+        'weights': '',
         'page': page,
         'page_size': page_size,
         'fields': 'id,name,username,license,duration,filesize,tags,url,previews',
         'sort': 'rating_desc',
         'filter': f'(license:"Creative Commons 0" OR license:"Attribution") duration:[0 TO {max_duration}]',
     }
-    headers = {'Authorization': f'Token {token}'}
-    r = requests.get(url, params=params, headers=headers, timeout=30)
-    if r.status_code == 429:
-        raise RuntimeError('Freesound rate limited (429). Try again later or reduce requests.')
-    r.raise_for_status()
-    return r.json()
+    headers = {
+        'Authorization': f'Token {token}',
+        'User-Agent': 'storyforge-assets-sync/0.1',
+    }
+
+    # Freesound sometimes returns 404 for /apiv2/search/ unless certain params are present.
+    # Fallback to the legacy /apiv2/search/text/ endpoint if needed.
+    def _try(fetch_url: str) -> dict:
+        r = requests.get(fetch_url, params=params, headers=headers, timeout=30)
+        if r.status_code == 429:
+            raise RuntimeError('Freesound rate limited (429). Try again later or reduce requests.')
+        if r.status_code == 404:
+            raise FileNotFoundError(f"HTTP 404 for {r.url}")
+        r.raise_for_status()
+        return r.json()
+
+    last_exc: Exception | None = None
+    for attempt in range(1, 6):
+        try:
+            try:
+                return _try(url)
+            except FileNotFoundError:
+                return _try('https://freesound.org/apiv2/search/text/')
+        except Exception as e:
+            last_exc = e
+            time.sleep(min(6.0, 0.7 * attempt))
+
+    raise last_exc  # type: ignore[misc]
 
 
 @dataclass
@@ -144,13 +169,14 @@ def main() -> None:
             break
         qid = q['id']
         qtxt = q['query']
+        # NOTE: Freesound's pagination URLs are inconsistent when using complex filters.
+        # To keep the sync robust, we only fetch the first page per query.
         page = 1
         got = 0
-        while downloaded < args.limit and got < per_query_limit:
-            res = search_freesound(token, qtxt, max_duration=max_duration, page=page)
-            results = res.get('results') or []
-            if not results:
-                break
+        res = search_freesound(token, qtxt, max_duration=max_duration, page=page)
+        results = res.get('results') or []
+        if not results:
+            continue
 
             for snd in results:
                 if downloaded >= args.limit or got >= per_query_limit:
@@ -213,8 +239,7 @@ def main() -> None:
                 got += 1
                 print(f"OK {downloaded}/{args.limit} {qid} {sid} {dest.name}")
 
-            page += 1
-            time.sleep(0.35)
+        time.sleep(0.35)
 
     print(f"Done. Downloaded {downloaded} assets.")
 

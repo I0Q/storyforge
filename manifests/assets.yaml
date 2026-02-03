@@ -1,40 +1,66 @@
-# Storyforge assets manifest
-# Note: Freesound originals require OAuth2; we download preview files (hq mp3/ogg) via metadata URLs.
-
 freesound:
   auth_profile: freesound
   allowed_licenses:
-    - CC0
-    - CC-BY
+  - CC0
+  - CC-BY
   prefer_previews:
-    - preview-hq-mp3
-    - preview-hq-ogg
-    - preview-lq-mp3
+  - preview-hq-mp3
+  - preview-hq-ogg
+  - preview-lq-mp3
   max_duration_sec: 20
   per_query_limit: 50
-
 queries:
-  - id: footsteps_soft
-    query: "footsteps soft"
-    tags: [footsteps, soft]
-  - id: door_gentle
-    query: "door close soft"
-    tags: [door, gentle]
-  - id: cloth
-    query: "cloth rustle"
-    tags: [cloth]
-  - id: paper
-    query: "page turn soft"
-    tags: [paper]
-  - id: wind_soft
-    query: "wind gentle"
-    tags: [wind]
-  - id: rain_soft
-    query: "rain light"
-    tags: [rain]
-  - id: roomtone
-    query: "room tone"
-    tags: [ambience, roomtone]
-  - id: river
-    query: "river stream gentle"
-    tags: [water, ambience]
+- id: footsteps_soft
+  query: footsteps soft
+  tags:
+  - footsteps
+  - soft
+- id: door_gentle
+  query: door close soft
+  tags:
+  - door
+  - gentle
+- id: cloth
+  query: cloth rustle
+  tags:
+  - cloth
+- id: paper
+  query: page turn soft
+  tags:
+  - paper
+- id: wind_soft
+  query: wind gentle
+  tags:
+  - wind
+- id: rain_soft
+  query: rain light
+  tags:
+  - rain
+- id: roomtone
+  query: room tone
+  tags:
+  - ambience
+  - roomtone
+- id: river
+  query: river stream gentle
+  tags:
+  - water
+  - ambience
+- id: music_ambient_bed
+  query: ambient music bed
+  tags:
+  - music
+  - ambient
+  - bed
+- id: music_fantasy
+  query: fantasy ambient music
+  tags:
+  - music
+  - fantasy
+  - ambient
+- id: music_calm
+  query: calm ambient music
+  tags:
+  - music
+  - calm
+  - ambient
