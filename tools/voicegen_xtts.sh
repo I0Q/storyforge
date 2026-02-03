@@ -7,7 +7,7 @@ set -euo pipefail
 #   tools/voicegen_xtts.sh --text "Hello" --ref /path/to/ref.wav --out out.wav
 #
 # Notes:
-# - First run will download the XTTS model into the docker volume cache.
+# - First run will download the XTTS model into a docker volume cache.
 
 MODEL_NAME="tts_models/multilingual/multi-dataset/xtts_v2"
 IMAGE="i0q-storyforge-voicegen:latest"
@@ -45,7 +45,6 @@ mkdir -p "$(dirname "$OUT")"
 # GPU passthrough if available
 GPU_ARGS=()
 if [[ "$DEVICE" == "cuda" || "$DEVICE" == "auto" ]]; then
-  # Works if nvidia-container-toolkit is installed; otherwise docker will ignore.
   GPU_ARGS+=(--gpus all)
 fi
 
@@ -55,17 +54,26 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   docker build -t "$IMAGE" -f docker/voicegen/Dockerfile .
 fi
 
+REF_BASENAME="$(basename "$REF")"
+OUT_BASENAME="$(basename "$OUT")"
+
 # Run
 
 docker run --rm \
   "${GPU_ARGS[@]}" \
+  -e TEXT="$TEXT" \
+  -e LANG="$LANG" \
+  -e MODEL="$MODEL_NAME" \
+  -e DEVICE="$DEVICE" \
+  -e REF="/in/${REF_BASENAME}" \
+  -e OUT="/out/${OUT_BASENAME}" \
   -v "$CACHE_VOL:/root/.local/share/tts" \
   -v "$(pwd):/work" \
   -v "$(cd "$(dirname "$REF")" && pwd):/in" \
   -v "$(cd "$(dirname "$OUT")" && pwd):/out" \
   -w /work \
   "$IMAGE" \
-  docker run
+  python - <<'PY'
 import os
 from TTS.api import TTS
 
@@ -75,7 +83,6 @@ out = os.environ['OUT']
 lang = os.environ.get('LANG','en')
 model = os.environ.get('MODEL')
 
-# Select device
 want = os.environ.get('DEVICE','auto')
 try:
     import torch
@@ -91,6 +98,8 @@ else:
     device = 'cuda' if has_cuda else 'cpu'
 
 print('device', device)
+
+# Create model and synthesize
 
 tts = TTS(model)
 tts.to(device)
