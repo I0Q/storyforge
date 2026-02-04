@@ -141,6 +141,7 @@ def main() -> None:
     ap.add_argument('--outdir', default='assets/sfx')
     ap.add_argument('--index', default='assets/credits/index.jsonl')
     ap.add_argument('--limit', type=int, default=200)
+    ap.add_argument('--max-pages', type=int, default=20, help='Max pages to scan per query (50 results/page)')
     ap.add_argument('--dry-run', action='store_true')
     args = ap.parse_args()
 
@@ -163,24 +164,44 @@ def main() -> None:
     index_path = root / args.index
     index_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Load existing index to avoid re-downloading and to dedupe by sha/id.
+    seen_ids: set[str] = set()
+    seen_sha: set[str] = set()
+    if index_path.exists():
+        with index_path.open('r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if obj.get('source') == 'freesound' and obj.get('id'):
+                        seen_ids.add(str(obj['id']))
+                    if obj.get('sha256'):
+                        seen_sha.add(str(obj['sha256']))
+                except Exception:
+                    continue
+
     downloaded = 0
     for q in queries:
         if downloaded >= args.limit:
             break
         qid = q['id']
         qtxt = q['query']
-        # NOTE: Freesound's pagination URLs are inconsistent when using complex filters.
-        # To keep the sync robust, we only fetch the first page per query.
-        page = 1
         got = 0
-        res = search_freesound(token, qtxt, max_duration=max_duration, page=page)
-        results = res.get('results') or []
-        if not results:
-            continue
 
-        for snd in results:
+        for page in range(1, args.max_pages + 1):
             if downloaded >= args.limit or got >= per_query_limit:
                 break
+
+            res = search_freesound(token, qtxt, max_duration=max_duration, page=page)
+            results = res.get('results') or []
+            if not results:
+                break
+
+            for snd in results:
+                if downloaded >= args.limit or got >= per_query_limit:
+                    break
 
             lic_url = snd.get('license') or ''
             if not allowed_license(lic_url, allowed):
@@ -196,6 +217,9 @@ def main() -> None:
                 continue
 
             sid = str(snd.get('id'))
+            if sid in seen_ids:
+                continue
+
             title = snd.get('name') or f'freesound-{sid}'
             user = snd.get('username') or 'unknown'
 
@@ -205,6 +229,7 @@ def main() -> None:
 
             if dest.exists() and dest.stat().st_size > 0:
                 got += 1
+                seen_ids.add(sid)
                 continue
 
             if args.dry_run:
@@ -219,6 +244,14 @@ def main() -> None:
                 continue
 
             h = sha256_file(dest)
+            if h in seen_sha:
+                # Duplicate content; keep filesystem clean.
+                try:
+                    dest.unlink()
+                except Exception:
+                    pass
+                continue
+
             rec = Record(
                 kind='sfx',
                 source='freesound',
@@ -238,7 +271,11 @@ def main() -> None:
 
             downloaded += 1
             got += 1
-            print(f"OK {downloaded}/{args.limit} {qid} {sid} {dest.name}")
+            seen_ids.add(sid)
+            seen_sha.add(h)
+            print(f"OK {downloaded}/{args.limit} {qid} p{page} {sid} {dest.name}")
+
+            time.sleep(0.10)
 
         time.sleep(0.35)
 

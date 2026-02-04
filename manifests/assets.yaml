@@ -8,59 +8,127 @@ freesound:
   - preview-hq-ogg
   - preview-lq-mp3
   max_duration_sec: 20
-  per_query_limit: 50
+  per_query_limit: 80
 queries:
+# Story-focused (North Wind & the Sun)
+- id: footsteps_grass
+  query: footsteps grass
+  tags: [footsteps, grass]
+- id: footsteps_dirt
+  query: footsteps dirt
+  tags: [footsteps, dirt]
+- id: footsteps_road
+  query: footsteps road
+  tags: [footsteps, road]
+- id: coat_cloak_rustle
+  query: coat rustle cloth
+  tags: [cloth, coat, rustle]
+- id: fabric_flap
+  query: fabric flap
+  tags: [cloth, flap]
+- id: wind_gentle
+  query: wind gentle
+  tags: [wind]
+- id: wind_gust
+  query: wind gust
+  tags: [wind, gust]
+- id: wind_whistle_soft
+  query: wind whistle soft
+  tags: [wind]
+- id: birds_light
+  query: birds distant
+  tags: [birds, ambience]
+- id: tree_leaves
+  query: leaves rustle gentle
+  tags: [leaves, ambience]
+- id: sitting_grass
+  query: sit down grass
+  tags: [movement]
+- id: clothing_adjust
+  query: clothing movement
+  tags: [cloth]
+- id: breathe_soft
+  query: breathing calm
+  tags: [breathing]
+- id: hat_off
+  query: hat remove cloth
+  tags: [cloth]
+
+# General bedtime-safe library expansion
 - id: footsteps_soft
   query: footsteps soft
-  tags:
-  - footsteps
-  - soft
+  tags: [footsteps, soft]
+- id: footsteps_wood
+  query: footsteps wood floor
+  tags: [footsteps, wood]
+- id: footsteps_stairs
+  query: footsteps stairs
+  tags: [footsteps, stairs]
 - id: door_gentle
   query: door close soft
-  tags:
-  - door
-  - gentle
+  tags: [door, gentle]
+- id: door_open_soft
+  query: door open soft
+  tags: [door, gentle]
 - id: cloth
   query: cloth rustle
-  tags:
-  - cloth
+  tags: [cloth]
 - id: paper
   query: page turn soft
-  tags:
-  - paper
-- id: wind_soft
-  query: wind gentle
-  tags:
-  - wind
+  tags: [paper]
 - id: rain_soft
   query: rain light
-  tags:
-  - rain
+  tags: [rain]
 - id: roomtone
   query: room tone
-  tags:
-  - ambience
-  - roomtone
+  tags: [ambience, roomtone]
 - id: river
   query: river stream gentle
-  tags:
-  - water
-  - ambience
+  tags: [water, ambience]
+- id: fire_soft
+  query: fireplace gentle
+  tags: [fire]
+- id: chime_soft
+  query: chime soft
+  tags: [chime]
+- id: bell_soft
+  query: bell soft
+  tags: [bell]
+- id: whoosh_soft
+  query: whoosh soft
+  tags: [whoosh]
+- id: swoosh_soft
+  query: swoosh soft
+  tags: [whoosh]
+- id: sparkle_soft
+  query: sparkle gentle
+  tags: [sparkle]
+- id: water_drop
+  query: water drop
+  tags: [water]
+- id: cloth_fold
+  query: cloth fold
+  tags: [cloth]
+- id: footsteps_snow_soft
+  query: footsteps snow soft
+  tags: [footsteps, snow]
+- id: footsteps_stone
+  query: footsteps stone
+  tags: [footsteps, stone]
+- id: footsteps_tile
+  query: footsteps tile
+  tags: [footsteps, tile]
+- id: footsteps_carpet
+  query: footsteps carpet
+  tags: [footsteps, carpet]
+
+# Music beds (kept small; most expansion is SFX)
 - id: music_ambient_bed
   query: ambient music bed
-  tags:
-  - music
-  - ambient
-  - bed
+  tags: [music, ambient, bed]
 - id: music_fantasy
   query: fantasy ambient music
-  tags:
-  - music
-  - fantasy
-  - ambient
+  tags: [music, fantasy, ambient]
 - id: music_calm
   query: calm ambient music
-  tags:
-  - music
-  - calm
-  - ambient
+  tags: [music, calm, ambient]
