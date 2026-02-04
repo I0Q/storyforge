@@ -20,8 +20,11 @@ class ProducerConfig:
     # Speaker -> reference wav path (local)
     speaker_refs: Dict[str, Path]
 
+    # Default language (overridden by @lang: in SFML)
+    default_lang: str = "en"
+
     # Path to voicegen wrapper (XTTS docker)
-    voicegen: Path
+    voicegen: Path = Path("tools/voicegen_xtts.sh")
 
     # Mix gains (dB)
     music_gain_db: float = -18.0
@@ -64,7 +67,25 @@ def _resolve_asset(assets_dir: Path, asset_id: str) -> Path:
     raise FileNotFoundError(f"Asset not found: {asset_id} (looked under {assets_dir})")
 
 
-def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path) -> None:
+def _normalize_lang(lang: str) -> str:
+    """Normalize user-facing language tags to Coqui/XTTS language codes.
+
+    Start with Brazilian Portuguese:
+      - pt-BR / pt_br / ptbr -> pt
+
+    In practice XTTS expects short codes like "en", "pt", "es", etc.
+    """
+
+    l = lang.strip().lower().replace("_", "-")
+    if l in {"pt-br", "ptbr"}:
+        return "pt"
+    # fall back to primary subtag
+    if "-" in l:
+        return l.split("-", 1)[0]
+    return l
+
+
+def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path, *, lang: str) -> None:
     ref = cfg.speaker_refs.get(speaker)
     if not ref:
         raise KeyError(
@@ -80,6 +101,8 @@ def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: 
         str(ref),
         "--out",
         str(out_wav),
+        "--lang",
+        _normalize_lang(lang),
         "--device",
         "cuda",
     ]
@@ -104,6 +127,9 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
     events = parse_sfml(sfml_text)
     title = get_directive(events, "title") or "story"
 
+    # Language tag for TTS (e.g. en, pt-BR). Defaults to cfg.default_lang.
+    lang = get_directive(events, "lang") or cfg.default_lang
+
     music = get_directive(events, "music")
     ambience = get_directive(events, "ambience")
 
@@ -125,7 +151,7 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
             if isinstance(ev, SfmlUtterance):
                 seg_idx += 1
                 out_wav = narr_dir / f"seg_{seg_idx:04d}_{ev.speaker}.wav"
-                synthesize_utterance(cfg, ev.speaker, ev.text, out_wav)
+                synthesize_utterance(cfg, ev.speaker, ev.text, out_wav, lang=lang)
                 dur = _ffprobe_duration_s(out_wav)
                 last_start = current_time
                 current_time += dur

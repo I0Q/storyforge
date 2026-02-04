@@ -3,6 +3,13 @@
 Story generation is done outside this repo (you/agent writes SFML).
 This repo focuses on turning SFML scripts into a single mixed MP3.
 
+## Multi-language support (starting with Brazilian Portuguese)
+
+- Put a language directive in your SFML:
+  - `@lang: en` (English)
+  - `@lang: pt-BR` (Brazilian Portuguese)
+- The renderer normalizes tags like `pt-BR` → `pt` for XTTS.
+
 ---
 
 ## Audio Production
