@@ -19,6 +19,7 @@ OUT=""
 LANG="en"
 DEVICE="auto"  # auto|cpu|cuda
 GPU_ID=""       # optional integer id for multi-GPU pinning
+SEED=""         # optional integer seed for deterministic voice
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,12 +29,13 @@ while [[ $# -gt 0 ]]; do
     --lang) LANG="$2"; shift 2;;
     --device) DEVICE="$2"; shift 2;;
     --gpu) GPU_ID="$2"; shift 2;;
+    --seed) SEED="$2"; shift 2;;
     *) echo "Unknown arg: $1"; exit 2;;
   esac
 done
 
 if [[ -z "$TEXT" || -z "$REF" || -z "$OUT" ]]; then
-  echo "Usage: $0 --text <text> --ref <ref.wav> --out <out.wav> [--lang en] [--device auto|cpu|cuda] [--gpu N]" >&2
+  echo "Usage: $0 --text <text> --ref <ref.wav> --out <out.wav> [--lang en] [--device auto|cpu|cuda] [--gpu N] [--seed N]" >&2
   exit 2
 fi
 
@@ -72,6 +74,7 @@ docker run --rm -i \
   -e LANG="$LANG" \
   -e MODEL="$MODEL_NAME" \
   -e DEVICE="$DEVICE" \
+  -e SEED="$SEED" \
   -e REF="/in/${REF_BASENAME}" \
   -e OUT="/out/${OUT_BASENAME}" \
   -v "$CACHE_VOL:/root/.local/share/tts" \
@@ -82,6 +85,9 @@ docker run --rm -i \
   "$IMAGE" \
   python - <<'PY'
 import os
+import random
+
+import numpy as np
 
 # PyTorch >=2.6 defaults torch.load(weights_only=True), which breaks Coqui XTTS
 # checkpoints that contain config objects. We trust the checkpoint source here
@@ -102,6 +108,7 @@ ref = os.environ['REF']
 out = os.environ['OUT']
 lang = os.environ.get('LANG','en')
 model = os.environ.get('MODEL')
+seed = os.environ.get('SEED','')
 
 want = os.environ.get('DEVICE','auto')
 try:
@@ -116,7 +123,15 @@ elif want == 'cpu':
 else:
     device = 'cuda' if has_cuda else 'cpu'
 
-print('device', device)
+if seed != '':
+    s = int(seed)
+    random.seed(s)
+    np.random.seed(s)
+    torch.manual_seed(s)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(s)
+
+print('device', device, 'seed', seed if seed != '' else '(none)')
 
 # Create model and synthesize
 

@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 import concurrent.futures
 import math
+import zlib
 
 from .sfml import SfmlEvent, SfmlPause, SfmlSfx, SfmlUtterance, get_directive, parse_sfml
 
@@ -94,20 +95,34 @@ def _normalize_lang(lang: str) -> str:
 
 
 
-def _tts_text_mode_a(text: str) -> str:
+def _tts_text_mode_a(text: str, *, lang: str) -> str:
     """Minimal normalization for Mode A.
 
-    We keep standard punctuation for XTTS rhythm/intonation.
-    We only normalize characters that commonly cause weird spoken artifacts.
+    Key goals:
+      - Keep coherence (no micro-splitting).
+      - Avoid "spoken punctuation" issues (notably observed for pt-BR).
+
+    Strategy:
+      - For English: keep normal punctuation.
+      - For Portuguese: strip most punctuation (keep ?/! for intonation), rely on explicit PAUSE/SFML.
     """
 
     t = text
-    # Normalize fancy quotes to plain quotes (XTTS may speak them)
+    # Normalize fancy quotes to plain quotes
     t = t.replace("“", '"').replace("”", '"')
     # Em-dash becomes comma-ish pause
     t = t.replace("—", ", ").replace("–", ", ")
-    # Keep ellipsis as three dots
+    # Ellipsis to three dots
     t = t.replace("…", "...")
+
+    nlang = _normalize_lang(lang)
+    if nlang == "pt":
+        # XTTS sometimes literally says punctuation in pt; strip it but keep ?/!.
+        # Also remove quotes.
+        keep = set("?!")
+        t = "".join(ch if (ch.isalnum() or ch.isspace() or ch in keep) else " " for ch in t)
+        t = " ".join(t.split())
+
     return t
 
 
@@ -121,13 +136,24 @@ def _detect_gpu_count() -> int:
         return 1
 
 
-def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path, *, lang: str, gpu_id: int | None = None) -> None:
+def synthesize_utterance(
+    cfg: ProducerConfig,
+    speaker: str,
+    text: str,
+    out_wav: Path,
+    *,
+    lang: str,
+    gpu_id: int | None = None,
+) -> None:
     ref = cfg.speaker_refs.get(speaker)
     if not ref:
         raise KeyError(
             f"No reference configured for speaker {speaker!r}. "
             f"Provide --ref SPEAKER=/path/to/ref.wav"
         )
+
+    # Deterministic per-speaker seed to keep character voice stable across lines
+    seed = (zlib.adler32(speaker.encode("utf-8")) & 0x7FFFFFFF) or 1
 
     cmd = [
         str(cfg.voicegen),
@@ -141,6 +167,8 @@ def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: 
         _normalize_lang(lang),
         "--device",
         "cuda",
+        "--seed",
+        str(seed),
     ]
     if gpu_id is not None:
         cmd += ["--gpu", str(int(gpu_id))]
@@ -193,7 +221,7 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
             if isinstance(ev, SfmlUtterance):
                 seg_idx += 1
                 out_wav = narr_dir / f"seg_{seg_idx:04d}_{ev.speaker}.wav"
-                synth_tasks.append((ev.speaker, _tts_text_mode_a(ev.text), out_wav))
+                synth_tasks.append((ev.speaker, _tts_text_mode_a(ev.text, lang=lang), out_wav))
                 concat_list.append(out_wav)
             elif isinstance(ev, SfmlPause):
                 seg_idx += 1
