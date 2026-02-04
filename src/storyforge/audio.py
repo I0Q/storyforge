@@ -85,6 +85,33 @@ def _normalize_lang(lang: str) -> str:
     return l
 
 
+def _normalize_tts_text(text: str, lang: str) -> str:
+    """Clean punctuation that some TTS models may speak aloud.
+
+    Observed issue (pt-BR): XTTS may literally say punctuation names (e.g. "ponto").
+    We keep the content but strip most punctuation symbols and normalize fancy quotes.
+    """
+
+    t = text
+    # Normalize common unicode punctuation
+    t = t.replace("“", "").replace("”", "").replace("\"", "")
+    t = t.replace("…", " ")
+    t = t.replace("—", ", ").replace("–", ", ")
+
+    # For Portuguese, remove punctuation that tends to be spoken.
+    l = _normalize_lang(lang)
+    if l == "pt":
+        for ch in [".", "!", "?", ";", ":", "(", ")", "[", "]", "{", "}"]:
+            t = t.replace(ch, "")
+    else:
+        # In other languages, keep basic punctuation but remove fancy quotes/ellipses already handled.
+        pass
+
+    # Collapse whitespace
+    t = " ".join(t.split())
+    return t
+
+
 def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path, *, lang: str) -> None:
     ref = cfg.speaker_refs.get(speaker)
     if not ref:
@@ -96,7 +123,7 @@ def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: 
     cmd = [
         str(cfg.voicegen),
         "--text",
-        text,
+        _normalize_tts_text(text, lang),
         "--ref",
         str(ref),
         "--out",
