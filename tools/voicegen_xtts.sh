@@ -18,6 +18,7 @@ REF=""
 OUT=""
 LANG="en"
 DEVICE="auto"  # auto|cpu|cuda
+GPU_ID=""       # optional integer id for multi-GPU pinning
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,12 +27,13 @@ while [[ $# -gt 0 ]]; do
     --out) OUT="$2"; shift 2;;
     --lang) LANG="$2"; shift 2;;
     --device) DEVICE="$2"; shift 2;;
+    --gpu) GPU_ID="$2"; shift 2;;
     *) echo "Unknown arg: $1"; exit 2;;
   esac
 done
 
 if [[ -z "$TEXT" || -z "$REF" || -z "$OUT" ]]; then
-  echo "Usage: $0 --text <text> --ref <ref.wav> --out <out.wav> [--lang en] [--device auto|cpu|cuda]" >&2
+  echo "Usage: $0 --text <text> --ref <ref.wav> --out <out.wav> [--lang en] [--device auto|cpu|cuda] [--gpu N]" >&2
   exit 2
 fi
 
@@ -45,7 +47,11 @@ mkdir -p "$(dirname "$OUT")"
 # GPU passthrough if available
 GPU_ARGS=()
 if [[ "$DEVICE" == "cuda" || "$DEVICE" == "auto" ]]; then
-  GPU_ARGS+=(--gpus all)
+  if [[ -n "$GPU_ID" ]]; then
+    GPU_ARGS+=(--gpus "device=${GPU_ID}")
+  else
+    GPU_ARGS+=(--gpus all)
+  fi
 fi
 
 # Build image if missing

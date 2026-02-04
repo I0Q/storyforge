@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import concurrent.futures
+import math
+
 from .sfml import SfmlEvent, SfmlPause, SfmlSfx, SfmlUtterance, get_directive, parse_sfml
 
 
@@ -25,6 +28,10 @@ class ProducerConfig:
 
     # Path to voicegen wrapper (XTTS docker)
     voicegen: Path = Path("tools/voicegen_xtts.sh")
+
+    # Parallel synthesis (multi-GPU via multiple docker/XTTS processes)
+    jobs: int = 1
+    gpu_count: int = 1
 
     # Mix gains (dB)
     music_gain_db: float = -18.0
@@ -104,7 +111,17 @@ def _tts_text_mode_a(text: str) -> str:
     return t
 
 
-def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path, *, lang: str) -> None:
+def _detect_gpu_count() -> int:
+    """Best-effort GPU count detection (NVIDIA)."""
+    try:
+        out = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.DEVNULL).decode("utf-8", "replace")
+        lines = [ln for ln in out.splitlines() if ln.strip().startswith("GPU ")]
+        return max(1, len(lines))
+    except Exception:
+        return 1
+
+
+def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path, *, lang: str, gpu_id: int | None = None) -> None:
     ref = cfg.speaker_refs.get(speaker)
     if not ref:
         raise KeyError(
@@ -125,6 +142,8 @@ def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: 
         "--device",
         "cuda",
     ]
+    if gpu_id is not None:
+        cmd += ["--gpu", str(int(gpu_id))]
     _run(cmd)
 
 
@@ -165,20 +184,18 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
         last_end = 0.0
         sfx_schedule: List[Tuple[Path, float]] = []  # (path, time_s)
 
+        # Plan all utterance synthesis first (to enable parallelism), while still
+        # building the output ordering in concat_list.
+        synth_tasks: List[Tuple[str, str, Path]] = []  # (speaker, text, out_wav)
+
         seg_idx = 0
         for ev in events:
             if isinstance(ev, SfmlUtterance):
-                # Mode A: do not pre-split for cadence; rely on XTTS punctuation handling.
                 seg_idx += 1
                 out_wav = narr_dir / f"seg_{seg_idx:04d}_{ev.speaker}.wav"
-                synthesize_utterance(cfg, ev.speaker, _tts_text_mode_a(ev.text), out_wav, lang=lang)
-                dur = _ffprobe_duration_s(out_wav)
-                last_start = current_time
-                current_time += dur
-                last_end = current_time
+                synth_tasks.append((ev.speaker, _tts_text_mode_a(ev.text), out_wav))
                 concat_list.append(out_wav)
             elif isinstance(ev, SfmlPause):
-                # generate silence wav
                 seg_idx += 1
                 sil = narr_dir / f"sil_{seg_idx:04d}.wav"
                 _run(
@@ -191,27 +208,88 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
                         "-f",
                         "lavfi",
                         "-i",
-                        f"anullsrc=r=48000:cl=mono",
+                        "anullsrc=r=48000:cl=mono",
                         "-t",
                         str(ev.seconds),
                         str(sil),
                     ]
                 )
-                current_time += ev.seconds
-                last_end = current_time
                 concat_list.append(sil)
             elif isinstance(ev, SfmlSfx):
-                t_anchor = {
-                    "now": current_time,
-                    "last_start": last_start,
-                    "last_end": last_end,
-                }.get(ev.at)
+                # SFX is anchored to narration time; we will resolve after durations are known.
+                # Store for a second pass by temporarily using current anchors (0 for now).
+                # We'll re-walk events after narration timing is computed.
+                pass
+            else:
+                pass
+
+        # Multi-GPU / multi-process synthesis
+        gpu_count = cfg.gpu_count or _detect_gpu_count()
+        jobs = max(1, int(cfg.jobs))
+        jobs = min(jobs, gpu_count)
+
+        def _worker(idx: int, task: Tuple[str, str, Path]) -> None:
+            speaker, text, out_wav = task
+            gpu_id = idx % gpu_count
+            synthesize_utterance(cfg, speaker, text, out_wav, lang=lang, gpu_id=gpu_id)
+
+        if synth_tasks:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
+                futs = [ex.submit(_worker, i, t) for i, t in enumerate(synth_tasks)]
+                for f in concurrent.futures.as_completed(futs):
+                    f.result()
+
+        # Now compute narration timing and SFX schedule by walking concat_list
+        current_time = 0.0
+        last_start = 0.0
+        last_end = 0.0
+
+        # second pass: compute times and schedule SFX
+        for ev in events:
+            if isinstance(ev, SfmlUtterance):
+                # find the matching wav in order (next in concat_list)
+                pass
+
+        # Compute timing by iterating concat_list in order
+        for p in concat_list:
+            if p.name.startswith("seg_"):
+                dur = _ffprobe_duration_s(p)
+                last_start = current_time
+                current_time += dur
+                last_end = current_time
+            else:
+                # silence
+                dur = _ffprobe_duration_s(p)
+                current_time += dur
+                last_end = current_time
+
+        # Finally, schedule SFX using final anchors (approximate using last_start/last_end/current_time as we stream through events)
+        current_time = 0.0
+        last_start = 0.0
+        last_end = 0.0
+        # We'll advance time using concat_list cursor.
+        cursor = 0
+        for ev in events:
+            if isinstance(ev, SfmlUtterance):
+                p = concat_list[cursor]
+                dur = _ffprobe_duration_s(p)
+                last_start = current_time
+                current_time += dur
+                last_end = current_time
+                cursor += 1
+            elif isinstance(ev, SfmlPause):
+                p = concat_list[cursor]
+                dur = _ffprobe_duration_s(p)
+                current_time += dur
+                last_end = current_time
+                cursor += 1
+            elif isinstance(ev, SfmlSfx):
+                t_anchor = {"now": current_time, "last_start": last_start, "last_end": last_end}.get(ev.at)
                 if t_anchor is None:
                     raise ValueError(f"Unknown SFX anchor: {ev.at}")
                 sfx_path = _resolve_asset(cfg.assets_dir, ev.asset)
                 sfx_schedule.append((sfx_path, max(0.0, t_anchor + ev.offset_s)))
             else:
-                # directives ignored here
                 pass
 
         if not concat_list:

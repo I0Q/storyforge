@@ -32,6 +32,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         out_dir=out_dir,
         speaker_refs=speaker_refs,
         voicegen=voicegen,
+        jobs=args.jobs,
+        gpu_count=args.gpu_count,
     )
 
     out_mp3 = render(sfml_text, cfg)
@@ -49,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--assets-dir", default="assets")
     r.add_argument("--out-dir", default="out")
     r.add_argument("--voicegen", default="tools/voicegen_xtts.sh")
+    r.add_argument("--jobs", type=int, default=1, help="Parallel TTS jobs (mapped across GPUs)")
+    r.add_argument("--gpu-count", type=int, default=0, help="GPU count to use (0=auto-detect via nvidia-smi)")
     r.add_argument(
         "--ref",
         action="append",
