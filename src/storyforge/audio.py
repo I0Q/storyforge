@@ -339,6 +339,9 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
         concat_txt.write_text("\n".join([f"file {shlex.quote(str(p))}" for p in concat_list]) + "\n")
 
         narration_wav = tdir / "narration.wav"
+        # IMPORTANT: Do NOT stream-copy here. Some inputs (or intermediate WAVs)
+        # can end up low sample-rate; that makes the final mix sound "telephone".
+        # Normalize narration to a stable render format.
         _run(
             [
                 "ffmpeg",
@@ -352,8 +355,12 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
                 "0",
                 "-i",
                 str(concat_txt),
-                "-c",
-                "copy",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-c:a",
+                "pcm_s16le",
                 str(narration_wav),
             ]
         )
@@ -412,7 +419,10 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
             filter_lines.append(f"[{sfx_i}:a]adelay={ms}|{ms}[sfx{j}]")
             mix_inputs.append(f"[sfx{j}]")
 
-        filter_lines.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[mix]")
+        filter_lines.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[mix0]")
+        # Normalize output render format to avoid ffmpeg picking a low sample rate
+        # based on one of the inputs.
+        filter_lines.append("[mix0]aresample=48000,aformat=sample_fmts=s16:channel_layouts=stereo[mix]")
 
         out_mp3 = cfg.out_dir / ("".join([c if c.isalnum() or c in "-_" else "_" for c in title]) + ".mp3")
 
@@ -430,7 +440,11 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
             "-c:a",
             "libmp3lame",
             "-b:a",
-            "160k",
+            "192k",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
             str(out_mp3),
         ]
         _run(cmd)
