@@ -85,93 +85,23 @@ def _normalize_lang(lang: str) -> str:
     return l
 
 
-import re
 
 
-def _segment_text_for_tts(text: str, lang: str) -> list[tuple[str, float]]:
-    """Split a line into (speakable_text, pause_seconds) chunks.
+def _tts_text_mode_a(text: str) -> str:
+    """Minimal normalization for Mode A.
 
-    Goal:
-      - Preserve *intonation* for '?' and '!' by passing them to XTTS.
-      - Use punctuation to drive pauses/cadence.
-      - Avoid models literally speaking punctuation names (observed in pt-BR).
-
-    Notes:
-      - We strip/normalize most punctuation from the text fed to XTTS, but we
-        still *interpret* it for timing.
-      - Multiple '?' or '!' increase pause a bit.
+    We keep standard punctuation for XTTS rhythm/intonation.
+    We only normalize characters that commonly cause weird spoken artifacts.
     """
 
-    # Normalize unicode punctuation to ASCII-ish equivalents for parsing
     t = text
+    # Normalize fancy quotes to plain quotes (XTTS may speak them)
     t = t.replace("“", '"').replace("”", '"')
-    t = t.replace("—", " - ").replace("–", " - ")
+    # Em-dash becomes comma-ish pause
+    t = t.replace("—", ", ").replace("–", ", ")
+    # Keep ellipsis as three dots
     t = t.replace("…", "...")
-
-    # Tokenize into text + punctuation runs
-    # Keep delimiter tokens like "!!!" or "...?"
-    parts = re.split(r"([!?]+|\.{3}|[\.,;:])", t)
-
-    # Pause map (seconds)
-    base_pause = {
-        ",": 0.15,
-        ".": 0.30,
-        "...": 0.45,
-        ";": 0.25,
-        ":": 0.25,
-        "?": 0.35,
-        "!": 0.35,
-    }
-
-    def speakable(fragment: str) -> str:
-        # Remove quotes/parentheticals markers that can get spoken weirdly
-        frag = fragment
-        frag = frag.replace('"', "")
-        # hyphen becomes a short pause feeling; keep as comma
-        frag = frag.replace("-", ",")
-        # Collapse spaces
-        frag = " ".join(frag.split())
-        return frag.strip()
-
-    out: list[tuple[str, float]] = []
-    pending_text = ""
-
-    def flush(pause_s: float) -> None:
-        nonlocal pending_text
-        s = speakable(pending_text)
-        pending_text = ""
-        if s:
-            out.append((s, pause_s))
-
-    for p in parts:
-        if p is None or p == "":
-            continue
-
-        if p in [",", ".", ";", ":", "..."]:
-            # End a chunk and add pause
-            flush(base_pause[p])
-            continue
-
-        if re.fullmatch(r"[!?]+", p):
-            n = len(p)
-            # Keep a single '?'/'!' for intonation; rest drives pause.
-            punct = p[0]
-            # Append punctuation to the pending text so XTTS can shape intonation.
-            pending_text = (pending_text.rstrip() + punct)
-            # Scale pause for repeats (Hello!!! -> longer)
-            pause = base_pause[punct] * (1.0 + 0.35 * max(0, n - 1))
-            flush(pause)
-            continue
-
-        # regular text
-        pending_text += p
-
-    # final chunk
-    flush(0.0)
-
-    # pt-BR specific: in practice, leaving only '?'/'!' as punctuation seems to
-    # avoid the spoken "ponto" issue while keeping intonation cues.
-    return out
+    return t
 
 
 def synthesize_utterance(cfg: ProducerConfig, speaker: str, text: str, out_wav: Path, *, lang: str) -> None:
@@ -238,40 +168,15 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
         seg_idx = 0
         for ev in events:
             if isinstance(ev, SfmlUtterance):
-                # Punctuation-aware segmentation within a single utterance.
-                chunks = _segment_text_for_tts(ev.text, lang)
-                for k, (chunk_text, pause_s) in enumerate(chunks, start=1):
-                    seg_idx += 1
-                    out_wav = narr_dir / f"seg_{seg_idx:04d}_{ev.speaker}.wav"
-                    synthesize_utterance(cfg, ev.speaker, chunk_text, out_wav, lang=lang)
-                    dur = _ffprobe_duration_s(out_wav)
-                    last_start = current_time
-                    current_time += dur
-                    last_end = current_time
-                    concat_list.append(out_wav)
-
-                    if pause_s > 0:
-                        seg_idx += 1
-                        sil = narr_dir / f"sil_{seg_idx:04d}.wav"
-                        _run(
-                            [
-                                "ffmpeg",
-                                "-hide_banner",
-                                "-loglevel",
-                                "error",
-                                "-y",
-                                "-f",
-                                "lavfi",
-                                "-i",
-                                "anullsrc=r=48000:cl=mono",
-                                "-t",
-                                str(pause_s),
-                                str(sil),
-                            ]
-                        )
-                        current_time += pause_s
-                        last_end = current_time
-                        concat_list.append(sil)
+                # Mode A: do not pre-split for cadence; rely on XTTS punctuation handling.
+                seg_idx += 1
+                out_wav = narr_dir / f"seg_{seg_idx:04d}_{ev.speaker}.wav"
+                synthesize_utterance(cfg, ev.speaker, _tts_text_mode_a(ev.text), out_wav, lang=lang)
+                dur = _ffprobe_duration_s(out_wav)
+                last_start = current_time
+                current_time += dur
+                last_end = current_time
+                concat_list.append(out_wav)
             elif isinstance(ev, SfmlPause):
                 # generate silence wav
                 seg_idx += 1

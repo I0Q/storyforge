@@ -116,6 +116,7 @@ print('device', device)
 
 tts = TTS(model)
 tts.to(device)
-tts.tts_to_file(text=text, speaker_wav=ref, language=lang, file_path=out)
+# Mode A: keep coherence on longer text; rely on XTTS punctuation handling.
+tts.tts_to_file(text=text, speaker_wav=ref, language=lang, file_path=out, split_sentences=False)
 print('wrote', out)
 PY
