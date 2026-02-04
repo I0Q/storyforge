@@ -194,7 +194,12 @@ def main() -> None:
             if downloaded >= args.limit or got >= per_query_limit:
                 break
 
-            res = search_freesound(token, qtxt, max_duration=max_duration, page=page)
+            try:
+                res = search_freesound(token, qtxt, max_duration=max_duration, page=page)
+            except FileNotFoundError:
+                # Freesound intermittently returns 404 for deeper pages; treat as end of pagination.
+                break
+
             results = res.get('results') or []
             if not results:
                 break
