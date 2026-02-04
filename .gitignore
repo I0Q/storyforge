@@ -1,15 +1,21 @@
-# Never commit large/binary audio assets
-assets/music/
-assets/sfx/
-assets/narrators/
-assets/voices/
+# OS
+.DS_Store
 
-# But keep credits + manifests in repo
-!assets/credits/
-!assets/credits/**
-!assets/narrators/.gitkeep
-
-# Local env
-.env
-.venv/
+# Python
 __pycache__/
+*.pyc
+.venv/
+
+# Assets are fetched from DigitalOcean Spaces (not committed)
+/assets/music/
+/assets/sfx/
+/assets/narrators/
+/assets/voices/
+
+# Local/secret configs
+/tools/s3cfg_storyforge
+*.s3cfg
+
+# Outputs
+/out/
+/tmp/

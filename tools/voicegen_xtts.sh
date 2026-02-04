@@ -76,6 +76,19 @@ docker run --rm -i \
   "$IMAGE" \
   python - <<'PY'
 import os
+
+# PyTorch >=2.6 defaults torch.load(weights_only=True), which breaks Coqui XTTS
+# checkpoints that contain config objects. We trust the checkpoint source here
+# (official model download) and force weights_only=False.
+import torch
+_orig_torch_load = torch.load
+
+def _torch_load_compat(*args, **kwargs):
+    kwargs.setdefault("weights_only", False)
+    return _orig_torch_load(*args, **kwargs)
+
+torch.load = _torch_load_compat
+
 from TTS.api import TTS
 
 text = os.environ['TEXT']
@@ -86,7 +99,6 @@ model = os.environ.get('MODEL')
 
 want = os.environ.get('DEVICE','auto')
 try:
-    import torch
     has_cuda = torch.cuda.is_available()
 except Exception:
     has_cuda = False
