@@ -14,7 +14,7 @@ IMAGE="i0q-storyforge-voicegen:latest"
 CACHE_VOL="storyforge_tts_cache"
 
 TEXT=""
-REF=""
+REF=""      # single ref OR comma-separated list
 OUT=""
 LANG="en"
 DEVICE="auto"  # auto|cpu|cuda
@@ -39,10 +39,30 @@ if [[ -z "$TEXT" || -z "$REF" || -z "$OUT" ]]; then
   exit 2
 fi
 
-if [[ ! -f "$REF" ]]; then
-  echo "Missing ref wav: $REF" >&2
+# Support comma-separated refs
+IFS=',' read -r -a REF_LIST <<<"$REF"
+REF_LIST=("${REF_LIST[@]/#/}")
+
+REF0="${REF_LIST[0]}"
+if [[ ! -f "$REF0" ]]; then
+  echo "Missing ref wav: $REF0" >&2
   exit 2
 fi
+
+REF_DIR="$(cd "$(dirname "$REF0")" && pwd)"
+for r in "${REF_LIST[@]}"; do
+  rr="$(echo "$r" | xargs)"
+  if [[ -z "$rr" ]]; then continue; fi
+  if [[ ! -f "$rr" ]]; then
+    echo "Missing ref wav: $rr" >&2
+    exit 2
+  fi
+  # Require all refs to live in same directory for clean docker mounting
+  if [[ "$(cd "$(dirname "$rr")" && pwd)" != "$REF_DIR" ]]; then
+    echo "All refs for a speaker must be in the same directory. Got: $REF0 and $rr" >&2
+    exit 2
+  fi
+done
 
 mkdir -p "$(dirname "$OUT")"
 
@@ -62,7 +82,13 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   docker build -t "$IMAGE" -f docker/voicegen/Dockerfile .
 fi
 
-REF_BASENAME="$(basename "$REF")"
+# Build /in/ paths for refs
+REFS_IN=()
+for r in "${REF_LIST[@]}"; do
+  rr="$(echo "$r" | xargs)"
+  if [[ -z "$rr" ]]; then continue; fi
+  REFS_IN+=("/in/$(basename "$rr")")
+done
 OUT_BASENAME="$(basename "$OUT")"
 
 # Run
@@ -75,11 +101,11 @@ docker run --rm -i \
   -e MODEL="$MODEL_NAME" \
   -e DEVICE="$DEVICE" \
   -e SEED="$SEED" \
-  -e REF="/in/${REF_BASENAME}" \
+  -e REFS="$(IFS=','; echo "${REFS_IN[*]}")" \
   -e OUT="/out/${OUT_BASENAME}" \
   -v "$CACHE_VOL:/root/.local/share/tts" \
   -v "$(pwd):/work" \
-  -v "$(cd "$(dirname "$REF")" && pwd):/in" \
+  -v "$REF_DIR:/in" \
   -v "$(cd "$(dirname "$OUT")" && pwd):/out" \
   -w /work \
   "$IMAGE" \
@@ -104,7 +130,10 @@ torch.load = _torch_load_compat
 from TTS.api import TTS
 
 text = os.environ['TEXT']
-ref = os.environ['REF']
+refs_env = os.environ.get('REFS','')
+refs = [p.strip() for p in refs_env.split(',') if p.strip()]
+if not refs:
+    raise SystemExit('Missing REFS env')
 out = os.environ['OUT']
 lang = os.environ.get('LANG','en')
 model = os.environ.get('MODEL')
@@ -138,6 +167,6 @@ print('device', device, 'seed', seed if seed != '' else '(none)')
 tts = TTS(model)
 tts.to(device)
 # Mode A: keep coherence on longer text; rely on XTTS punctuation handling.
-tts.tts_to_file(text=text, speaker_wav=ref, language=lang, file_path=out, split_sentences=False)
+tts.tts_to_file(text=text, speaker_wav=refs, language=lang, file_path=out, split_sentences=False)
 print('wrote', out)
 PY

@@ -5,13 +5,18 @@ from pathlib import Path
 
 from .audio import ProducerConfig, render
 
-def _parse_ref_kv(items: list[str]) -> dict[str, Path]:
-    out: dict[str, Path] = {}
+
+def _parse_ref_kv(items: list[str]) -> dict[str, list[Path]]:
+    """Parse --ref SPEAKER=path[,path2,...] into a dict."""
+    out: dict[str, list[Path]] = {}
     for it in items:
         if "=" not in it:
-            raise SystemExit(f"--ref expects SPEAKER=/path/to/ref.wav, got: {it}")
+            raise SystemExit(f"--ref expects SPEAKER=/path/to/ref.wav[,ref2.wav,...], got: {it}")
         k, v = it.split("=", 1)
-        out[k] = Path(v)
+        paths = [Path(p.strip()) for p in v.split(",") if p.strip()]
+        if not paths:
+            raise SystemExit(f"--ref expects SPEAKER=/path/to/ref.wav[,ref2.wav,...], got: {it}")
+        out[k] = paths
     return out
 
 
@@ -56,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument(
         "--ref",
         action="append",
-        help="Speaker reference mapping, e.g. --ref Ruby=assets/voices/refs/cmu_arctic/slt/ref.wav",
+        help="Speaker reference mapping, e.g. --ref Ruby=assets/voices/refs/cmu_arctic/slt/ref.wav[,ref2.wav,...]",
     )
     r.set_defaults(func=cmd_render)
 

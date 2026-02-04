@@ -21,8 +21,8 @@ class ProducerConfig:
     repo_root: Path
     assets_dir: Path
     out_dir: Path
-    # Speaker -> reference wav path (local)
-    speaker_refs: Dict[str, Path]
+    # Speaker -> reference wav paths (local). Multiple refs improves cloning stability.
+    speaker_refs: Dict[str, List[Path]]
 
     # Default language (overridden by @lang: in SFML)
     default_lang: str = "en"
@@ -104,7 +104,8 @@ def _tts_text_mode_a(text: str, *, lang: str) -> str:
 
     Strategy:
       - For English: keep normal punctuation.
-      - For Portuguese: strip most punctuation (keep ?/! for intonation), rely on explicit PAUSE/SFML.
+      - For Portuguese: *remap* punctuation to avoid the "spoken punctuation" bug while preserving cadence.
+        Keep ?/! for intonation.
     """
 
     t = text
@@ -117,11 +118,21 @@ def _tts_text_mode_a(text: str, *, lang: str) -> str:
 
     nlang = _normalize_lang(lang)
     if nlang == "pt":
-        # XTTS sometimes literally says punctuation in pt; strip it but keep ?/!.
-        # Also remove quotes.
-        keep = set("?!")
+        # XTTS sometimes literally speaks punctuation tokens in Portuguese.
+        # Remap instead of stripping to keep rhythm:
+        #   - Keep ? and ! (intonation)
+        #   - Convert . ... ; : (and quotes/brackets) into commas/spaces
+        #   - Keep commas
+        t = t.replace('"', ' ')
+        t = t.replace("...", ",")
+        for ch in [".", ";", ":", "(", ")", "[", "]", "{", "}"]:
+            t = t.replace(ch, ",")
+
+        # Remove any remaining non-word symbols except ?!
+        keep = set("?!,")
         t = "".join(ch if (ch.isalnum() or ch.isspace() or ch in keep) else " " for ch in t)
-        t = " ".join(t.split())
+        # Normalize comma spacing
+        t = " ".join(t.replace(",", ", ").split())
 
     return t
 
@@ -145,11 +156,11 @@ def synthesize_utterance(
     lang: str,
     gpu_id: int | None = None,
 ) -> None:
-    ref = cfg.speaker_refs.get(speaker)
-    if not ref:
+    refs = cfg.speaker_refs.get(speaker)
+    if not refs:
         raise KeyError(
             f"No reference configured for speaker {speaker!r}. "
-            f"Provide --ref SPEAKER=/path/to/ref.wav"
+            f"Provide --ref SPEAKER=/path/to/ref.wav[,/path/to/ref2.wav,...]"
         )
 
     # Deterministic per-speaker seed to keep character voice stable across lines
@@ -160,7 +171,7 @@ def synthesize_utterance(
         "--text",
         text,
         "--ref",
-        str(ref),
+        ",".join(str(p) for p in refs),
         "--out",
         str(out_wav),
         "--lang",
