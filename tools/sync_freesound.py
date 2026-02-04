@@ -85,7 +85,7 @@ def search_freesound(token: str, query: str, max_duration: int, page: int, page_
         'page': page,
         'page_size': page_size,
         'fields': 'id,name,username,license,duration,filesize,tags,url,previews',
-        'sort': 'rating_desc',
+        'sort': 'created_desc',
         'filter': f'(license:"Creative Commons 0" OR license:"Attribution") duration:[0 TO {max_duration}]',
     }
     headers = {
