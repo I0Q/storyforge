@@ -1,38 +1,11 @@
-# Storyforge Subsystems
+# Storyforge Audio Production Subsystem
 
-This repo is split into two core subsystems:
-
-1) **Story generation** (text/structure)
-2) **Audio production** (TTS + mixing)
-
-Both are designed to be **local-first** and **repeatable**.
+Story generation is done outside this repo (you/agent writes SFML).
+This repo focuses on turning SFML scripts into a single mixed MP3.
 
 ---
 
-## 1) Story Generation
-
-Module: `src/storyforge/generation.py`
-
-Goal: produce a valid **SFML v0.1** script (see `docs/storyforge-markup.md`) from a small set of inputs.
-
-Current implementation:
-- deterministic (seeded) and non-LLM
-- bedtime-safe structure (intro → beats → gentle outro)
-- emits:
-  - `@title`, `@lang`
-  - optional `@music`, `@ambience`
-  - narration lines: `SPEAKER: text`
-  - `PAUSE:`
-  - `SFX:` placeholders
-
-CLI:
-```bash
-storyforge generate --title "The Quiet Lantern" --seed 7 --out out/the-quiet-lantern.sfml
-```
-
----
-
-## 2) Audio Production
+## Audio Production
 
 Module: `src/storyforge/audio.py`
 

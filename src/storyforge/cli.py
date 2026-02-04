@@ -4,8 +4,6 @@ import argparse
 from pathlib import Path
 
 from .audio import ProducerConfig, render
-from .generation import StoryGenConfig, generate_sfml
-
 
 def _parse_ref_kv(items: list[str]) -> dict[str, Path]:
     out: dict[str, Path] = {}
@@ -16,22 +14,6 @@ def _parse_ref_kv(items: list[str]) -> dict[str, Path]:
         out[k] = Path(v)
     return out
 
-
-def cmd_generate(args: argparse.Namespace) -> int:
-    cfg = StoryGenConfig(
-        title=args.title,
-        seed=args.seed,
-        minutes=args.minutes,
-        narrator=args.narrator,
-        music_asset=args.music,
-        ambience_asset=args.ambience,
-    )
-    sfml = generate_sfml(cfg)
-    if args.out:
-        Path(args.out).write_text(sfml)
-    else:
-        print(sfml)
-    return 0
 
 
 def cmd_render(args: argparse.Namespace) -> int:
@@ -60,16 +42,6 @@ def cmd_render(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="storyforge")
     sub = p.add_subparsers(dest="cmd", required=True)
-
-    g = sub.add_parser("generate", help="Generate a SFML script (deterministic, non-LLM)")
-    g.add_argument("--title", required=True)
-    g.add_argument("--seed", type=int, default=0)
-    g.add_argument("--minutes", type=float, default=3.0)
-    g.add_argument("--narrator", default="Ruby")
-    g.add_argument("--music", default=None)
-    g.add_argument("--ambience", default=None)
-    g.add_argument("--out", default=None, help="Write SFML to file")
-    g.set_defaults(func=cmd_generate)
 
     r = sub.add_parser("render", help="Render a SFML script to a mixed MP3")
     r.add_argument("--story", required=True, help="Path to .sfml")

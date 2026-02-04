@@ -22,9 +22,3 @@ Environment overrides:
 
 See `docs/storyforge-markup.md` and `examples/umbrella.sfml`.
 
-## Subsystems
-
-- **Story generation:** `storyforge generate …` (writes SFML scripts)
-- **Audio production:** `storyforge render …` (renders SFML → single MP3)
-
-See `docs/subsystems.md`.
