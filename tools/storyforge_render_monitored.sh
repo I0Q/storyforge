@@ -12,9 +12,9 @@ SFML=$1
 shift || true
 
 # Guard: avoid launching duplicate renders for the same SFML
-if ps -ef | grep -F "storyforge.cli render" | grep -F "--story $SFML" | grep -v grep >/dev/null 2>&1; then
+if ps -ef | grep -F "storyforge.cli render" | grep -F -- "--story $SFML" | grep -v grep >/dev/null 2>&1; then
   echo "ERROR: a render for $SFML is already running" >&2
-  ps -ef | grep -F "--story $SFML" | grep -F "storyforge.cli render" | grep -v grep >&2 || true
+  ps -ef | grep -F -- "--story $SFML" | grep -F "storyforge.cli render" | grep -v grep >&2 || true
   exit 3
 fi
 
