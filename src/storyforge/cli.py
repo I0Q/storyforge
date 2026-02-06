@@ -39,6 +39,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         voicegen=voicegen,
         jobs=args.jobs,
         gpu_count=args.gpu_count,
+        qc_enabled=(not args.no_qc),
+        max_retries_per_segment=int(args.retries),
     )
 
     out_mp3 = render(sfml_text, cfg)
@@ -58,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--voicegen", default="tools/voicegen_xtts.sh")
     r.add_argument("--jobs", type=int, default=1, help="Parallel TTS jobs (mapped across GPUs)")
     r.add_argument("--gpu-count", type=int, default=0, help="GPU count to use (0=auto-detect via nvidia-smi)")
+    r.add_argument("--no-qc", action="store_true", help="Disable audio QC/retries")
+    r.add_argument("--retries", type=int, default=2, help="Retries per segment on QC failure")
     r.add_argument(
         "--ref",
         action="append",

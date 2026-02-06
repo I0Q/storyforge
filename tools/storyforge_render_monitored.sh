@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /raid/storyforge_test
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: $0 <sfml_path> [storyforge render args...]" >&2
+  exit 2
+fi
+
+SFML=$1
+shift || true
+
+JOB_ID=$(python3 - <<'PYIN'
+import secrets
+print(secrets.token_urlsafe(8).replace("-", "_"))
+PYIN
+)
+
+ROOT=/raid/storyforge_test/monitor
+JOBS=$ROOT/jobs
+TMPBASE=$ROOT/tmp/$JOB_ID
+mkdir -p "$JOBS" "$TMPBASE"
+
+TITLE=$(python3 - <<PYIN
+from pathlib import Path
+p=Path("$SFML")
+for ln in p.read_text(encoding="utf-8", errors="replace").splitlines():
+    if ln.startswith("@title:"):
+        print(ln.split(":",1)[1].strip())
+        break
+else:
+    print(p.stem)
+PYIN
+)
+
+TOTAL=$(python3 - <<PYIN
+from pathlib import Path
+p=Path("$SFML")
+count=0
+for ln in p.read_text(encoding="utf-8", errors="replace").splitlines():
+    s=ln.strip()
+    if not s or s.startswith("@"): 
+        continue
+    if ":" in s:
+        count += 1
+print(count)
+PYIN
+)
+
+STARTED=$(date +%s)
+python3 - <<PYIN
+import json
+from pathlib import Path
+job={
+  "id": "$JOB_ID",
+  "title": "$TITLE",
+  "sfml": "$SFML",
+  "started_at": int("$STARTED"),
+  "total_segments": int("$TOTAL"),
+}
+Path("$JOBS/$JOB_ID.json").write_text(json.dumps(job, ensure_ascii=False, indent=2)+"\n")
+PYIN
+
+TOKEN=$(cat $ROOT/token.txt)
+HOST=$(hostname -I | awk '{print $1}')
+URL="http://$HOST:8787/job/$JOB_ID?t=$TOKEN"
+echo "MONITOR_URL=$URL"
+
+export TMPDIR="$TMPBASE"
+
+# cap CPU threads (keeps jobs=4 from stampeding)
+export OMP_NUM_THREADS=16
+export MKL_NUM_THREADS=16
+export OPENBLAS_NUM_THREADS=16
+export NUMEXPR_NUM_THREADS=16
+export TOKENIZERS_PARALLELISM=false
+
+LOG="$TMPDIR/storyforge-$(date +%s).log"
+exec bash -lc "env PYTHONPATH=src python3 -m storyforge.cli render --story '$SFML' --assets-dir assets --out-dir out $*" 2>&1 | tee -a "$LOG"

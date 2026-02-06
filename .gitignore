@@ -19,3 +19,12 @@ __pycache__/
 # Outputs
 /out/
 /tmp/
+
+# Storyforge Monitor (LAN web UI)
+/monitor/token.txt
+/monitor/jobs/
+/monitor/tmp/
+
+# Local scratch
+/tools/tmp_upload_cfg/
+

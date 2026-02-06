@@ -1,0 +1,33 @@
+# Tortoise built-in voice roster
+# IMPORTANT:
+# - Tortoise voice *names* (e.g., "deniro") are codenames, not gender guarantees.
+# - We expose COLOR IDS to the user; voice_name is an internal implementation detail.
+
+voices:
+  - id: ruby
+    color: Ruby
+    role: narrator
+    engine: tortoise
+    voice_name: emma
+    notes: "Default narrator color. (Tortoise voice_name: emma)"
+
+  - id: onyx
+    color: Onyx
+    role: character
+    engine: tortoise
+    voice_name: deniro
+    notes: "Deep/strong character. (Codename only; gender not guaranteed.)"
+
+  - id: slate
+    color: Slate
+    role: character
+    engine: tortoise
+    voice_name: daniel
+    notes: "Mid character. (Codename only; gender not guaranteed.)"
+
+  - id: sapphire
+    color: Sapphire
+    role: character
+    engine: tortoise
+    voice_name: jlaw
+    notes: "Higher/bright character. (Codename only; gender not guaranteed.)"

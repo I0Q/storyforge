@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Job</title>
+  <style>
+    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:16px;}
+    a{color:#0b63ce;}
+    pre{white-space:pre-wrap; background:#111; color:#ddd; padding:12px; border-radius:10px;}
+
+    .muted{color:#666; font-size: 12px;}
+
+    .toprow{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+    .underTitle{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:2px 0 8px;}
+    #startLine{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+    .btnrow{display:flex; gap:8px; align-items:center;}
+    .badge{font-size:12px; font-weight:750; padding:6px 10px; border-radius:999px; border:1px solid #ddd; text-transform:uppercase; letter-spacing:0.02em;}
+    .badge.running{background:#e0f2fe; border-color:#38bdf8; color:#075985;}
+    .badge.completed{background:#dcfce7; border-color:#22c55e; color:#14532d;}
+    .badge.aborted{background:#fee2e2; border-color:#ef4444; color:#7f1d1d;}
+    .badge.pending{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
+    .badge.unknown{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
+
+    .prog{display:flex; align-items:center; gap:10px; margin:10px 0 6px;}
+    .pbar{flex:1; height:16px; background:#eee; border-radius:999px; overflow:hidden; position:relative;}
+    .pfill{height:16px; background:#0b63ce; width:0%;} 
+    .ptext{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#111; mix-blend-mode:multiply;}
+    .ptext.light{color:#fff; mix-blend-mode:normal; text-shadow:0 1px 2px rgba(0,0,0,.35);} 
+    .ppct{min-width:96px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700;}
+
+    .cpuRow{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;}
+    .pill{font-size:12px; background:#f3f4f6; border-radius:999px; padding:4px 8px;}
+
+    .gpu{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:10px 0;}
+    .g{border:1px solid #ddd; border-radius:12px; padding:10px 12px;}
+    .ghead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}
+    .gt{font-weight:750;}
+    .gsub{font-size:12px; color:#666; white-space:nowrap;}
+
+    .metric{display:flex; align-items:center; gap:8px; margin:6px 0;}
+    .label{width:42px; font-size:12px; color:#666;}
+    .ibar{flex:1; height:8px; background:#f1f1f1; border-radius:999px; overflow:hidden;}
+    .ifill{height:8px; width:0%;}
+    .ifill.green{background:#1f9d55;}
+    .ifill.amber{background:#d97706;}
+    .ifill.red{background:#dc2626;}
+    .val{min-width:64px; text-align:right; font-variant-numeric:tabular-nums; font-size:12px; font-weight:650;}
+
+    details{border:1px solid #ddd; border-radius:12px; padding:10px 12px; margin:10px 0;}
+    .logtop{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:8px 0 10px;}
+    .btn{display:inline-block; padding:10px 12px; border-radius:10px; border:1px solid #d1d5db; text-decoration:none; font-weight:700; font-size:14px;}
+    .btn.tiny{padding:6px 10px; font-size:12px; border-radius:999px;}
+    summary{cursor:pointer; font-weight:650;}
+    .plist{margin-top:8px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#333; white-space:pre; overflow-x:auto;}
+  </style>
+</head>
+<body>
+  <div class="toprow">
+  <a id="back" href="#">Back</a>
+  <span id="statusBadge" class="badge">--</span>
+</div>
+  <h2 id="title">Job</h2>
+  <div class="underTitle">
+    <div class="muted" id="startLine"></div>
+    <div class="btnrow"><a id="sfmlTopBtn" class="btn tiny" href="#" target="_blank" rel="noopener">SFML</a><a id="dlTopBtn" class="btn tiny" href="#" target="_blank" rel="noopener">AUDIO</a></div>
+  </div>
+  <div class="muted" id="meta"></div>
+
+  <div class="prog">
+    <div class="pbar">
+      <div class="pfill" id="pfill"></div>
+      <div class="ptext" id="ptext">--</div>
+    </div>
+  </div>
+
+  <div id="cpu" class="cpuRow"><span class="muted">Loading...</span></div>
+  <div id="gpu" class="gpu"><span class="muted">Loading...</span></div>
+
+  <details id="procs" open="false">
+    <summary>Show processes</summary>
+    <div class="plist" id="ps"></div>
+  </details>
+
+  <details id="logs" open>
+    <summary>Log tail</summary>
+    <div class="logtop">
+      <div class="muted" id="logMeta"></div>
+    </div>
+    <pre id="log">(no log yet)</pre>
+  </details>
+
+<script>
+const params = new URLSearchParams(location.search);
+const t = params.get('t');
+const jobId = location.pathname.split('/').pop();
+document.getElementById('back').href = '/?t='+encodeURIComponent(t);
+
+document.getElementById('procs').open = false;
+document.getElementById('logs').open = true;
+
+function clampPct(x){
+  if(x===null || x===undefined || Number.isNaN(x)) return 0;
+  return Math.max(0, Math.min(100, x));
+}
+function klassForPct(p){
+  if(p >= 85) return 'red';
+  if(p >= 60) return 'amber';
+  return 'green';
+}
+function mibToGb(mib){
+  return mib/1024.0;
+}
+
+function metricRow(label, pct, cls, valueText){
+  return `
+    <div class="metric">
+      <div class="label">${label}</div>
+      <div class="ibar"><div class="ifill ${cls}" style="width:${pct}%"></div></div>
+      <div class="val">${valueText}</div>
+    </div>
+  `;
+}
+
+function renderGpu(gpus){
+  const el = document.getElementById('gpu');
+  if(!gpus){ el.innerHTML = '<span class="muted">(no GPU data)</span>'; return; }
+  el.innerHTML = '';
+  for(const g of gpus){
+    const div = document.createElement('div');
+    div.className = 'g';
+
+    const utilPct = clampPct(g.util);
+    const memPct = g.mem_total ? clampPct((g.mem_used/g.mem_total)*100) : 0;
+
+    const utilClass = klassForPct(utilPct);
+    const memClass = klassForPct(memPct);
+
+    const usedGb = mibToGb(g.mem_used||0);
+    const totalGb = mibToGb(g.mem_total||0);
+
+    div.innerHTML = `
+      <div class="ghead">
+        <div class="gt">GPU ${g.index}</div>
+        <div class="gsub">${(g.power||0).toFixed(0)}W · ${(g.temp||0).toFixed(0)}C</div>
+      </div>
+      ${metricRow('Util', utilPct, utilClass, utilPct.toFixed(0)+'%')}
+      ${metricRow('VRAM', memPct, memClass, usedGb.toFixed(1)+'/'+totalGb.toFixed(1)+'G')}
+    `;
+    el.appendChild(div);
+  }
+}
+
+function fmtElapsed(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = sec%60;
+  if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function renderCpu(cpu, startedAt, nowTs, status){
+  const el = document.getElementById('cpu');
+  if(!cpu){ el.innerHTML = '<span class="muted">(no CPU data)</span>'; return; }
+  const mem = cpu.mem_gb || {};
+  const cpuPct = cpu.cpu_pct;
+  const endTs = (status && status.state==='completed' && status.finished_at) ? status.finished_at : nowTs;
+  const elapsed = (startedAt && endTs) ? (endTs - startedAt) : null;
+
+  el.innerHTML = `
+    <div class="pill">Time: ${elapsed===null ? '-' : fmtElapsed(elapsed)}</div>
+    <div class="pill">CPU: ${cpuPct ?? '-'}%</div>
+    <div class="pill">RAM: ${mem.used ?? '-'} / ${mem.total ?? '-'} GB (${mem.pct ?? '-'}%)</div>
+  `;
+
+  const ps = (cpu.ps || []).join('\n');
+  document.getElementById('ps').textContent = ps;
+}
+
+async function refresh(){
+  const r = await fetch('/api/job/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t));
+  const j = await r.json();
+  if(!j.ok){ document.getElementById('log').textContent = 'Not found'; return; }
+  document.getElementById('title').textContent = j.job.title || j.job.id;
+  document.getElementById('meta').textContent = '';
+  document.getElementById('startLine').textContent = j.job.started_at ? new Date(j.job.started_at*1000).toLocaleString() : '';
+
+  // move sfml/tmp line into log area
+  const metaLine = (j.job.sfml||'') + ' | tmp=' + (j.tmp_dir||'(pending)');
+  const lm = document.getElementById('logMeta');
+  if(lm) lm.textContent = metaLine;
+  const sb = document.getElementById('sfmlTopBtn');
+  if(sb) sb.href = '/sfml/' + encodeURIComponent(jobId) + '?t=' + encodeURIComponent(t);
+
+  // status badge
+  const st = (j.status && j.status.state) ? j.status.state : 'unknown';
+  const b = document.getElementById('statusBadge');
+  b.className = 'badge ' + st;
+  b.textContent = st;
+
+  // top buttons
+  const dlb = document.getElementById('dlTopBtn');
+  if (dlb) {
+    if (j.mp3 && st === 'completed') {
+      dlb.style.display = 'inline-block';
+      dlb.href = '/dl/' + encodeURIComponent(jobId) + '?t=' + encodeURIComponent(t);
+    } else {
+      dlb.style.display = 'none';
+      dlb.href = '#';
+    }
+  }
+
+
+  const done = (j.progress && j.progress.done) ? j.progress.done : 0;
+  const total = (j.progress && j.progress.total) ? j.progress.total : 0;
+  const pct = (j.progress && j.progress.pct!==null && j.progress.pct!==undefined) ? j.progress.pct : null;
+  document.getElementById('pfill').style.width = pct ? (pct+'%') : '0%';
+  const txt = total ? `${done}/${total} (${pct===null?0:pct.toFixed(1)}%)` : `${done}`;
+  const pt = document.getElementById('ptext');
+  if(pt){ pt.textContent = txt; pt.className = 'ptext' + ((pct!==null && pct>=55) ? ' light' : ''); }
+
+  renderCpu(j.cpu, j.job.started_at, j.now, j.status);
+  renderGpu(j.gpu);
+  document.getElementById('log').textContent = j.log_tail || '(no log yet)';
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

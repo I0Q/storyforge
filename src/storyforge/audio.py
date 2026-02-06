@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import shlex
 import subprocess
@@ -39,6 +40,10 @@ class ProducerConfig:
     ambience_gain_db: float = -22.0
     narration_gain_db: float = 0.0
 
+    # Reliability/QC
+    qc_enabled: bool = True
+    max_retries_per_segment: int = 2
+
 
 def _run(cmd: List[str]) -> None:
     subprocess.run(cmd, check=True)
@@ -58,6 +63,100 @@ def _ffprobe_duration_s(path: Path) -> float:
     out = subprocess.check_output(cmd)
     data = json.loads(out)
     return float(data["format"]["duration"])
+
+
+# --- Audio QC (reliability) ---
+_qc_mean_re = re.compile(r"mean_volume:\s*([-0-9.]+)\s*dB")
+_qc_max_re = re.compile(r"max_volume:\s*([-0-9.]+)\s*dB")
+_qc_entropy_re = re.compile(r"Entropy:\s*([0-9.]+)")
+_qc_rms_re = re.compile(r"RMS level dB:\s*([-0-9.]+)")
+
+
+def _qc_wav(path: Path) -> tuple[bool, dict]:
+    """Heuristic QC to detect common TTS failures (silence/noise/clipping).
+
+    Uses ffmpeg filters so we avoid extra Python deps.
+    Returns (ok, stats).
+    """
+
+    stats: dict = {}
+    try:
+        dur = _ffprobe_duration_s(path)
+    except Exception as e:
+        return False, {"error": f"ffprobe_failed: {e}"}
+
+    stats["dur_s"] = dur
+    if dur < 0.18:
+        return False, {**stats, "reason": "too_short"}
+
+    # Volume detect
+    try:
+        out = subprocess.check_output(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                str(path),
+                "-af",
+                "volumedetect",
+                "-f",
+                "null",
+                "-",
+            ],
+            stderr=subprocess.STDOUT,
+        ).decode("utf-8", "replace")
+    except Exception as e:
+        return False, {**stats, "reason": f"volumedetect_failed: {e}"}
+
+    m = _qc_mean_re.search(out)
+    x = _qc_max_re.search(out)
+    mean_db = float(m.group(1)) if m else None
+    max_db = float(x.group(1)) if x else None
+    stats["mean_db"] = mean_db
+    stats["max_db"] = max_db
+
+    # Silence / near-silence
+    if mean_db is not None and mean_db < -45:
+        return False, {**stats, "reason": "too_quiet"}
+
+    # Hard clipping / broken levels
+    if max_db is not None and max_db > -0.2:
+        return False, {**stats, "reason": "clipping"}
+
+    # Entropy + RMS (noise-only often looks like high entropy with relatively loud RMS)
+    try:
+        out2 = subprocess.check_output(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                str(path),
+                "-af",
+                "astats=metadata=1:reset=0",
+                "-f",
+                "null",
+                "-",
+            ],
+            stderr=subprocess.STDOUT,
+        ).decode("utf-8", "replace")
+    except Exception as e:
+        return False, {**stats, "reason": f"astats_failed: {e}"}
+
+    em = _qc_entropy_re.findall(out2)
+    rm = _qc_rms_re.findall(out2)
+    entropy = float(em[-1]) if em else None
+    rms_db = float(rm[-1]) if rm else None
+    stats["entropy"] = entropy
+    stats["rms_db"] = rms_db
+
+    # This is a conservative rule: only reject when it looks like loud noise.
+    if entropy is not None and rms_db is not None:
+        if entropy > 0.93 and rms_db > -22:
+            return False, {**stats, "reason": "noise_like"}
+
+    return True, stats
 
 
 def _resolve_asset(assets_dir: Path, asset_id: str) -> Path:
@@ -183,7 +282,37 @@ def synthesize_utterance(
     ]
     if gpu_id is not None:
         cmd += ["--gpu", str(int(gpu_id))]
-    _run(cmd)
+
+    # Reliability: retry on bad audio outputs
+    attempts = max(0, int(getattr(cfg, "max_retries_per_segment", 0)))
+    for attempt in range(attempts + 1):
+        # Nudge seed on retries to escape bad generations
+        if attempt:
+            cmd2 = cmd.copy()
+            # seed is last arg after --seed
+            try:
+                seed_i = cmd2.index("--seed") + 1
+                base = int(cmd2[seed_i])
+                cmd2[seed_i] = str(base + attempt * 9973)
+            except Exception:
+                cmd2 = cmd
+        else:
+            cmd2 = cmd
+
+        _run(cmd2)
+        if getattr(cfg, "qc_enabled", True):
+            ok, stats = _qc_wav(out_wav)
+            if ok:
+                return
+            try:
+                out_wav.unlink(missing_ok=True)
+            except Exception:
+                pass
+            # If final attempt fails, raise for visibility
+            if attempt == attempts:
+                raise RuntimeError(f"QC failed for {speaker} after {attempts+1} attempts: {stats}")
+        else:
+            return
 
 
 def render(sfml_text: str, cfg: ProducerConfig) -> Path:
