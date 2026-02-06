@@ -648,8 +648,9 @@ class Handler(BaseHTTPRequestHandler):
               h1{margin:0 0 6px;}
               h2{margin:0 0 10px;}
               pre{white-space:pre-wrap; background:#111; color:#ddd; padding:12px; border-radius:10px;}
-              .muted{color:#666; font-size:12px;}
-              .badge{font-size:11px; font-weight:900; padding:3px 8px; border-radius:999px; border:1px solid #ddd; text-transform:uppercase; letter-spacing:0.02em; align-self:flex-start;}
+              .muted{color:#6b7280; font-size:12px;}
+              .badge{font-size:11px; font-weight:900; padding:4px 10px; border-radius:999px; border:1px solid transparent; text-transform:uppercase; letter-spacing:0.02em; align-self:flex-start;}
+
               .badge.running{background:#e0f2fe; border-color:#38bdf8; color:#075985;}
               .badge.completed{background:#dcfce7; border-color:#22c55e; color:#14532d;}
               .badge.aborted{background:#fee2e2; border-color:#ef4444; color:#7f1d1d;}
@@ -668,10 +669,16 @@ class Handler(BaseHTTPRequestHandler):
               .pillrow{display:flex; gap:10px; flex-wrap:wrap; margin:6px 0 0;}
               .pill{font-size:12px; background:#f3f4f6; border-radius:999px; padding:4px 8px; font-weight:700;}
               .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; background:#fff;}
-.rowTop{display:flex; gap:10px; align-items:flex-start;}
+.rowTop{display:flex; gap:10px; align-items:flex-start; margin-bottom:6px;}
+
               .rowMain{flex:1; min-width:0;}
-              .rowTitle{font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.15; flex:1;}
-.rowBtns{display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-top:10px;}
+.rowMainLink{display:block; color:inherit; text-decoration:none;}
+.rowMainLink:active{opacity:0.75;}
+
+              .rowTitle{font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.2; flex:1; font-size:16px;}
+
+.rowBtns{display:flex; gap:10px; align-items:flex-end; justify-content:flex-end; flex-wrap:wrap;}
+
               details{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0 0;}
               summary{cursor:pointer; font-weight:800;}
             </style>
@@ -758,18 +765,23 @@ class Handler(BaseHTTPRequestHandler):
                     done = 0
                 segtxt = (str(done) + '/' + str(total)) if (done is not None and total is not None and total) else ('audio' if (st=='completed' and meta.get('mp3')) else '-')
                 btns = []
+                # MARKUP (SFML viewer)
+                btns.append('<a class=\"btn tiny\" href=\"/view/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">MARKUP</a>')
                 if meta.get('mp3') and st == 'completed':
                     btns.append('<a class=\"btn tiny\" href=\"/dl/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">AUDIO</a>')
 
                 row = ''
-                row += '<div class="row">'
-                row +=   '<div class="rowMain">'
+                row += '<div class=\"row ' + h(st) + '\">'
+                row +=   '<a class=\"rowMainLink\" href=\"/view/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">'
+                row +=   '<div class=\"rowMain\">'
                 row +=     '<div class="rowTop">'
                 row +=       '<div>' + badge(st) + '</div>'
                 row +=       '<div class="rowTitle"><a href="/view/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">' + h(meta.get('title') or jid) + '</a></div>'
                 row +=     '</div>'
-                row +=     '<div class=\"muted\">' + h(fmt_ts(started_at)) + ' • ' + fmt_elapsed(elapsed) + ' • ' + segtxt + '</div>'
+                row +=     '<div class=\"muted\">' + h(fmt_ts(started_at)) + '</div>'
+                row +=     '<div class=\"muted\">' + fmt_elapsed(elapsed) + ' • ' + segtxt + '</div>'
                 row +=   '</div>'
+                row +=   '</a>'
                 if btns:
                     row +=   '<div class=\"rowBtns\">' + ''.join(btns) + '</div>'
                 row += '</div>'
