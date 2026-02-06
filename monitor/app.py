@@ -713,6 +713,12 @@ class Handler(BaseHTTPRequestHandler):
                     if done is None and total:
                         done = 0
                 pct = prog.get('pct') or 0
+                tmp_root = root / tmp
+                job_base = tmp_root / jid
+                tmp_job = find_tmp_job_dir(tmp_root, jid) or job_base
+                tmp_root = root / tmp
+                job_base = tmp_root / jid
+                tmp_job = find_tmp_job_dir(tmp_root, jid) or job_base
                 log_tail = read_log_tail(tmp_job, job_base)
                 log_text = "\n".join(log_tail) if log_tail else '(no log yet)'
                 started_at = running.get('started_at')
