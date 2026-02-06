@@ -73,6 +73,9 @@
       <div class="ptext" id="ptext">--</div>
     </div>
   </div>
+
+  <div class="cpuRow" id="jobStats"><span class="muted">Loading…</span></div>
+
 <details id="logs" open>
     <summary>Log tail</summary>
     <div class="logtop">
@@ -87,33 +90,13 @@ const t = params.get('t');
 const jobId = location.pathname.split('/').pop();
 document.getElementById('back').href = '/?t='+encodeURIComponent(t);
 
-document.getElementById('procs').open = false;
 document.getElementById('logs').open = true;
 
 function clampPct(x){
   if(x===null || x===undefined || Number.isNaN(x)) return 0;
   return Math.max(0, Math.min(100, x));
 }
-function klassForPct(p){
-  if(p >= 85) return 'red';
-  if(p >= 60) return 'amber';
-  return 'green';
-}
-function mibToGb(mib){
-  return mib/1024.0;
-}
 
-function metricRow(label, pct, cls, valueText){
-  return `
-    <div class="metric">
-      <div class="label">${label}</div>
-      <div class="ibar"><div class="ifill ${cls}" style="width:${pct}%"></div></div>
-      <div class="val">${valueText}</div>
-    </div>
-  `;
-}
-
-function renderGpu(){ return; }
 
 function fmtElapsed(sec){
   sec = Math.max(0, Math.floor(sec));
@@ -123,8 +106,6 @@ function fmtElapsed(sec){
   if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   return `${m}:${String(s).padStart(2,'0')}`;
 }
-
-function renderCpu(){ return; }
 
 async function refresh(){
   const r = await fetch('/api/job/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t));
@@ -167,6 +148,22 @@ async function refresh(){
   const txt = total ? `${done}/${total} (${pct===null?0:pct.toFixed(1)}%)` : `${done}`;
   const pt = document.getElementById('ptext');
   if(pt){ pt.textContent = txt; pt.className = 'ptext' + ((pct!==null && pct>=55) ? ' light' : ''); }
+
+  // job stats
+  const js = document.getElementById('jobStats');
+  if(js){
+    const startedAt = j.job && j.job.started_at ? j.job.started_at : null;
+    const stState = (j.status && j.status.state) ? j.status.state : 'unknown';
+    const nowTs = j.now;
+    const endTs = (stState==='completed' && j.status && j.status.finished_at) ? j.status.finished_at : nowTs;
+    const elapsed = (startedAt && endTs) ? (endTs - startedAt) : null;
+    js.innerHTML = `
+      <div class="pill">Time: ${elapsed===null ? '-' : fmtElapsed(elapsed)}</div>
+      <div class="pill">Done: ${total ? (done+'/'+total) : done}</div>
+      <div class="pill">Status: ${stState}</div>
+    `;
+  }
+
 
     document.getElementById('log').textContent = j.log_tail || '(no log yet)';
 }
