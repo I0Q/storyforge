@@ -766,7 +766,8 @@ class Handler(BaseHTTPRequestHandler):
                 # MARKUP (SFML viewer)
                 btns.append('<a class=\"btn tiny\" href=\"/view/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">SFML</a>')
                 if meta.get('mp3') and st == 'completed':
-                    btns.append('<a class=\"btn tiny\" href=\"/dl/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">AUDIO</a>')
+                    btns.append('<a class=\"btn tiny\" href=\"#\" data-play=\"' + jid + '\">PLAY</a>')
+                    btns.append('<a class=\"btn tiny\" href=\"/dl/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">DL</a>')
 
                 row = ''
                 row += '<div class=\"row ' + h(st) + '\">'
@@ -779,6 +780,10 @@ class Handler(BaseHTTPRequestHandler):
                 row +=       '<div class=\"muted\">' + h(fmt_ts(started_at)) + ' • ' + fmt_elapsed(elapsed) + ' • ' + segtxt + '</div>'
                 row +=       '<div class=\"rowBtns\">' + ''.join(btns) + '</div>'
                 row +=     '</div>'
+                if meta.get('mp3') and st == 'completed':
+                    row +=     '<div class=\"rowAudio\" id=\"aud_' + jid + '\" style=\"display:none;\">'
+                    row +=       '<audio controls preload=\"none\" src=\"/audio/' + jid + '?t=' + h(token) + '\"></audio>'
+                    row +=     '</div>'
                 row +=   '</div>'
                 row += '</div>'
                 rows.append(row)
@@ -787,6 +792,41 @@ class Handler(BaseHTTPRequestHandler):
                 parts.append("\n".join(rows))
             else:
                 parts.append('<div class="muted">No jobs yet.</div>')
+
+            parts.append("""
+<script>
+(function(){
+  function stopAll(exceptId){
+    document.querySelectorAll('.rowAudio').forEach(function(el){
+      if(exceptId && el.id === exceptId) return;
+      try{ el.style.display='none'; }catch(e){}
+      try{ var a=el.querySelector('audio'); if(a) a.pause(); }catch(e){}
+    });
+    document.querySelectorAll('[data-play]').forEach(function(b){ b.textContent='PLAY'; });
+  }
+
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    if(!t) return;
+    var jid = t.getAttribute('data-play');
+    if(!jid) return;
+    ev.preventDefault();
+    var box = document.getElementById('aud_'+jid);
+    if(!box) return;
+    var open = box.style.display !== 'none';
+    if(open){
+      stopAll(null);
+      return;
+    }
+    stopAll('aud_'+jid);
+    box.style.display='block';
+    t.textContent='HIDE';
+    var a = box.querySelector('audio');
+    if(a){ try{ a.play(); }catch(e){} }
+  }, {passive:false});
+})();
+</script>
+""")
 
             parts.append('<!-- Bottom sheet: system monitor -->\n<style>\n  .bs{position:fixed; left:0; right:0; bottom:0; z-index:9999; pointer-events:auto; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; will-change:transform;}\n  .bs .handle{margin:0 auto; width:46px; height:5px; background:#d1d5db; border-radius:999px;}\n  .bs .bar{background:rgba(255,255,255,.96); border-top:1px solid #e5e7eb; box-shadow:0 -10px 25px rgba(0,0,0,.08); padding:10px 14px calc(10px + env(safe-area-inset-bottom));}\n  .bs .barTop{display:flex; justify-content:space-between; align-items:center; gap:12px;}\n  .bs .title{font-weight:900; font-size:13px;}\n  .bs .mini{font-size:12px; color:#666;}\n  .bs .btn{display:inline-block; padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:12px; color:#0b63ce; background:#fff;}\n  .bs .panel{display:none; padding-top:10px;}\n  .bs.open .panel{display:block;}\n  .bs .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:10px;}\n  .bs .g{border:1px solid #ddd; border-radius:12px; padding:10px 12px; background:#fff;}\n  .bs .ghead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}\n  .bs .gt{font-weight:850;}\n  .bs .gsub{font-size:12px; color:#666; white-space:nowrap;}\n  .bs .metric{display:flex; align-items:center; gap:8px; margin:6px 0;}\n  .bs .label{width:42px; font-size:12px; color:#666;}\n  .bs .ibar{flex:1; height:8px; background:#f1f1f1; border-radius:999px; overflow:hidden;}\n  .bs .ifill{height:8px; width:0%;}\n  .bs .ifill.green{background:#1f9d55;}\n  .bs .ifill.amber{background:#d97706;}\n  .bs .ifill.red{background:#dc2626;}\n  .bs .val{min-width:64px; text-align:right; font-variant-numeric:tabular-nums; font-size:12px; font-weight:700;}\n  .bs details{border:1px solid #ddd; border-radius:12px; padding:10px 12px; margin-top:10px; background:#fff;}\n  .bs summary{cursor:pointer; font-weight:750;}\n  .bs .plist{margin-top:8px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#333; white-space:pre; overflow-x:auto;}\n  html,body{height:100%;}\n  body{padding-bottom:90px; -webkit-overflow-scrolling:touch;} /* room for bar */\n</style>\n\n<div id="bottomSheet" class="bs">\n  <div class="bar">\n    <div class="handle" aria-hidden="true"></div>\n    <div class="barTop" style="margin-top:8px;">\n      <div>\n        <div class="title">System Monitor</div>\n        <div class="mini" id="bsMini">Loading…</div>\n      </div>\n      <div style="display:flex; gap:8px; align-items:center;">\n        <a href="#" id="bsToggle" class="btn">Show</a>\n      </div>\n    </div>\n\n    <div class="panel" id="bsPanel">\n      <div class="grid" id="bsGpu"></div>\n      <div class="grid" style="grid-template-columns:1fr;">\n        <div class="g" id="bsCpu"></div>\n      </div>\n      <details>\n        <summary>Processes</summary>\n        <div class="plist" id="bsPs"></div>\n      </details>\n    </div>\n  </div>\n</div>\n\n<script>\n(function(){\n  const params = new URLSearchParams(location.search);\n  const t = params.get(\'t\') || \'\';\n  const bs = document.getElementById(\'bottomSheet\');\n  const btn = document.getElementById(\'bsToggle\');\n\n  function clampPct(x){\n    if(x===null || x===undefined || Number.isNaN(x)) return 0;\n    return Math.max(0, Math.min(100, x));\n  }\n  function klassForPct(p){\n    if(p >= 85) return \'red\';\n    if(p >= 60) return \'amber\';\n    return \'green\';\n  }\n  function metricRow(label, pct, cls, valueText){\n    return `\n      <div class="metric">\n        <div class="label">${label}</div>\n        <div class="ibar"><div class="ifill ${cls}" style="width:${pct}%"></div></div>\n        <div class="val">${valueText}</div>\n      </div>\n    `;\n  }\n\n  function toggle(open){\n    const isOpen = (open !== undefined) ? open : !bs.classList.contains(\'open\');\n    bs.classList.toggle(\'open\', isOpen);\n    btn.textContent = isOpen ? \'Hide\' : \'Show\';\n    try{ localStorage.setItem(\'bsOpen\', isOpen ? \'1\':\'0\'); }catch(e){}\n  }\n\n  btn.addEventListener(\'click\', (e)=>{ e.preventDefault(); toggle(); });\n  bs.querySelector(\'.handle\').addEventListener(\'click\', ()=>toggle());\n\n  try{\n    const saved = localStorage.getItem(\'bsOpen\');\n    if(saved===\'1\') toggle(true);\n  }catch(e){}\n\n  async function refresh(){\n    const r = await fetch(\'/api/stats?t=\'+encodeURIComponent(t));\n    if(!r.ok) return;\n    const j = await r.json();\n    if(!j.ok) return;\n\n    // Mini line\n    const mini = document.getElementById(\'bsMini\');\n    const cpuPct = j.cpu && (j.cpu.cpu_pct ?? null);\n    const g0 = (j.gpu && j.gpu.length) ? j.gpu[0] : null;\n    const gtxt = g0 ? `GPU0 ${Math.round(g0.util||0)}%` : \'GPU n/a\';\n    mini.textContent = `CPU ${cpuPct===null?\'-\':cpuPct}% • ${gtxt}`;\n\n    // GPU cards\n    const ge = document.getElementById(\'bsGpu\');\n    if(!j.gpu){ ge.innerHTML = \'<div class="muted">(no GPU data)</div>\'; }\n    else {\n      ge.innerHTML = \'\';\n      for(const g of j.gpu){\n        const util = clampPct(g.util);\n        const vram = g.mem_total ? clampPct((g.mem_used/g.mem_total)*100.0) : 0;\n        const gdiv = document.createElement(\'div\');\n        gdiv.className=\'g\';\n        gdiv.innerHTML = `\n          <div class="ghead"><div class="gt">GPU ${g.index}</div><div class="gsub">${Math.round(g.power||0)}W • ${Math.round(g.temp||0)}C</div></div>\n          ${metricRow(\'Util\', util, klassForPct(util), `${Math.round(util)}%`)}\n          ${metricRow(\'VRAM\', vram, klassForPct(vram), `${(g.mem_used||0).toFixed(1)}/${(g.mem_total||0).toFixed(0)} MiB`)}\n        `;\n        ge.appendChild(gdiv);\n      }\n    }\n\n    // CPU\n    const ce = document.getElementById(\'bsCpu\');\n    if(!j.cpu){ ce.innerHTML = \'<span class="muted">(no CPU data)</span>\'; }\n    else {\n      const mem = j.cpu.mem_gb || {};\n      ce.innerHTML = `\n        <div class="ghead"><div class="gt">CPU</div><div class="gsub">RAM ${(mem.used??\'-\')} / ${(mem.total??\'-\')} GB</div></div>\n        ${metricRow(\'CPU\', clampPct(j.cpu.cpu_pct||0), klassForPct(j.cpu.cpu_pct||0), `${j.cpu.cpu_pct ?? \'-\'}%`)}\n      `;\n      document.getElementById(\'bsPs\').textContent = (j.cpu.ps || []).join(\'\\n\');\n    }\n  }\n\n  refresh();\n  setInterval(refresh, 5000);\n})();\n</script>')
             parts.append('</body></html>')
@@ -1013,6 +1053,31 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
             except Exception:
                 self._send(500, b"error\n")
+            return
+
+        
+
+        m = re.match(r"^/audio/([a-zA-Z0-9_-]+)$", path)
+        if m:
+            qs = parse_qs(urlparse(self.path).query)
+            token = (qs.get("t") or [""])[0]
+            if token != self.server.token:
+                self._send(403, b"forbidden\n")
+                return
+            jid = m.group(1)
+            st = job_status(root, jid)
+            mp3 = st.get("mp3")
+            if not mp3:
+                self._send(404, b"not_ready\n")
+                return
+            p = Path(mp3)
+            data = p.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", f"inline; filename=\"{p.name}\"")
+            self.end_headers()
+            self.wfile.write(data)
             return
 
         m = re.match(r"^/dl/([a-zA-Z0-9_-]+)$", path)
