@@ -2,6 +2,7 @@
 import argparse
 import ipaddress
 import json
+import sqlite3
 import re
 import time
 from http import HTTPStatus
@@ -23,17 +24,110 @@ def read_text(p: Path) -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
 
+# --- SQLite job store ---
+
+def db_default_path(root: Path) -> Path:
+    return root / "monitor.db"
+
+
+def db_connect(db_path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    # Better concurrency for threaded server
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+
+def db_init(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS jobs (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          sfml TEXT NOT NULL DEFAULT '',
+          started_at INTEGER NOT NULL DEFAULT 0,
+          total_segments INTEGER NOT NULL DEFAULT 0,
+          mp3 TEXT
+        );
+        """
+    )
+    conn.commit()
+
+
+def db_upsert_job(conn: sqlite3.Connection, meta: dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO jobs (id, title, sfml, started_at, total_segments, mp3)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title,
+          sfml=excluded.sfml,
+          started_at=excluded.started_at,
+          total_segments=excluded.total_segments,
+          mp3=excluded.mp3
+        """,
+        (
+            meta.get("id"),
+            meta.get("title") or meta.get("id") or "",
+            meta.get("sfml") or "",
+            int(meta.get("started_at", 0) or 0),
+            int(meta.get("total_segments", 0) or 0),
+            meta.get("mp3"),
+        ),
+    )
+    conn.commit()
+
+
+def db_get_job(conn: sqlite3.Connection, job_id: str) -> dict | None:
+    row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def db_list_jobs(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute("SELECT * FROM jobs ORDER BY started_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+def migrate_jobs_json_to_db(root: Path, db_path: Path) -> int:
+    """One-time migration: if DB is empty, import monitor/jobs/*.json."""
+    jobs_dir = root / "jobs"
+    if not jobs_dir.exists():
+        return 0
+
+    conn = db_connect(db_path)
+    db_init(conn)
+    n = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    if n:
+        conn.close()
+        return 0
+
+    imported = 0
+    for p in sorted(jobs_dir.glob("*.json")):
+        try:
+            meta = json.loads(read_text(p))
+            if not meta.get("id"):
+                meta["id"] = p.stem
+            db_upsert_job(conn, meta)
+            imported += 1
+        except Exception:
+            pass
+    conn.close()
+    return imported
+
+
 def job_status_light(root: Path, job_id: str) -> dict:
     """Lightweight status for list view (no cpu/gpu/log tail)."""
-    jobs_dir = root / "jobs"
     tmp_root = root / "tmp"
     out_dir = Path("/raid/storyforge_test/out")
 
-    meta_path = jobs_dir / (job_id + ".json")
-    if not meta_path.exists():
+    conn = db_connect(db_default_path(root))
+    db_init(conn)
+    meta = db_get_job(conn, job_id)
+    conn.close()
+    if not meta:
         return {"ok": False, "error": "job_not_found"}
 
-    meta = json.loads(read_text(meta_path))
     started_at = int(meta.get("started_at", 0) or 0)
     total = int(meta.get("total_segments", 0) or 0)
 
@@ -438,20 +532,20 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/jobs":
-            jobs_dir = root / "jobs"
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            metas = db_list_jobs(conn)
+            conn.close()
+
             items = []
-            for p in jobs_dir.glob("*.json"):
-                try:
-                    meta = json.loads(read_text(p))
-                    jid = meta.get("id") or p.stem
-                    st = job_status_light(root, jid)
-                    meta["status"] = st.get("status")
-                    meta["mp3"] = st.get("mp3")
-                    meta["progress"] = st.get("progress")
-                    items.append(meta)
-                except Exception:
-                    pass
-            items.sort(key=lambda m: int(m.get("started_at", 0) or 0), reverse=True)
+            for meta in metas:
+                jid = meta.get("id")
+                st = job_status_light(root, jid)
+                meta["status"] = st.get("status")
+                meta["mp3"] = st.get("mp3")
+                meta["progress"] = st.get("progress")
+                items.append(meta)
+
             self._send(200, (json.dumps({"ok": True, "jobs": items}) + "\n").encode(), "application/json")
             return
 
@@ -467,12 +561,14 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/sfml/([a-zA-Z0-9_-]+)$", path)
         if m:
             jid = m.group(1)
-            meta_path = (root / "jobs" / f"{jid}.json")
-            if not meta_path.exists():
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            meta = db_get_job(conn, jid)
+            conn.close()
+            if not meta:
                 self._send(404, b"job_not_found\n")
                 return
             try:
-                meta = json.loads(read_text(meta_path))
                 sfml = meta.get("sfml")
                 if not sfml:
                     self._send(404, b"sfml_missing\n")
@@ -520,16 +616,25 @@ def main():
     ap.add_argument("--root", default="/raid/storyforge_test/monitor")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8787)
+    ap.add_argument("--db", default="", help="Path to sqlite db (default: <root>/monitor.db)")
     args = ap.parse_args()
 
     root = Path(args.root)
     token = (root / "token.txt").read_text().strip()
     allow_nets = detect_allow_cidrs(root)
 
+    db_path = Path(args.db) if args.db else db_default_path(root)
+    # create/init db + migrate legacy JSON jobs once
+    conn = db_connect(db_path)
+    db_init(conn)
+    conn.close()
+    migrate_jobs_json_to_db(root, db_path)
+
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.root = root
     httpd.token = token
     httpd.allow_nets = allow_nets
+    httpd.db_path = db_path
 
     print(f"listening on http://{args.host}:{args.port} (token required)")
     print("allow:", ", ".join(str(n) for n in allow_nets))

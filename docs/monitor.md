@@ -11,12 +11,16 @@ A tiny LAN-only web UI that shows Storyforge render jobs, basic progress, and pr
 
 ## Files / Layout
 
+State is stored in **SQLite** (`monitor/monitor.db`, ignored by git). Legacy JSON files under `monitor/jobs/` may exist for compatibility / migration but are not the primary store.
+
+
 - `monitor/app.py` — HTTP server (ThreadingHTTPServer).
 - `monitor/static/index.html` — Jobs list page.
 - `monitor/static/job.html` — Job detail page.
 - `monitor/static/ping.html` — simple health page.
 - `monitor/allow_cidrs.json` — CIDR allowlist (e.g. `127.0.0.1/32`, `192.168.0.0/16`).
 - `monitor/token.txt` — **secret token** (NOT committed).
+- `monitor/monitor.db` — SQLite database (NOT committed).
 - `monitor/token.example.txt` — template file for token.
 - `monitor/jobs/<id>.json` — job metadata (NOT committed).
 - `monitor/tmp/<id>/...` — per-job temp dirs + logs (NOT committed).
@@ -52,6 +56,20 @@ Downloads:
 - `GET /sfml/<id>?t=...` — SFML source download for that job
 
 ## Job model
+
+### SQLite
+
+Primary store: `monitor/monitor.db`
+
+Table: `jobs`
+- `id` (PRIMARY KEY)
+- `title`
+- `sfml`
+- `started_at`
+- `total_segments`
+- `mp3` (optional path)
+
+### Legacy JSON
 
 Jobs are represented by:
 

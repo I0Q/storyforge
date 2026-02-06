@@ -28,3 +28,5 @@ __pycache__/
 # Local scratch
 /tools/tmp_upload_cfg/
 
+/monitor/monitor.db
+/monitor/*.db

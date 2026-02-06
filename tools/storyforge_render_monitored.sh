@@ -62,6 +62,37 @@ job={
 Path("$JOBS/$JOB_ID.json").write_text(json.dumps(job, ensure_ascii=False, indent=2)+"\n")
 PYIN
 
+# Upsert into sqlite job DB (preferred job store)
+DB=${MONITOR_DB:-$ROOT/monitor.db}
+python3 - <<PYIN
+import sqlite3
+conn=sqlite3.connect("$DB")
+conn.execute("PRAGMA journal_mode=WAL")
+conn.execute("""
+CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  sfml TEXT NOT NULL DEFAULT '',
+  started_at INTEGER NOT NULL DEFAULT 0,
+  total_segments INTEGER NOT NULL DEFAULT 0,
+  mp3 TEXT
+);
+""")
+conn.execute(
+  """INSERT INTO jobs (id,title,sfml,started_at,total_segments,mp3)
+     VALUES (?,?,?,?,?,NULL)
+     ON CONFLICT(id) DO UPDATE SET
+       title=excluded.title,
+       sfml=excluded.sfml,
+       started_at=excluded.started_at,
+       total_segments=excluded.total_segments
+  """,
+  ("$JOB_ID","$TITLE","$SFML",int("$STARTED"),int("$TOTAL"))
+)
+conn.commit(); conn.close()
+PYIN
+
+
 TOKEN=$(cat $ROOT/token.txt)
 HOST=$(hostname -I | awk '{print $1}')
 URL="http://$HOST:8787/job/$JOB_ID?t=$TOKEN"
