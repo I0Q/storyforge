@@ -666,6 +666,7 @@ class Handler(BaseHTTPRequestHandler):
               .pbar{flex:1; height:16px; background:#eee; border-radius:999px; overflow:hidden; position:relative;}
               .pfill{height:16px; background:#0b63ce; width:0%;}
               .ptext{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#111;}
+              .logbox{max-height:160px; overflow:auto; white-space:pre-wrap; word-break:break-word;}
               .pillrow{display:flex; gap:12px; flex-wrap:wrap; margin:6px 0 0;}
               .pill{font-size:12px; background:#f3f4f6; border-radius:999px; padding:4px 8px; font-weight:700;}
               .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; background:#fff;}
@@ -736,7 +737,7 @@ class Handler(BaseHTTPRequestHandler):
                 parts.append('</div>')
                 parts.append('<div class="prog"><div class="pbar"><div id="run_pfill" class="pfill" style="width:' + str(pct) + '%"></div><div id="run_ptext" class="ptext">' + str(done) + '/' + str(total) + ' segments</div></div></div>')
                 parts.append('<div class="pillrow"><div id="run_time" class="pill">Time: ' + fmt_elapsed(elapsed) + '</div><div id="run_state" class="pill">Status: ' + h(st) + '</div></div>')
-                parts.append('<details open><summary>Log tail</summary><pre id="run_log">' + h(log_text) + '</pre></details>')
+                parts.append('<details open><summary>Log tail</summary><pre id="run_log" class="logbox">' + h(log_text) + '</pre></details>')
                 parts.append('</div>')
 
                 parts.append('<script>(function(){const jid=' + json.dumps(jid) + ';const t=new URLSearchParams(location.search).get(\'t\')||\'\';const logEl=document.getElementById(\'run_log\');const pfill=document.getElementById(\'run_pfill\');const ptext=document.getElementById(\'run_ptext\');const stateEl=document.getElementById(\'run_state\');function lastLines(s,n){if(!s)return\'\';const lines=String(s).split(/\\r?\\n/);return lines.slice(Math.max(0,lines.length-n)).join("\\n");}async function tick(){try{const r=await fetch(\'/api/job/\'+encodeURIComponent(jid)+\'?t=\'+encodeURIComponent(t),{cache:\'no-store\'});if(!r.ok)return;const j=await r.json();if(!j||!j.ok)return;const prog=j.progress||{};const done=(prog.done??0);const total=(prog.total??0);const pct=(prog.pct??0);if(pfill)pfill.style.width=((pct?pct.toFixed(1):0)+\'%\');if(ptext)ptext.textContent=(total?(done+\'/\'+total+\' segments\'):(done+\' segments\'));const st=(j.status&&j.status.state)?j.status.state:\'running\';if(stateEl)stateEl.textContent=\'Status: \'+st;if(logEl){logEl.textContent=lastLines(j.log_tail||\'\',12);}if(st===\'completed\'||st===\'aborted\'){clearInterval(timer);}}catch(e){}}tick();const timer=setInterval(tick,2500);})();</script>')
