@@ -4,73 +4,214 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Storyforge Monitor</title>
+  
   <style>
     body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:16px;}
     a{color:#0b63ce;}
-    .job{padding:12px; border:1px solid #ddd; border-radius:12px; margin:12px 0;}
-    .cardrow{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
-    .left{flex:1; min-width:0;}
-    .right{display:flex; flex-direction:row; gap:8px; align-items:center;}
-    .btn{display:inline-block; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; text-decoration:none; font-weight:700; font-size:13px; min-width:0; text-align:center;}
-    .btn.primary{background:#0b63ce; color:#fff; border-color:#0b63ce;}
-    .btn.secondary{background:#fff; color:#0b63ce;}
-    .muted{color:#666; font-size: 12px;}
-  .row{display:flex; justify-content:space-between; align-items:center; gap:10px;}
-  .badge{font-size:10px; font-weight:750; padding:4px 8px; border-radius:999px; border:1px solid #ddd; text-transform:uppercase; letter-spacing:0.02em; white-space:nowrap;}
-  .badge.running{background:#e0f2fe; border-color:#38bdf8; color:#075985;}
-  .badge.completed{background:#dcfce7; border-color:#22c55e; color:#14532d;}
-  .badge.aborted{background:#fee2e2; border-color:#ef4444; color:#7f1d1d;}
-  .badge.pending{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
-  .dl{font-size:12px; margin-top:6px;}
-  .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;}
-  .btn{display:inline-block; padding:12px 14px; border-radius:12px; border:1px solid #d1d5db; text-decoration:none; font-weight:700; font-size:15px;}
-  .btn.primary{background:#0b63ce; color:#fff; border-color:#0b63ce;}
-  .btn.secondary{background:#fff; color:#0b63ce;}
+    h1{margin:0 0 6px;}
+    h2{margin:0 0 10px;}
+    pre{white-space:pre-wrap; background:#111; color:#ddd; padding:12px; border-radius:10px;}
+    .muted{color:#666; font-size:12px;}
+
+    .badge{font-size:12px; font-weight:850; padding:6px 10px; border-radius:999px; border:1px solid #ddd; text-transform:uppercase; letter-spacing:0.02em;}
+    .badge.running{background:#e0f2fe; border-color:#38bdf8; color:#075985;}
+    .badge.completed{background:#dcfce7; border-color:#22c55e; color:#14532d;}
+    .badge.aborted{background:#fee2e2; border-color:#ef4444; color:#7f1d1d;}
+    .badge.pending{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
+    .badge.unknown{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
+
+    .btn{display:inline-block; padding:10px 12px; border-radius:10px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:14px; background:#fff;}
+    .btn.tiny{padding:6px 10px; font-size:12px; border-radius:999px;}
+    .btnrow{display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap;}
+
+    .card{border:1px solid #e5e7eb; border-radius:14px; padding:12px; background:#fff;}
+    .cardTop{display:flex; justify-content:space-between; gap:12px; align-items:flex-start;}
+    .title{font-weight:950; font-size:16px;}
+
+    .prog{display:flex; align-items:center; gap:10px; margin:10px 0 6px;}
+    .pbar{flex:1; height:16px; background:#eee; border-radius:999px; overflow:hidden; position:relative;}
+    .pfill{height:16px; background:#0b63ce; width:0%;}
+    .ptext{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#111;}
+
+    .pillrow{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;}
+    .pill{font-size:12px; background:#f3f4f6; border-radius:999px; padding:4px 8px; font-weight:700;}
+
+    .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:10px; align-items:center; background:#fff; cursor:pointer;}
+    .rowTop{display:flex; justify-content:space-between; gap:10px; align-items:center;}
+    .rowMain{flex:1; min-width:0;}
+    .rowTitle{font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+    .rowBtns{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    details{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0 0;}
+    summary{cursor:pointer; font-weight:800;}
   </style>
+
 </head>
 <body>
-  <h2>Storyforge Monitor</h2>
-  <div class="muted" style="margin:6px 0 10px;"><a id="voicesLink" href="#">Voices</a></div>
-  <div id="jobs">Loading…</div>
 
-<script>
-const params = new URLSearchParams(location.search);
-const t = params.get('t');
-document.getElementById('voicesLink').href = '/voices?t='+encodeURIComponent(t);
-async function refresh(){
-  const r = await fetch('/api/jobs?t='+encodeURIComponent(t));
-  const j = await r.json();
-  const el = document.getElementById('jobs');
-  if(!j.ok){ el.textContent = 'Error'; return; }
-  if(j.jobs.length===0){ el.textContent = 'No jobs yet.'; return; }
-  el.innerHTML = '';
-  for(const job of j.jobs){
-    const div = document.createElement('div');
-    div.className='job';
-    const started = job.started_at ? new Date(job.started_at*1000).toLocaleString() : '';
-    div.innerHTML =
-      '<div class="cardrow">'
-        + '<div class="left">'
-          + '<div class="row">'
-            + '<b>' + (job.title||job.id) + '</b>'
-            + '<span class="badge ' + ((job.status&&job.status.state)||'unknown') + '">' + ((job.status&&job.status.state)||'unknown') + '</span>'
-          + '</div>'
-          + '<div class="muted">' + started + ' — ' + (job.sfml||'') + '</div>'
-        + '</div>'
-        + '<div class="right">'
-          + '<a class="btn primary" href="/job/' + job.id + '?t=' + encodeURIComponent(t) + '">Open</a>'
-          + (((job.mp3) && (job.status) && (job.status.state==="completed"))
-              ? ('<a class="btn secondary" href="/dl/' + job.id + '?t=' + encodeURIComponent(t) + '">Audio</a>')
-              : '')
-        + '</div>'
-      + '</div>';
+  <h1>Storyforge Monitor</h1>
 
-    el.appendChild(div);
+  <div id="runningWrap" style="display:none;">
+    <h2 style="margin-top:18px;">Running</h2>
+    <div class="card">
+      <div class="cardTop">
+        <div>
+          <div class="title" id="runTitle">—</div>
+          <div class="muted" id="runMeta">—</div>
+        </div>
+        <div class="btnrow">
+          <a class="btn tiny" id="runOpen" href="#">Open</a>
+          <a class="btn tiny" id="runSfml" href="#" target="_blank" rel="noopener">SFML</a>
+          <a class="btn tiny" id="runAudio" href="#" target="_blank" rel="noopener">AUDIO</a>
+        </div>
+      </div>
+
+      <div class="prog">
+        <div class="pbar"><div class="pfill" id="runFill"></div><div class="ptext" id="runText">—</div></div>
+      </div>
+      <div class="pillrow" id="runPills"></div>
+
+      <details open>
+        <summary>Log tail</summary>
+        <pre id="runLog">(loading…)</pre>
+      </details>
+    </div>
+  </div>
+
+  <h2 style="margin-top:18px;">History</h2>
+  <div class="muted" style="margin-bottom:8px;">Most recent first. Tap a row for details.</div>
+  <div id="hist"></div>
+
+  <script>
+  const params = new URLSearchParams(location.search);
+  const t = params.get('t') || '';
+
+  function esc(s){
+    return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[c]));
   }
-}
-refresh();
-setInterval(refresh, 3000);
-</script>
+  function fmtTs(ts){
+    if(!ts) return '-';
+    return new Date(ts*1000).toLocaleString();
+  }
+  function fmtElapsed(sec){
+    if(sec===null||sec===undefined) return '-';
+    sec = Math.max(0, Math.floor(sec));
+    const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+    if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function badge(state){
+    const st = state || 'unknown';
+    return `<span class="badge ${st}">${esc(st)}</span>`;
+  }
+
+  function clampPct(x){
+    if(x===null||x===undefined||Number.isNaN(x)) return 0;
+    return Math.max(0, Math.min(100, x));
+  }
+
+  async function fetchJobs(){
+    const r = await fetch('/api/jobs?t='+encodeURIComponent(t));
+    return await r.json();
+  }
+
+  async function fetchJob(id){
+    const r = await fetch('/api/job/'+encodeURIComponent(id)+'?t='+encodeURIComponent(t));
+    return await r.json();
+  }
+
+  function renderHistory(jobs){
+    const el = document.getElementById('hist');
+    if(!jobs.length){ el.innerHTML='<div class="muted">No jobs yet.</div>'; return; }
+
+    el.innerHTML = jobs.map(j=>{
+      const st = (j.status && j.status.state) ? j.status.state : (j.state||'unknown');
+      const done = (j.segments_done!==null && j.segments_done!==undefined) ? j.segments_done : (j.status? j.status.done : null);
+      const total = j.total_segments || (j.status? j.status.total : null);
+      const finished_at = j.finished_at || (j.status? j.status.finished_at : null);
+      const elapsed = (j.started_at && finished_at) ? (finished_at - j.started_at) : null;
+
+      const audioBtn = (j.mp3 && st==='completed') ? `<a class="btn tiny" href="/dl/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}" target="_blank" rel="noopener">AUDIO</a>` : '';
+      const sfmlBtn = `<a class="btn tiny" href="/sfml/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}" target="_blank" rel="noopener">SFML</a>`;
+
+      return `
+        <div class="row" onclick="location.href='/job/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}'">
+          <div class="rowMain">
+            <div class="rowTop">
+              <div class="rowTitle">${esc(j.title||j.id)}</div>
+              <div>${badge(st)}</div>
+            </div>
+            <div class="muted">${fmtTs(j.started_at)} • ${done===null||total===null?'-':(done+'/'+total)} seg • ${elapsed===null?'-':fmtElapsed(elapsed)}</div>
+          </div>
+          <div class="rowBtns" onclick="event.stopPropagation();">
+            ${sfmlBtn}
+            ${audioBtn}
+          </div>
+        </div>
+      `;
+    }).join('
+');
+  }
+
+  async function renderRunning(running){
+    const wrap = document.getElementById('runningWrap');
+    if(!running){ wrap.style.display='none'; return; }
+    wrap.style.display='block';
+
+    // lightweight info
+    document.getElementById('runTitle').textContent = running.title || running.id;
+    document.getElementById('runMeta').textContent = `${fmtTs(running.started_at)} • ${running.sfml||''}`;
+    document.getElementById('runOpen').href = '/job/'+encodeURIComponent(running.id)+'?t='+encodeURIComponent(t);
+    document.getElementById('runSfml').href = '/view/'+encodeURIComponent(running.id)+'?t='+encodeURIComponent(t);
+
+    // detail for progress/log
+    const j = await fetchJob(running.id);
+    if(!j.ok){ document.getElementById('runLog').textContent='(job not found)'; return; }
+
+    const st = (j.status && j.status.state) ? j.status.state : 'running';
+    const done = (j.status && j.status.done!==undefined) ? j.status.done : 0;
+    const total = (j.status && j.status.total!==undefined) ? j.status.total : (running.total_segments||0);
+    const pct = total ? clampPct((done/total)*100.0) : 0;
+
+    document.getElementById('runFill').style.width = pct+'%';
+    const txt = total ? `${done}/${total} segments` : `${done} segments`;
+    document.getElementById('runText').textContent = txt;
+
+    const nowTs = j.now;
+    const elapsed = (j.job && j.job.started_at && nowTs) ? (nowTs - j.job.started_at) : null;
+    document.getElementById('runPills').innerHTML = `
+      <div class="pill">Time: ${elapsed===null?'-':fmtElapsed(elapsed)}</div>
+      <div class="pill">Status: ${esc(st)}</div>
+    `;
+
+    // audio button only if completed
+    const a = document.getElementById('runAudio');
+    if(j.mp3 && st==='completed'){
+      a.style.display='inline-block';
+      a.href='/dl/'+encodeURIComponent(running.id)+'?t='+encodeURIComponent(t);
+    } else {
+      a.style.display='none';
+      a.href='#';
+    }
+
+    document.getElementById('runLog').textContent = (j.log_tail && j.log_tail.length) ? j.log_tail.join('\n') : '(no log yet)';
+  }
+
+  async function refresh(){
+    const j = await fetchJobs();
+    if(!j.ok){ document.getElementById('hist').innerHTML='<div class="muted">Failed to load.</div>'; return; }
+
+    const jobs = j.jobs || [];
+    const running = jobs.find(x => (x.state==='running') || (x.status && x.status.state==='running')) || null;
+    const hist = jobs.filter(x => !running || x.id !== running.id);
+
+    await renderRunning(running);
+    renderHistory(hist);
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+  </script>
 
 
 <!-- Bottom sheet: system monitor -->
