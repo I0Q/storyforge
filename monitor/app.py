@@ -698,6 +698,12 @@ class Handler(BaseHTTPRequestHandler):
                 prog = st_full.get('progress') or {}
                 done = prog.get('done')
                 total = prog.get('total')
+                # fallback to persisted total_segments; for completed assume done=total
+                total = meta.get('total_segments') or total
+                if st == 'completed' and total:
+                    done = total
+                elif meta.get('segments_done') is not None:
+                    done = meta.get('segments_done')
                 pct = prog.get('pct') or 0
                 log_tail = job_log_tail(root, jid, 200)
                 log_text = "\n".join(log_tail) if log_tail else '(no log yet)'
@@ -737,6 +743,12 @@ class Handler(BaseHTTPRequestHandler):
                 prog = meta.get('progress') or {}
                 done = prog.get('done')
                 total = prog.get('total')
+                # fallback to persisted total_segments; for completed assume done=total
+                total = meta.get('total_segments') or total
+                if st == 'completed' and total:
+                    done = total
+                elif meta.get('segments_done') is not None:
+                    done = meta.get('segments_done')
                 segtxt = (str(done) + '/' + str(total)) if (done is not None and total is not None and total) else '-'
 
                 btns = []
