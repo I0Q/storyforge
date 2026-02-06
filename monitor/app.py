@@ -734,10 +734,13 @@ class Handler(BaseHTTPRequestHandler):
                     btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '">AUDIO</a>')
                 parts.append('<div class="btnrow">' + ''.join(btns) + '</div>')
                 parts.append('</div>')
-                parts.append('<div class="prog"><div class="pbar"><div class="pfill" style="width:' + str(pct) + '%"></div><div class="ptext">' + str(done) + '/' + str(total) + ' segments</div></div></div>')
-                parts.append('<div class="pillrow"><div class="pill">Time: ' + fmt_elapsed(elapsed) + '</div><div class="pill">Status: ' + h(st) + '</div></div>')
-                parts.append('<details open><summary>Log tail</summary><pre>' + h(log_text) + '</pre></details>')
+                parts.append('<div class="prog"><div class="pbar"><div id="run_pfill" class="pfill" style="width:' + str(pct) + '%"></div><div id="run_ptext" class="ptext">' + str(done) + '/' + str(total) + ' segments</div></div></div>')
+                parts.append('<div class="pillrow"><div id="run_time" class="pill">Time: ' + fmt_elapsed(elapsed) + '</div><div id="run_state" class="pill">Status: ' + h(st) + '</div></div>')
+                parts.append('<details open><summary>Log tail</summary><pre id="run_log">' + h(log_text) + '</pre></details>')
                 parts.append('</div>')
+
+                parts.append('<script>(function(){const jid=' + json.dumps(jid) + ';const t=new URLSearchParams(location.search).get(\'t\')||\'\';const logEl=document.getElementById(\'run_log\');const pfill=document.getElementById(\'run_pfill\');const ptext=document.getElementById(\'run_ptext\');const stateEl=document.getElementById(\'run_state\');function lastLines(s,n){if(!s)return\'\';const lines=String(s).split(/\\r?\\n/);return lines.slice(Math.max(0,lines.length-n)).join("\\n");}async function tick(){try{const r=await fetch(\'/api/job/\'+encodeURIComponent(jid)+\'?t=\'+encodeURIComponent(t),{cache:\'no-store\'});if(!r.ok)return;const j=await r.json();if(!j||!j.ok)return;const prog=j.progress||{};const done=(prog.done??0);const total=(prog.total??0);const pct=(prog.pct??0);if(pfill)pfill.style.width=((pct?pct.toFixed(1):0)+\'%\');if(ptext)ptext.textContent=(total?(done+\'/\'+total+\' segments\'):(done+\' segments\'));const st=(j.status&&j.status.state)?j.status.state:\'running\';if(stateEl)stateEl.textContent=\'Status: \'+st;if(logEl){logEl.textContent=lastLines(j.log_tail||\'\',12);}if(st===\'completed\'||st===\'aborted\'){clearInterval(timer);}}catch(e){}}tick();const timer=setInterval(tick,2500);})();</script>')
+
 
             parts.append('<h2 style="margin-top:18px;">History</h2>')
             parts.append('<div class="muted" style="margin-bottom:8px;">Most recent first.</div>')
