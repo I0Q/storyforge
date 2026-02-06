@@ -11,6 +11,13 @@ fi
 SFML=$1
 shift || true
 
+# Guard: avoid launching duplicate renders for the same SFML
+if ps -ef | grep -F "storyforge.cli render" | grep -F "--story $SFML" | grep -v grep >/dev/null 2>&1; then
+  echo "ERROR: a render for $SFML is already running" >&2
+  ps -ef | grep -F "--story $SFML" | grep -F "storyforge.cli render" | grep -v grep >&2 || true
+  exit 3
+fi
+
 JOB_ID=$(python3 - <<'PYIN'
 import secrets
 print(secrets.token_urlsafe(8).replace("-", "_"))
@@ -108,4 +115,26 @@ export NUMEXPR_NUM_THREADS=16
 export TOKENIZERS_PARALLELISM=false
 
 LOG="$TMPDIR/storyforge-$(date +%s).log"
-exec bash -lc "env PYTHONPATH=src python3 -m storyforge.cli render --story '$SFML' --assets-dir assets --out-dir out $*" 2>&1 | tee -a "$LOG"
+bash -lc "env PYTHONPATH=src python3 -m storyforge.cli render --story '$SFML' --assets-dir assets --out-dir out $*" 2>&1 | tee -a "$LOG"
+RC=${PIPESTATUS[0]}
+
+# If render succeeded, record the produced mp3 path in sqlite (best-effort)
+if [[ $RC -eq 0 ]]; then
+  python3 - <<PYIN
+import sqlite3
+from pathlib import Path
+DB="$DB"
+JOB_ID="$JOB_ID"
+STARTED=int("$STARTED")
+out_dir=Path("out")
+cands=[p for p in out_dir.glob("*.mp3") if int(p.stat().st_mtime) >= STARTED-5]
+cands.sort(key=lambda p:p.stat().st_mtime, reverse=True)
+mp3=str((Path.cwd()/cands[0]).resolve()) if cands else None
+if mp3:
+    conn=sqlite3.connect(DB)
+    conn.execute("UPDATE jobs SET mp3=? WHERE id=?", (mp3, JOB_ID))
+    conn.commit(); conn.close()
+PYIN
+fi
+
+exit $RC

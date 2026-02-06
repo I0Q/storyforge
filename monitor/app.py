@@ -119,7 +119,6 @@ def migrate_jobs_json_to_db(root: Path, db_path: Path) -> int:
 def job_status_light(root: Path, job_id: str) -> dict:
     """Lightweight status for list view (no cpu/gpu/log tail)."""
     tmp_root = root / "tmp"
-    out_dir = Path("/raid/storyforge_test/out")
 
     conn = db_connect(db_default_path(root))
     db_init(conn)
@@ -145,14 +144,6 @@ def job_status_light(root: Path, job_id: str) -> dict:
         cand = Path(mp3)
         if cand.exists():
             mp3_path = cand
-
-    # If mp3 not recorded in meta, try to locate by title prefix in out/
-    if mp3_path is None:
-        pref = slugify_title(meta.get("title", ""))
-        if pref:
-            cands = sorted(out_dir.glob(pref + "*.mp3"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if cands:
-                mp3_path = cands[0]
 
     if mp3_path and mp3_path.exists() and total and done == 0:
         done = total
@@ -423,7 +414,6 @@ def job_runtime_status(job_base: Path, tmp_job: Path | None, mp3_path: Path | No
 def job_status(root: Path, job_id: str) -> dict:
     jobs_dir = root / "jobs"
     tmp_root = root / "tmp"
-    out_dir = Path("/raid/storyforge_test/out")
 
     meta_path = jobs_dir / f"{job_id}.json"
     if not meta_path.exists():
