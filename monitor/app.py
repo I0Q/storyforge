@@ -672,9 +672,10 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(404, b"voice_not_found\n")
                     return
                 demo = voice_demo_text(vid, color)
+                seed = (sum(ord(c) for c in (engine+":"+vid)) % 2000000000) + 1
                 wav_tmp = cache_dir / f"{vid}.wav"
                 import subprocess
-                subprocess.run([str(repo_root / "tools" / "voicegen_tortoise.sh"), "--text", demo, "--ref", voice_name, "--out", str(wav_tmp), "--lang", "en", "--device", "cuda"], check=True)
+                subprocess.run([str(repo_root / "tools" / "voicegen_tortoise.sh"), "--text", demo, "--ref", voice_name, "--out", str(wav_tmp), "--lang", "en", "--device", "cuda", "--seed", str(seed), "--gpu", "0"], check=True)
                 # convert to mp3 (48k stereo)
                 mp3_tmp = cache_dir / f"{vid}.tmp.mp3"
                 subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-y","-i", str(wav_tmp),"-c:a","libmp3lame","-b:a","192k","-ar","48000","-ac","2", str(mp3_tmp)], check=True)
