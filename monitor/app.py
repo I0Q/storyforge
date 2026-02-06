@@ -673,7 +673,7 @@ class Handler(BaseHTTPRequestHandler):
 
               .rowMain{flex:1; min-width:0;}
 
-              .rowTitle{font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.2; flex:1; font-size:16px;}
+              .rowTitle{font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.25; flex:1; font-size:16px; margin-top:2px;}
 
 .rowBtns{display:flex; gap:10px; align-items:flex-end; justify-content:flex-end; flex-wrap:wrap;}
 
@@ -776,7 +776,7 @@ class Handler(BaseHTTPRequestHandler):
                 row +=     '</div>'
                 row +=     '<div class=\"rowTitle\">' + h(meta.get('title') or jid) + '</div>'
                 row +=     '<div class=\"metaRow\">'
-                row +=       '<div class=\"muted\">' + h(fmt_ts(started_at)) + '</div>'
+                row +=       '<div class=\"muted\">' + h(fmt_ts(started_at)) + ' • ' + fmt_elapsed(elapsed) + ' • ' + segtxt + '</div>'
                 row +=       '<div class=\"rowBtns\">' + ''.join(btns) + '</div>'
                 row +=     '</div>'
                 row +=   '</div>'
