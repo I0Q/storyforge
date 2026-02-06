@@ -649,7 +649,7 @@ class Handler(BaseHTTPRequestHandler):
               h2{margin:0 0 10px;}
               pre{white-space:pre-wrap; background:#111; color:#ddd; padding:12px; border-radius:10px;}
               .muted{color:#6b7280; font-size:12px;}
-              .badge{font-size:11px; font-weight:900; padding:4px 10px; border-radius:999px; border:1px solid transparent; text-transform:uppercase; letter-spacing:0.02em; align-self:flex-start;}
+              .badge{font-size:10px; font-weight:900; padding:3px 8px; border-radius:999px; border:1px solid transparent; text-transform:uppercase; letter-spacing:0.02em; align-self:flex-start;}
 
               .badge.running{background:#e0f2fe; border-color:#38bdf8; color:#075985;}
               .badge.completed{background:#dcfce7; border-color:#22c55e; color:#14532d;}
@@ -672,7 +672,8 @@ class Handler(BaseHTTPRequestHandler):
               .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; background:#fff;}
 .rowTop{display:flex; gap:12px; align-items:flex-start; margin-bottom:6px;}
 
-              .rowMain{flex:1; min-width:0;}
+              .rowBadge{min-width:72px; display:flex; align-items:flex-start; padding-top:2px;}
+.rowMain{flex:1; min-width:0;}
 
               .rowTitle{font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.25; flex:1; font-size:16px; margin-top:8px; margin-bottom:8px;}
 
