@@ -48,11 +48,20 @@
 </head>
 <body>
 
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
   <h1>Storyforge Monitor</h1>
+  <div class="btnrow">
+    <a class="btn tiny" id="voicesBtn" href="#">Voices</a>
+  </div>
+</div>
 
-  <div id="runningWrap" style="display:none;">
+  <div id="runningWrap">
     <h2 style="margin-top:18px;">Running</h2>
-    <div class="card">
+    <div class="card" id="noRun">
+      <div class="title">No job running</div>
+      <div class="muted">When you start a render, it will appear here with progress + log tail.</div>
+    </div>
+    <div class="card" id="runCard" style="display:none;">
       <div class="cardTop">
         <div>
           <div class="title" id="runTitle">—</div>
@@ -90,8 +99,10 @@
 
   const params = new URLSearchParams(location.search);
   const t = params.get('t') || '';
+  const vb=document.getElementById('voicesBtn');
+  if(vb) vb.href = '/voices?t='+encodeURIComponent(t);
   // debug: prove JS is running
-  try{ const el=document.getElementById('hist'); if(el) el.innerHTML='<div class="muted">(js running...)<\/div>'; }catch(e){}
+  
 
   function esc(s){
     const m = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',''':'&#39;'};
@@ -177,9 +188,15 @@
   }
 
   async function renderRunning(running){
-    const wrap = document.getElementById('runningWrap');
-    if(!running){ wrap.style.display='none'; return; }
-    wrap.style.display='block';
+    const noRun = document.getElementById('noRun');
+    const card = document.getElementById('runCard');
+    if(!running){
+      if(noRun) noRun.style.display='block';
+      if(card) card.style.display='none';
+      return;
+    }
+    if(noRun) noRun.style.display='none';
+    if(card) card.style.display='block';
 
     // lightweight info
     document.getElementById('runTitle').textContent = running.title || running.id;
@@ -302,8 +319,10 @@
 (function(){
   const params = new URLSearchParams(location.search);
   const t = params.get('t') || '';
+  const vb=document.getElementById('voicesBtn');
+  if(vb) vb.href = '/voices?t='+encodeURIComponent(t);
   // debug: prove JS is running
-  try{ const el=document.getElementById('hist'); if(el) el.innerHTML='<div class="muted">(js running...)<\/div>'; }catch(e){}
+  
   const bs = document.getElementById('bottomSheet');
   const btn = document.getElementById('bsToggle');
 
