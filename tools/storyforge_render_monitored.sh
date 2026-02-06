@@ -106,6 +106,7 @@ URL="http://$HOST:8787/job/$JOB_ID?t=$TOKEN"
 echo "MONITOR_URL=$URL"
 
 export TMPDIR="$TMPBASE"
+export STORYFORGE_JOB_ID="$JOB_ID"
 
 # cap CPU threads (keeps jobs=4 from stampeding)
 export OMP_NUM_THREADS=16

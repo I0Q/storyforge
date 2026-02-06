@@ -553,7 +553,12 @@ def render(sfml_text: str, cfg: ProducerConfig) -> Path:
         # based on one of the inputs.
         filter_lines.append("[mix0]aresample=48000,aformat=sample_fmts=s16:channel_layouts=stereo[mix]")
 
-        out_mp3 = cfg.out_dir / ("".join([c if c.isalnum() or c in "-_" else "_" for c in title]) + ".mp3")
+        safe = "".join([c if c.isalnum() or c in "-_" else "_" for c in title])
+        job_id = os.environ.get("STORYFORGE_JOB_ID")
+        if job_id:
+            out_mp3 = cfg.out_dir / f"{safe}__{job_id}.mp3"
+        else:
+            out_mp3 = cfg.out_dir / f"{safe}.mp3"
 
         cmd = [
             "ffmpeg",
