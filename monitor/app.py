@@ -760,7 +760,7 @@ class Handler(BaseHTTPRequestHandler):
                 segtxt = (str(done) + '/' + str(total)) if (done is not None and total is not None and total) else '-'
 
                 btns = []
-                btns.append('<a class="btn tiny" href="/sfml/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">SFML</a>')
+                btns.append('<a class="btn tiny" href="/view/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">SFML</a>')
                 if meta.get('mp3') and st == 'completed':
                     btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">AUDIO</a>')
 
@@ -815,7 +815,7 @@ class Handler(BaseHTTPRequestHandler):
                 started_at = meta.get("started_at")
                 btns = []
                 btns.append('<a href="/job/%s?t=%s">open</a>' % (jid, h(token)))
-                btns.append('<a href="/sfml/%s?t=%s">sfml</a>' % (jid, h(token)))
+                btns.append('<a href="/view/%s?t=%s">sfml</a>' % (jid, h(token)))
                 if meta.get("mp3") and st == "completed":
                     btns.append('<a href="/dl/%s?t=%s">audio</a>' % (jid, h(token)))
                 rows.append('<li><b>%s</b> [%s] %s<br/>%s</li>' % (h(title), h(st), h(str(started_at or "")), " ".join(btns)))
