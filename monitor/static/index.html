@@ -135,7 +135,7 @@
       const sfmlBtn = `<a class="btn tiny" href="/sfml/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}" target="_blank" rel="noopener">SFML</a>`;
 
       return `
-        <div class="row" onclick="location.href='/job/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}'">
+        <div class="row">
           <div class="rowMain">
             <div class="rowTop">
               <div class="rowTitle">${esc(j.title||j.id)}</div>
@@ -143,7 +143,8 @@
             </div>
             <div class="muted">${fmtTs(j.started_at)} • ${done===null||total===null?'-':(done+'/'+total)} seg • ${elapsed===null?'-':fmtElapsed(elapsed)}</div>
           </div>
-          <div class="rowBtns" onclick="event.stopPropagation();">
+          <div class="rowBtns">
+            <a class="btn tiny" href="/job/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}">OPEN</a>
             ${sfmlBtn}
             ${audioBtn}
           </div>
