@@ -592,11 +592,176 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(u.path)
         root: Path = self.server.root
 
-        if path == "/" or path == "":
-            body = (root / "static" / "index.html").read_bytes()
-            self._send(200, body, "text/html; charset=utf-8")
-            return
 
+        if path == "/" or path == "":
+            # dynamic index page (server-rendered to avoid mobile browser JS quirks)
+            qs = parse_qs(urlparse(self.path).query)
+            token = (qs.get("t") or [""])[0]
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            metas = db_list_jobs(conn)
+            conn.close()
+
+            def h(s: str) -> str:
+                return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
+
+            def fmt_ts(ts):
+                if not ts:
+                    return "-"
+                try:
+                    import datetime
+                    return datetime.datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    return str(ts)
+
+            def fmt_elapsed(sec):
+                if sec is None:
+                    return "-"
+                try:
+                    sec = int(sec)
+                except Exception:
+                    return "-"
+                if sec < 0:
+                    sec = 0
+                hh = sec // 3600
+                mm = (sec % 3600) // 60
+                ss = sec % 60
+                if hh > 0:
+                    return "%d:%02d:%02d" % (hh, mm, ss)
+                return "%d:%02d" % (mm, ss)
+
+            def badge(state):
+                st = state or "unknown"
+                return '<span class="badge %s">%s</span>' % (st, st)
+
+            running = None
+            for meta in metas:
+                st = (meta.get("status") or {}).get("state") or meta.get("state")
+                if st == "running":
+                    running = meta
+                    break
+
+            style = """
+            <style>
+              body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:16px;}
+              a{color:#0b63ce;}
+              h1{margin:0 0 6px;}
+              h2{margin:0 0 10px;}
+              pre{white-space:pre-wrap; background:#111; color:#ddd; padding:12px; border-radius:10px;}
+              .muted{color:#666; font-size:12px;}
+              .badge{font-size:12px; font-weight:850; padding:6px 10px; border-radius:999px; border:1px solid #ddd; text-transform:uppercase; letter-spacing:0.02em;}
+              .badge.running{background:#e0f2fe; border-color:#38bdf8; color:#075985;}
+              .badge.completed{background:#dcfce7; border-color:#22c55e; color:#14532d;}
+              .badge.aborted{background:#fee2e2; border-color:#ef4444; color:#7f1d1d;}
+              .badge.pending{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
+              .badge.unknown{background:#f3f4f6; border-color:#d1d5db; color:#374151;}
+              .btn{display:inline-block; padding:10px 12px; border-radius:10px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:14px; background:#fff;}
+              .btn.tiny{padding:6px 10px; font-size:12px; border-radius:999px;}
+              .btnrow{display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap;}
+              .card{border:1px solid #e5e7eb; border-radius:14px; padding:12px; background:#fff;}
+              .cardTop{display:flex; justify-content:space-between; gap:12px; align-items:flex-start;}
+              .title{font-weight:950; font-size:16px;}
+              .prog{display:flex; align-items:center; gap:10px; margin:10px 0 6px;}
+              .pbar{flex:1; height:16px; background:#eee; border-radius:999px; overflow:hidden; position:relative;}
+              .pfill{height:16px; background:#0b63ce; width:0%;}
+              .ptext{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#111;}
+              .pillrow{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;}
+              .pill{font-size:12px; background:#f3f4f6; border-radius:999px; padding:4px 8px; font-weight:700;}
+              .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:10px; align-items:center; background:#fff;}
+              .rowTop{display:flex; justify-content:space-between; gap:10px; align-items:center;}
+              .rowMain{flex:1; min-width:0;}
+              .rowTitle{font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+              .rowBtns{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+              details{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0 0;}
+              summary{cursor:pointer; font-weight:800;}
+            </style>
+            """
+
+            parts = []
+            parts.append('<!doctype html><html><head><meta charset="utf-8" />')
+            parts.append('<meta name="viewport" content="width=device-width, initial-scale=1" />')
+            parts.append('<title>Storyforge Monitor</title>')
+            parts.append(style)
+            parts.append('</head><body>')
+            parts.append('<div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">')
+            parts.append('<h1>Storyforge Monitor</h1>')
+            parts.append('<div class="btnrow"><a class="btn tiny" href="/voices?t=' + h(token) + '">Voices</a></div>')
+            parts.append('</div>')
+
+            parts.append('<h2 style="margin-top:18px;">Running</h2>')
+            if running is None:
+                parts.append('<div class="card"><div class="title">No job running</div><div class="muted">When you start a render, it will appear here with progress + log tail.</div></div>')
+            else:
+                jid = running.get('id')
+                st = (running.get('status') or {}).get('state') or running.get('state') or 'running'
+                st_full = job_status_light(root, jid)
+                prog = st_full.get('progress') or {}
+                done = prog.get('done')
+                total = prog.get('total')
+                pct = prog.get('pct') or 0
+                log_tail = job_log_tail(root, jid, 200)
+                log_text = "\n".join(log_tail) if log_tail else '(no log yet)'
+                started_at = running.get('started_at')
+                now = now_ts()
+                elapsed = (now - started_at) if (started_at and now) else None
+                parts.append('<div class="card">')
+                parts.append('<div class="cardTop">')
+                parts.append('<div><div class="title">' + h(running.get('title') or jid) + '</div>')
+                parts.append('<div class="muted">' + h(fmt_ts(started_at)) + ' - ' + h(running.get('sfml') or '') + '</div></div>')
+                btns = []
+                btns.append('<a class="btn tiny" href="/job/' + jid + '?t=' + h(token) + '">OPEN</a>')
+                btns.append('<a class="btn tiny" href="/view/' + jid + '?t=' + h(token) + '">SFML</a>')
+                if running.get('mp3') and st == 'completed':
+                    btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '">AUDIO</a>')
+                parts.append('<div class="btnrow">' + ''.join(btns) + '</div>')
+                parts.append('</div>')
+                parts.append('<div class="prog"><div class="pbar"><div class="pfill" style="width:' + str(pct) + '%"></div><div class="ptext">' + str(done) + '/' + str(total) + ' segments</div></div></div>')
+                parts.append('<div class="pillrow"><div class="pill">Time: ' + fmt_elapsed(elapsed) + '</div><div class="pill">Status: ' + h(st) + '</div></div>')
+                parts.append('<details open><summary>Log tail</summary><pre>' + h(log_text) + '</pre></details>')
+                parts.append('</div>')
+
+            parts.append('<h2 style="margin-top:18px;">History</h2>')
+            parts.append('<div class="muted" style="margin-bottom:8px;">Most recent first.</div>')
+            rows = []
+            for meta in metas:
+                if running is not None and meta.get('id') == running.get('id'):
+                    continue
+                jid = meta.get('id')
+                st = (meta.get('status') or {}).get('state') or meta.get('state') or 'unknown'
+                started_at = meta.get('started_at')
+                finished_at = meta.get('finished_at') or (meta.get('status') or {}).get('finished_at')
+                elapsed = (finished_at - started_at) if (finished_at and started_at) else None
+                prog = meta.get('progress') or {}
+                done = prog.get('done')
+                total = prog.get('total')
+                if done is not None and total is not None and total:
+                    segtxt = str(done) + '/' + str(total)
+                else:
+                    segtxt = '-'
+                btns = []
+                btns.append('<a class="btn tiny" href="/job/' + jid + '?t=' + h(token) + '">OPEN</a>')
+                btns.append('<a class="btn tiny" href="/sfml/' + jid + '?t=' + h(token) + '">SFML</a>')
+                if meta.get('mp3') and st == 'completed':
+                    btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '">AUDIO</a>')
+                row = ''
+                row += '<div class="row">'
+                row += '<div class="rowMain">'
+                row += '<div class="rowTop"><div class="rowTitle">' + h(meta.get('title') or jid) + '</div><div>' + badge(st) + '</div></div>'
+                row += '<div class="muted">' + h(fmt_ts(started_at)) + ' - ' + segtxt + ' seg - ' + fmt_elapsed(elapsed) + '</div>'
+                row += '</div>'
+                row += '<div class="rowBtns">' + ''.join(btns) + '</div>'
+                row += '</div>'
+                rows.append(row)
+
+            if rows:
+                parts.append("\n".join(rows))
+            else:
+                parts.append('<div class="muted">No jobs yet.</div>')
+
+            parts.append('</body></html>')
+            page = ''.join(parts)
+            self._send(200, page.encode('utf-8'), 'text/html; charset=utf-8')
+            return
         if path == "/ping":
             body = (root / "static" / "ping.html").read_bytes()
             self._send(200, body, "text/html; charset=utf-8")
