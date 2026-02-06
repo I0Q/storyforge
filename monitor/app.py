@@ -351,15 +351,6 @@ def read_log_tail(tmp_job: Path, job_base: Path) -> str:
 def job_runtime_status(job_base: Path, tmp_job: Path | None, mp3_path: Path | None, done: int, total: int) -> dict:
     now = now_ts()
 
-    if mp3_path and mp3_path.exists() and total and done >= total:
-        finished_at = int(mp3_path.stat().st_mtime)
-        return {
-            'state': 'completed',
-            'finished_at': finished_at,
-            'aborted_at': None,
-            'last_activity_at': finished_at,
-        }
-
     # last activity: newest seg wav or newest log in tmp_job/job_base
     last = None
     cands = []
@@ -369,19 +360,23 @@ def job_runtime_status(job_base: Path, tmp_job: Path | None, mp3_path: Path | No
             cands += list(narr.glob('seg_*.wav'))
         cands += list(tmp_job.glob('*.log'))
     cands += list(job_base.glob('*.log'))
-    for p in cands:
+    for pp in cands:
         try:
-            ts = int(p.stat().st_mtime)
+            ts = int(pp.stat().st_mtime)
             if last is None or ts > last:
                 last = ts
         except Exception:
             pass
 
-    # running? best-effort: any storyforge render process
+    # running? best-effort: if ANY process references this job tmp path
     running = False
     try:
         import subprocess
-        out = subprocess.check_output(['bash','-lc', f"ps -ef | grep -F '{job_base.as_posix()}' | grep -F 'storyforge.cli render' | grep -v grep | wc -l"], text=True).strip()
+        probe = job_base.as_posix().rstrip('/') + '/'
+        out = subprocess.check_output(
+            ['bash','-lc', f"ps -eo args | grep -F {probe!r} | grep -v grep | wc -l"],
+            text=True,
+        ).strip()
         running = int(out) > 0
     except Exception:
         running = False
@@ -394,7 +389,16 @@ def job_runtime_status(job_base: Path, tmp_job: Path | None, mp3_path: Path | No
             'last_activity_at': last,
         }
 
-    # not running + no mp3
+    # completed only if mp3 exists AND we generated all segments
+    if mp3_path and mp3_path.exists() and total and done >= total:
+        finished_at = int(mp3_path.stat().st_mtime)
+        return {
+            'state': 'completed',
+            'finished_at': finished_at,
+            'aborted_at': None,
+            'last_activity_at': finished_at,
+        }
+
     if last is not None and now - last > 600:
         return {
             'state': 'aborted',
@@ -412,20 +416,25 @@ def job_runtime_status(job_base: Path, tmp_job: Path | None, mp3_path: Path | No
 
 
 def job_status(root: Path, job_id: str) -> dict:
-    jobs_dir = root / "jobs"
     tmp_root = root / "tmp"
 
-    meta_path = jobs_dir / f"{job_id}.json"
-    if not meta_path.exists():
+    conn = db_connect(db_default_path(root))
+    db_init(conn)
+    meta = db_get_job(conn, job_id)
+    conn.close()
+    if not meta:
         return {"ok": False, "error": "job_not_found"}
 
-    meta = json.loads(read_text(meta_path))
-    sfml = Path(meta.get("sfml", ""))
+    sfml_rel = meta.get("sfml") or ""
+    sfml_path = Path(sfml_rel)
+    if sfml_rel and not sfml_path.is_absolute():
+        sfml_path = Path("/raid/storyforge_test") / sfml_path
+
     started_at = int(meta.get("started_at", 0) or 0)
 
     total = int(meta.get("total_segments", 0) or 0)
-    if total == 0 and sfml.exists():
-        total = count_spoken_segments(sfml)
+    if total == 0 and sfml_rel and sfml_path.exists():
+        total = count_spoken_segments(sfml_path)
 
     job_base = tmp_root / job_id
     tmp_job = find_tmp_job_dir(tmp_root, job_id)
@@ -439,26 +448,22 @@ def job_status(root: Path, job_id: str) -> dict:
 
     mp3 = meta.get("mp3")
     mp3_path = Path(mp3) if mp3 else None
-    if not mp3_path or not mp3_path.exists():
-        mp3_path = find_latest_mp3(out_dir, started_at)
+    if mp3_path and not mp3_path.exists():
+        mp3_path = None
 
     # If an MP3 exists but the temp folder is gone (cleanup) we still consider all segments done.
-    if mp3_path and mp3_path.exists() and total and done == 0:
+    if mp3_path and total and done == 0:
         done = total
 
-    status = job_runtime_status(job_base, tmp_job, mp3_path if (mp3_path and mp3_path.exists()) else None, done, total)
+    status = job_runtime_status(job_base, tmp_job, mp3_path, done, total)
 
     return {
         "ok": True,
         "job": meta,
         "status": status,
-        "progress": {
-            "done": done,
-            "total": total,
-            "pct": (done / total * 100.0) if total else None,
-        },
+        "progress": {"done": done, "total": total, "pct": (done / total * 100.0) if total else None},
         "tmp_dir": str(tmp_job) if tmp_job else None,
-        "mp3": str(mp3_path) if mp3_path and mp3_path.exists() else None,
+        "mp3": str(mp3_path) if mp3_path else None,
         "log_tail": filter_log_tail(tail),
         "gpu": gpu_stats(),
         "cpu": cpu_stats(),
