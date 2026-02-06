@@ -767,6 +767,43 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, body, "text/html; charset=utf-8")
             return
 
+        if path == "/history":
+            qs = parse_qs(urlparse(self.path).query)
+            token = (qs.get("t") or [""])[0]
+
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            metas = db_list_jobs(conn)
+            conn.close()
+
+            def h(s: str) -> str:
+                return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
+
+            rows = []
+            for meta in metas:
+                jid = meta.get("id")
+                st = (meta.get("status") or {}).get("state") or meta.get("state") or "unknown"
+                title = meta.get("title") or jid
+                started_at = meta.get("started_at")
+                btns = []
+                btns.append('<a href="/job/%s?t=%s">open</a>' % (jid, h(token)))
+                btns.append('<a href="/sfml/%s?t=%s">sfml</a>' % (jid, h(token)))
+                if meta.get("mp3") and st == "completed":
+                    btns.append('<a href="/dl/%s?t=%s">audio</a>' % (jid, h(token)))
+                rows.append('<li><b>%s</b> [%s] %s<br/>%s</li>' % (h(title), h(st), h(str(started_at or "")), " ".join(btns)))
+
+            body = '<!doctype html><html><head><meta charset="utf-8"/>'
+            body += '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
+            body += '<title>History</title>'
+            body += '<style>body{font-family:system-ui; padding:16px;} a{color:#0b63ce;} li{margin:14px 0;}</style>'
+            body += '</head><body>'
+            body += '<h1>History (debug)</h1><div style="margin-bottom:10px;"><a href="/?t=%s">back</a></div>' % h(token)
+            body += ('<ol>' + ''.join(rows) + '</ol>') if rows else '<div>(no jobs)</div>'
+            body += '</body></html>'
+            self._send(200, body.encode('utf-8'), 'text/html; charset=utf-8')
+            return
+
+
         if path.startswith("/job/"):
             body = (root / "static" / "job.html").read_bytes()
             self._send(200, body, "text/html; charset=utf-8")
