@@ -90,6 +90,8 @@
 
   const params = new URLSearchParams(location.search);
   const t = params.get('t') || '';
+  // debug: prove JS is running
+  try{ const el=document.getElementById('hist'); if(el) el.innerHTML='<div class="muted">(js running...)<\/div>'; }catch(e){}
 
   function esc(s){
     return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[c]));
@@ -116,14 +118,27 @@
     return Math.max(0, Math.min(100, x));
   }
 
+  function getJson(url){
+    return new Promise((resolve,reject)=>{
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.onreadystatechange = function(){
+        if(xhr.readyState !== 4) return;
+        if(xhr.status < 200 || xhr.status >= 300){
+          return reject(new Error('HTTP '+xhr.status));
+        }
+        try{ resolve(JSON.parse(xhr.responseText)); }catch(e){ reject(e); }
+      };
+      xhr.send();
+    });
+  }
+
   async function fetchJobs(){
-    const r = await fetch('/api/jobs?t='+encodeURIComponent(t));
-    return await r.json();
+    return await getJson('/api/jobs?t='+encodeURIComponent(t));
   }
 
   async function fetchJob(id){
-    const r = await fetch('/api/job/'+encodeURIComponent(id)+'?t='+encodeURIComponent(t));
-    return await r.json();
+    return await getJson('/api/job/'+encodeURIComponent(id)+'?t='+encodeURIComponent(t));
   }
 
   function renderHistory(jobs){
@@ -286,6 +301,8 @@
 (function(){
   const params = new URLSearchParams(location.search);
   const t = params.get('t') || '';
+  // debug: prove JS is running
+  try{ const el=document.getElementById('hist'); if(el) el.innerHTML='<div class="muted">(js running...)<\/div>'; }catch(e){}
   const bs = document.getElementById('bottomSheet');
   const btn = document.getElementById('bsToggle');
 
