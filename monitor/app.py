@@ -704,6 +704,9 @@ class Handler(BaseHTTPRequestHandler):
                     done = total
                 elif meta.get('segments_done') is not None:
                     done = meta.get('segments_done')
+                    # if we know total but segments_done wasn't recorded, show 0/total
+                    if done is None and total:
+                        done = 0
                 pct = prog.get('pct') or 0
                 log_tail = job_log_tail(root, jid, 200)
                 log_text = "\n".join(log_tail) if log_tail else '(no log yet)'
@@ -749,6 +752,11 @@ class Handler(BaseHTTPRequestHandler):
                     done = total
                 elif meta.get('segments_done') is not None:
                     done = meta.get('segments_done')
+                    # if we know total but segments_done wasn't recorded, show 0/total
+                    if done is None and total:
+                        done = 0
+                if done is None and total:
+                    done = 0
                 segtxt = (str(done) + '/' + str(total)) if (done is not None and total is not None and total) else '-'
 
                 btns = []
