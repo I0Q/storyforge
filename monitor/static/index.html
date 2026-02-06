@@ -78,10 +78,16 @@
   </div>
 
   <h2 style="margin-top:18px;">History</h2>
-  <div class="muted" style="margin-bottom:8px;">Most recent first. Tap a row for details.</div>
-  <div id="hist"></div>
+  <div class="muted" style="margin-bottom:8px;">Most recent first. Use OPEN for details.</div>
+  <div id="hist"><div class="muted">(loading…)</div></div>
 
   <script>
+  window.onerror = function(msg, src, line, col, err){
+    const el=document.getElementById("hist");
+    if(el) el.innerHTML = `<div class="muted">JS error: ${msg} @ ${line}:${col}</div>`;
+    return false;
+  };
+
   const params = new URLSearchParams(location.search);
   const t = params.get('t') || '';
 
@@ -199,7 +205,8 @@
   }
 
   async function refresh(){
-    const j = await fetchJobs();
+    try{
+      const j = await fetchJobs();
     if(!j.ok){ document.getElementById('hist').innerHTML='<div class="muted">Failed to load.</div>'; return; }
 
     const jobs = j.jobs || [];
@@ -208,6 +215,10 @@
 
     await renderRunning(running);
     renderHistory(hist);
+    }catch(e){
+      const el=document.getElementById('hist');
+      if(el) el.innerHTML = `<div class="muted">Failed: ${e}</div>`;
+    }
   }
 
   refresh();
