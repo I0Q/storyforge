@@ -56,7 +56,7 @@ const t = params.get('t') || '';
 const parts = location.pathname.split('/');
 const jobId = parts[parts.length-1] || '';
 
-document.getElementById('back').href = '/job/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t);
+document.getElementById('back').href = '/?t='+encodeURIComponent(t);
 document.getElementById('dl').href = '/sfml/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t);
 
 function esc(s){
