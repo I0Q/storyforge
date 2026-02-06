@@ -94,7 +94,8 @@
   try{ const el=document.getElementById('hist'); if(el) el.innerHTML='<div class="muted">(js running...)<\/div>'; }catch(e){}
 
   function esc(s){
-    return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[c]));
+    const m = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',''':'&#39;'};
+    return (s||'').replace(/[&<>"']/g, c => m[c] || c);
   }
   function fmtTs(ts){
     if(!ts) return '-';
