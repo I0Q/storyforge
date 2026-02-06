@@ -5,7 +5,21 @@ cd /raid/storyforge_test
 
 if [[ $# -lt 1 ]]; then
   echo "usage: $0 <sfml_path> [storyforge render args...]" >&2
-  exit 2
+  
+
+# If render failed, mark aborted in sqlite (best-effort)
+if [[  -ne 0 ]]; then
+  python3 - <<PYIN
+import sqlite3, time
+DB=""
+JOB_ID=""
+conn=sqlite3.connect(DB)
+conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
+conn.commit(); conn.close()
+PYIN
+fi
+
+exit 2
 fi
 
 SFML=$1
@@ -15,7 +29,21 @@ shift || true
 if ps -ef | grep -F "storyforge.cli render" | grep -F -- "--story $SFML" | grep -v grep >/dev/null 2>&1; then
   echo "ERROR: a render for $SFML is already running" >&2
   ps -ef | grep -F -- "--story $SFML" | grep -F "storyforge.cli render" | grep -v grep >&2 || true
-  exit 3
+  
+
+# If render failed, mark aborted in sqlite (best-effort)
+if [[  -ne 0 ]]; then
+  python3 - <<PYIN
+import sqlite3, time
+DB=""
+JOB_ID=""
+conn=sqlite3.connect(DB)
+conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
+conn.commit(); conn.close()
+PYIN
+fi
+
+exit 3
 fi
 
 JOB_ID=$(python3 - <<'PYIN'
@@ -150,6 +178,20 @@ if mp3:
     conn=sqlite3.connect(DB)
     conn.execute("UPDATE jobs SET state=?, finished_at=?, aborted_at=NULL, mp3=? WHERE id=?", ("completed", int(Path(mp3).stat().st_mtime), mp3, JOB_ID))
     conn.commit(); conn.close()
+PYIN
+fi
+
+
+
+# If render failed, mark aborted in sqlite (best-effort)
+if [[  -ne 0 ]]; then
+  python3 - <<PYIN
+import sqlite3, time
+DB=""
+JOB_ID=""
+conn=sqlite3.connect(DB)
+conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
+conn.commit(); conn.close()
 PYIN
 fi
 
