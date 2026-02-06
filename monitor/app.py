@@ -722,6 +722,7 @@ class Handler(BaseHTTPRequestHandler):
 
             parts.append('<h2 style="margin-top:18px;">History</h2>')
             parts.append('<div class="muted" style="margin-bottom:8px;">Most recent first.</div>')
+
             rows = []
             for meta in metas:
                 if running is not None and meta.get('id') == running.get('id'):
@@ -730,26 +731,33 @@ class Handler(BaseHTTPRequestHandler):
                 st = (meta.get('status') or {}).get('state') or meta.get('state') or 'unknown'
                 started_at = meta.get('started_at')
                 finished_at = meta.get('finished_at') or (meta.get('status') or {}).get('finished_at')
-                elapsed = (finished_at - started_at) if (finished_at and started_at) else None
+                aborted_at = meta.get('aborted_at') or (meta.get('status') or {}).get('aborted_at')
+                end_at = finished_at or aborted_at
+                elapsed = (end_at - started_at) if (end_at and started_at) else None
                 prog = meta.get('progress') or {}
                 done = prog.get('done')
                 total = prog.get('total')
-                if done is not None and total is not None and total:
-                    segtxt = str(done) + '/' + str(total)
-                else:
-                    segtxt = '-'
+                segtxt = (str(done) + '/' + str(total)) if (done is not None and total is not None and total) else '-'
+
                 btns = []
-                btns.append('<a class="btn tiny" href="/job/' + jid + '?t=' + h(token) + '">OPEN</a>')
-                btns.append('<a class="btn tiny" href="/sfml/' + jid + '?t=' + h(token) + '">SFML</a>')
+                btns.append('<a class="btn tiny" href="/sfml/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">SFML</a>')
                 if meta.get('mp3') and st == 'completed':
-                    btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '">AUDIO</a>')
+                    btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">AUDIO</a>')
+
                 row = ''
                 row += '<div class="row">'
-                row += '<div class="rowMain">'
-                row += '<div class="rowTop"><div class="rowTitle">' + h(meta.get('title') or jid) + '</div><div>' + badge(st) + '</div></div>'
-                row += '<div class="muted">' + h(fmt_ts(started_at)) + ' - ' + segtxt + ' seg - ' + fmt_elapsed(elapsed) + '</div>'
-                row += '</div>'
-                row += '<div class="rowBtns">' + ''.join(btns) + '</div>'
+                row +=   '<div class="rowMain">'
+                row +=     '<div class="rowTop">'
+                row +=       '<div class="rowTitle">' + h(meta.get('title') or jid) + '</div>'
+                row +=       '<div>' + badge(st) + '</div>'
+                row +=     '</div>'
+                row +=     '<div class="muted">' + h(fmt_ts(started_at)) + '</div>'
+                row +=     '<div class="pillrow">'
+                row +=       '<div class="pill">Time: ' + fmt_elapsed(elapsed) + '</div>'
+                row +=       '<div class="pill">Segments: ' + segtxt + '</div>'
+                row +=     '</div>'
+                row +=   '</div>'
+                row +=   '<div class="rowBtns">' + ''.join(btns) + '</div>'
                 row += '</div>'
                 rows.append(row)
 
