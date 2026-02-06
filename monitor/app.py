@@ -665,13 +665,13 @@ class Handler(BaseHTTPRequestHandler):
               .pbar{flex:1; height:16px; background:#eee; border-radius:999px; overflow:hidden; position:relative;}
               .pfill{height:16px; background:#0b63ce; width:0%;}
               .ptext{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#111;}
-              .pillrow{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;}
+              .pillrow{display:flex; gap:10px; flex-wrap:wrap; margin:6px 0 0;}
               .pill{font-size:12px; background:#f3f4f6; border-radius:999px; padding:4px 8px; font-weight:700;}
-              .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:10px; align-items:center; background:#fff;}
-              .rowTop{display:flex; gap:10px; align-items:flex-start;}
+              .row{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; background:#fff;}
+.rowTop{display:flex; gap:10px; align-items:flex-start;}
               .rowMain{flex:1; min-width:0;}
               .rowTitle{font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.15; flex:1;}
-              .rowBtns{display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-top:8px;}
+.rowBtns{display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-top:10px;}
               details{border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin:10px 0 0;}
               summary{cursor:pointer; font-weight:800;}
             </style>
@@ -757,10 +757,9 @@ class Handler(BaseHTTPRequestHandler):
                 if done is None and total:
                     done = 0
                 segtxt = (str(done) + '/' + str(total)) if (done is not None and total is not None and total) else ('audio' if (st=='completed' and meta.get('mp3')) else '-')
-
                 btns = []
                 if meta.get('mp3') and st == 'completed':
-                    btns.append('<a class="btn tiny" href="/dl/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">AUDIO</a>')
+                    btns.append('<a class=\"btn tiny\" href=\"/dl/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\">AUDIO</a>')
 
                 row = ''
                 row += '<div class="row">'
@@ -769,13 +768,10 @@ class Handler(BaseHTTPRequestHandler):
                 row +=       '<div>' + badge(st) + '</div>'
                 row +=       '<div class="rowTitle"><a href="/view/' + jid + '?t=' + h(token) + '" target="_blank" rel="noopener">' + h(meta.get('title') or jid) + '</a></div>'
                 row +=     '</div>'
-                row +=     '<div class="muted">' + h(fmt_ts(started_at)) + '</div>'
-                row +=     '<div class="pillrow">'
-                row +=       '<div class="pill">Time: ' + fmt_elapsed(elapsed) + '</div>'
-                row +=       '<div class="pill">Segments: ' + segtxt + '</div>'
-                row +=     '</div>'
+                row +=     '<div class=\"muted\">' + h(fmt_ts(started_at)) + ' • ' + fmt_elapsed(elapsed) + ' • ' + segtxt + '</div>'
                 row +=   '</div>'
-                row +=   '<div class="rowBtns">' + ''.join(btns) + '</div>'
+                if btns:
+                    row +=   '<div class=\"rowBtns\">' + ''.join(btns) + '</div>'
                 row += '</div>'
                 rows.append(row)
 
