@@ -720,7 +720,7 @@ class Handler(BaseHTTPRequestHandler):
                 job_base = tmp_root / jid
                 tmp_job = find_tmp_job_dir(tmp_root, jid) or job_base
                 log_tail = read_log_tail(tmp_job, job_base)
-                log_text = "\n".join(log_tail) if log_tail else '(no log yet)'
+                log_text = log_tail if log_tail else '(no log yet)'
                 started_at = running.get('started_at')
                 now = now_ts()
                 elapsed = (now - started_at) if (started_at and now) else None
