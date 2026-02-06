@@ -30,11 +30,13 @@
 </head>
 <body>
   <h2>Storyforge Monitor</h2>
+  <div class="muted" style="margin:6px 0 10px;"><a id="voicesLink" href="#">Voices</a></div>
   <div id="jobs">Loading…</div>
 
 <script>
 const params = new URLSearchParams(location.search);
 const t = params.get('t');
+document.getElementById('voicesLink').href = '/voices?t='+encodeURIComponent(t);
 async function refresh(){
   const r = await fetch('/api/jobs?t='+encodeURIComponent(t));
   const j = await r.json();

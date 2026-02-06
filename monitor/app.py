@@ -58,6 +58,7 @@ def db_init(conn: sqlite3.Connection) -> None:
     if "finished_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN finished_at INTEGER")
     if "aborted_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN aborted_at INTEGER")
     if "segments_done" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN segments_done INTEGER")
+    conn.execute("CREATE TABLE IF NOT EXISTS voice_ratings (engine TEXT NOT NULL, voice_id TEXT NOT NULL, rating INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(engine, voice_id))")
     conn.commit()
 
 
@@ -175,6 +176,63 @@ def job_status_light(root: Path, job_id: str) -> dict:
         "mp3": str(mp3_path) if mp3_path and mp3_path.exists() else None,
         "status": status,
     }
+
+
+
+
+def load_tortoise_roster(repo_root: Path) -> list[dict]:
+    """Parse manifests/tortoise_voice_roster.yaml without external deps."""
+    path = repo_root / "manifests" / "tortoise_voice_roster.yaml"
+    if not path.exists():
+        return []
+    items = []
+    cur = None
+    for raw in read_text(path).splitlines():
+        ln = raw.rstrip()
+        if not ln.strip() or ln.lstrip().startswith('#'):
+            continue
+        s = ln.lstrip()
+        if s.startswith('- '):
+            if cur:
+                items.append(cur)
+            cur = {}
+            s = s[2:].strip()
+            if s and ':' in s:
+                k,v = s.split(':',1)
+                cur[k.strip()] = v.strip().strip('"')
+            continue
+        if cur is None:
+            continue
+        if ':' in s:
+            k,v = s.split(':',1)
+            cur[k.strip()] = v.strip().strip('"')
+    if cur:
+        items.append(cur)
+    # normalize
+    out=[]
+    for it in items:
+        out.append({
+            'id': it.get('id') or '',
+            'color': it.get('color') or it.get('id') or '',
+            'role': it.get('role') or '',
+            'engine': it.get('engine') or 'tortoise',
+            'voice_name': it.get('voice_name') or '',
+            'notes': it.get('notes') or '',
+        })
+    return [x for x in out if x['id']]
+
+
+def voice_demo_text(voice_id: str, color: str) -> str:
+    # unique-ish per voice; keep it short for fast generation
+    base = [
+        f"Hello. I'm {color}. I keep stories calm and clear.",
+        f"Hi. {color} here. Soft voice, steady pace.",
+        f"I'm {color}. I'll guide you gently into the story.",
+        f"{color} speaking. Warm, quiet, and bedtime-friendly.",
+        f"This is {color}. Let's make the night feel safe.",
+    ]
+    idx = (sum(ord(c) for c in voice_id) % len(base))
+    return base[idx]
 
 
 def filter_log_tail(raw: str, max_lines: int = 60) -> str:
@@ -552,6 +610,81 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/view/"):
             body = (root / "static" / "sfml_view.html").read_bytes()
             self._send(200, body, "text/html; charset=utf-8")
+            return
+
+        if path.startswith("/voices"):
+            body = (root / "static" / "voices.html").read_bytes()
+            self._send(200, body, "text/html; charset=utf-8")
+            return
+
+        if path == "/api/voices":
+            qs = parse_qs(urlparse(self.path).query)
+            engine = (qs.get("engine") or ["tortoise"])[0]
+            repo_root = Path("/raid/storyforge_test")
+            voices = []
+            if engine == "tortoise":
+                voices = load_tortoise_roster(repo_root)
+            # attach ratings
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            ratings = {row[0]: row[1] for row in conn.execute("SELECT voice_id, rating FROM voice_ratings WHERE engine=?", (engine,)).fetchall()}
+            conn.close()
+            for v in voices:
+                v["rating"] = int(ratings.get(v["id"], 0) or 0)
+            self._send(200, (json.dumps({"ok": True, "engine": engine, "voices": voices}) + "\n").encode(), "application/json")
+            return
+
+        if path == "/api/voice/rate":
+            qs = parse_qs(urlparse(self.path).query)
+            engine = (qs.get("engine") or [""])[0]
+            vid = (qs.get("id") or [""])[0]
+            rating = int((qs.get("rating") or ["0"])[0])
+            rating = max(0, min(5, rating))
+            if not engine or not vid:
+                self._send(400, (json.dumps({"ok": False})+"\n").encode(), "application/json")
+                return
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            conn.execute("INSERT INTO voice_ratings(engine,voice_id,rating,updated_at) VALUES(?,?,?,?) ON CONFLICT(engine,voice_id) DO UPDATE SET rating=excluded.rating, updated_at=excluded.updated_at", (engine, vid, rating, now_ts()))
+            conn.commit(); conn.close()
+            self._send(200, (json.dumps({"ok": True})+"\n").encode(), "application/json")
+            return
+
+        m = re.match(r"^/api/voice/demo/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)$", path)
+        if m:
+            engine = m.group(1)
+            vid = m.group(2)
+            repo_root = Path("/raid/storyforge_test")
+            cache_dir = root / "voices_cache" / engine
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            mp3_path = cache_dir / f"{vid}.mp3"
+            if not mp3_path.exists():
+                # build demo
+                voice_name = None
+                color = vid
+                if engine == "tortoise":
+                    for v in load_tortoise_roster(repo_root):
+                        if v.get("id") == vid:
+                            voice_name = v.get("voice_name")
+                            color = v.get("color") or vid
+                            break
+                if not voice_name:
+                    self._send(404, b"voice_not_found\n")
+                    return
+                demo = voice_demo_text(vid, color)
+                wav_tmp = cache_dir / f"{vid}.wav"
+                import subprocess
+                subprocess.run([str(repo_root / "tools" / "voicegen_tortoise.sh"), "--text", demo, "--ref", voice_name, "--out", str(wav_tmp), "--lang", "en", "--device", "cuda"], check=True)
+                # convert to mp3 (48k stereo)
+                mp3_tmp = cache_dir / f"{vid}.tmp.mp3"
+                subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-y","-i", str(wav_tmp),"-c:a","libmp3lame","-b:a","192k","-ar","48000","-ac","2", str(mp3_tmp)], check=True)
+                try:
+                    wav_tmp.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                mp3_tmp.replace(mp3_path)
+            data = mp3_path.read_bytes()
+            self._send(200, data, "audio/mpeg")
             return
 
         if path == "/api/jobs":

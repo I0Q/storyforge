@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voices</title>
+  <style>
+    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:16px;}
+    a{color:#0b63ce;}
+    .top{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;}
+    .title{font-size:18px; font-weight:800; margin:0;}
+    .muted{color:#666; font-size:12px;}
+
+    .tabs{display:flex; gap:8px; margin:10px 0 14px;}
+    .tab{padding:8px 10px; border:1px solid #d1d5db; border-radius:999px; font-weight:800; font-size:13px; text-decoration:none; color:#0b63ce; background:#fff;}
+    .tab.active{background:#0b63ce; color:#fff; border-color:#0b63ce;}
+    .tab.disabled{opacity:.45; pointer-events:none;}
+
+    .card{border:1px solid #ddd; border-radius:14px; padding:12px; margin:12px 0;}
+    .row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+    .left{flex:1; min-width:0;}
+    .right{display:flex; gap:8px; align-items:center;}
+
+    .swatch{width:44px; height:44px; border-radius:12px; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:900; color:#111;}
+    .name{font-weight:900; font-size:16px; margin:0;}
+    .meta{font-size:12px; color:#666; margin-top:2px;}
+
+    .btn{display:inline-block; padding:8px 10px; border-radius:999px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:12px; color:#0b63ce; background:#fff;}
+    .btn.primary{background:#0b63ce; color:#fff; border-color:#0b63ce;}
+
+    .stars{display:flex; gap:4px; align-items:center;}
+    .star{font-size:18px; line-height:1; cursor:pointer; user-select:none;}
+    .star.on{color:#f59e0b;}
+    .star.off{color:#d1d5db;}
+
+    audio{width:100%; margin-top:10px;}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <a id="back" href="#">Back</a>
+      <h1 class="title">Voices</h1>
+      <div class="muted">Tap Play to hear each voice introduce itself. Rate with stars.</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a id="tabT" class="tab active" href="#">Tortoise</a>
+    <a class="tab disabled" href="#">(more soon)</a>
+  </div>
+
+  <div id="list">Loading…</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const t = params.get('t') || '';
+const engine = params.get('engine') || 'tortoise';
+
+document.getElementById('back').href = '/?t='+encodeURIComponent(t);
+document.getElementById('tabT').href = '/voices?engine=tortoise&t='+encodeURIComponent(t);
+
+function esc(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function swatchBg(color){
+  // simple mapping; fallback gray
+  const m = {
+    Ruby: '#fecaca',
+    Onyx: '#111827',
+    Slate: '#e5e7eb',
+    Sapphire: '#bfdbfe',
+  };
+  return m[color] || '#f3f4f6';
+}
+
+function swatchFg(color){
+  return (color==='Onyx') ? '#fff' : '#111';
+}
+
+async function setRating(id, rating){
+  const url = `/api/voice/rate?engine=${encodeURIComponent(engine)}&id=${encodeURIComponent(id)}&rating=${encodeURIComponent(rating)}&t=${encodeURIComponent(t)}`;
+  const r = await fetch(url);
+  const j = await r.json();
+  return j.ok;
+}
+
+function renderStars(id, cur){
+  const wrap = document.createElement('div');
+  wrap.className='stars';
+  for(let i=1;i<=5;i++){
+    const s=document.createElement('span');
+    s.className='star ' + (i<=cur ? 'on':'off');
+    s.textContent='★';
+    s.onclick = async ()=>{
+      const ok = await setRating(id, i);
+      if(ok){
+        // rerender locally
+        const parent = wrap.parentElement;
+        parent.querySelectorAll('.star').forEach((el, idx)=>{
+          el.className='star ' + ((idx+1)<=i ? 'on':'off');
+        });
+      }
+    };
+    wrap.appendChild(s);
+  }
+  return wrap;
+}
+
+async function load(){
+  const r = await fetch(`/api/voices?engine=${encodeURIComponent(engine)}&t=${encodeURIComponent(t)}`);
+  const j = await r.json();
+  const el = document.getElementById('list');
+  if(!j.ok){ el.textContent = 'Error'; return; }
+  if(!j.voices || j.voices.length===0){ el.textContent='No voices.'; return; }
+
+  el.innerHTML='';
+  for(const v of j.voices){
+    const card=document.createElement('div');
+    card.className='card';
+
+    const top=document.createElement('div');
+    top.className='row';
+
+    const left=document.createElement('div');
+    left.className='left';
+    left.innerHTML = `
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="swatch" style="background:${swatchBg(v.color)}; color:${swatchFg(v.color)};">${esc((v.color||'?').slice(0,1))}</div>
+        <div>
+          <div class="name">${esc(v.color || v.id)}</div>
+          <div class="meta">${esc(v.role||'')} • ${esc(v.voice_name||'')}</div>
+          <div class="muted" style="margin-top:4px;">${esc(v.notes||'')}</div>
+        </div>
+      </div>
+    `;
+
+    const right=document.createElement('div');
+    right.className='right';
+
+    const play=document.createElement('a');
+    play.className='btn primary';
+    play.href = '#';
+    play.textContent = 'Play';
+    play.onclick = (e)=>{
+      e.preventDefault();
+      const a = card.querySelector('audio');
+      a.src = `/api/voice/demo/${encodeURIComponent(engine)}/${encodeURIComponent(v.id)}?t=${encodeURIComponent(t)}`;
+      a.play();
+    };
+
+    right.appendChild(play);
+
+    top.appendChild(left);
+    top.appendChild(right);
+
+    card.appendChild(top);
+    card.appendChild(document.createElement('div')).appendChild(renderStars(v.id, v.rating||0));
+
+    const audio=document.createElement('audio');
+    audio.controls = true;
+    audio.preload = 'none';
+    card.appendChild(audio);
+
+    el.appendChild(card);
+  }
+}
+
+load();
+</script>
+</body>
+</html>
