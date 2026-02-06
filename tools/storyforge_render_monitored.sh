@@ -6,18 +6,7 @@ cd /raid/storyforge_test
 if [[ $# -lt 1 ]]; then
   echo "usage: $0 <sfml_path> [storyforge render args...]" >&2
   
-
 # If render failed, mark aborted in sqlite (best-effort)
-if [[  -ne 0 ]]; then
-  python3 - <<PYIN
-import sqlite3, time
-DB=""
-JOB_ID=""
-conn=sqlite3.connect(DB)
-conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
-conn.commit(); conn.close()
-PYIN
-fi
 
 exit 2
 fi
@@ -30,18 +19,7 @@ if ps -ef | grep -F "storyforge.cli render" | grep -F -- "--story $SFML" | grep 
   echo "ERROR: a render for $SFML is already running" >&2
   ps -ef | grep -F -- "--story $SFML" | grep -F "storyforge.cli render" | grep -v grep >&2 || true
   
-
 # If render failed, mark aborted in sqlite (best-effort)
-if [[  -ne 0 ]]; then
-  python3 - <<PYIN
-import sqlite3, time
-DB=""
-JOB_ID=""
-conn=sqlite3.connect(DB)
-conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
-conn.commit(); conn.close()
-PYIN
-fi
 
 exit 3
 fi
@@ -99,6 +77,19 @@ PYIN
 
 # Upsert into sqlite job DB (preferred job store)
 DB=${MONITOR_DB:-$ROOT/monitor.db}
+
+# Mark aborted on any non-zero exit (best-effort)
+trap 'rc=$?; if [[ $rc -ne 0 ]] && [[ -n "${JOB_ID:-}" ]] && [[ -n "${DB:-}" ]]; then python3 - <<PYIN
+import sqlite3, time
+DB="${DB}"
+JOB_ID="${JOB_ID}"
+conn=sqlite3.connect(DB)
+conn.execute("PRAGMA journal_mode=WAL")
+conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
+conn.commit(); conn.close()
+PYIN
+fi' EXIT
+
 python3 - <<PYIN
 import sqlite3
 conn=sqlite3.connect("$DB")
@@ -184,15 +175,5 @@ fi
 
 
 # If render failed, mark aborted in sqlite (best-effort)
-if [[  -ne 0 ]]; then
-  python3 - <<PYIN
-import sqlite3, time
-DB=""
-JOB_ID=""
-conn=sqlite3.connect(DB)
-conn.execute("UPDATE jobs SET state=?, aborted_at=?, finished_at=NULL WHERE id=?", ("aborted", int(time.time()), JOB_ID))
-conn.commit(); conn.close()
-PYIN
-fi
 
 exit $RC
