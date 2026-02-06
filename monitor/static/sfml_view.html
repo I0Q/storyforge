@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SFML</title>
+  <style>
+    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:16px;}
+    a{color:#0b63ce;}
+    .top{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;}
+    .title{font-size:18px; font-weight:800; margin:0;}
+    .btnrow{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;}
+    .btn{display:inline-block; padding:8px 10px; border-radius:999px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:12px; color:#0b63ce; background:#fff;}
+    .btn.primary{background:#0b63ce; color:#fff; border-color:#0b63ce;}
+    .muted{color:#666; font-size:12px;}
+
+    .codewrap{border:1px solid #ddd; border-radius:14px; overflow:hidden;}
+    .toolbar{display:flex; justify-content:space-between; gap:10px; padding:10px 12px; background:#f7f7f8; border-bottom:1px solid #e5e7eb;}
+    .code{font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; line-height:1.5;}
+    .row{display:grid; grid-template-columns:46px 1fr;}
+    .ln{padding:0 10px; text-align:right; color:#999; user-select:none; background:#fafafa; border-right:1px solid #eee;}
+    .src{padding:0 12px; white-space:pre-wrap; word-break:break-word;}
+
+    /* highlighting */
+    .dir{color:#0b63ce; font-weight:750;}     /* @title, @music, etc */
+    .speaker{color:#166534; font-weight:800;} /* Ruby: */
+    .text{color:#111;}
+    .comment{color:#6b7280; font-style:italic;}
+    .warn{color:#b45309;}
+    .error{color:#b91c1c;}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <a id="back" href="#">Back</a>
+      <h1 class="title" id="h">SFML</h1>
+      <div class="muted" id="meta">Loading…</div>
+    </div>
+    <div class="btnrow">
+      <a class="btn" id="dl" href="#" target="_blank" rel="noopener">Download</a>
+    </div>
+  </div>
+
+  <div class="codewrap">
+    <div class="toolbar">
+      <div class="muted">Viewer (read-only)</div>
+      <div class="muted" id="stats"></div>
+    </div>
+    <div class="code" id="code"></div>
+  </div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const t = params.get('t') || '';
+const parts = location.pathname.split('/');
+const jobId = parts[parts.length-1] || '';
+
+document.getElementById('back').href = '/job/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t);
+document.getElementById('dl').href = '/sfml/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t);
+
+function esc(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightLine(line){
+  const raw = line || '';
+  const s = raw.trim();
+
+  if(!s) return '<span class="text">'+esc(raw)+'</span>';
+  if(s.startsWith('#')) return '<span class="comment">'+esc(raw)+'</span>';
+
+  if(s.startsWith('@')){
+    // directive: split at first ':'
+    const idx = raw.indexOf(':');
+    if(idx>0){
+      const k = raw.slice(0, idx+1);
+      const v = raw.slice(idx+1);
+      return '<span class="dir">'+esc(k)+'</span><span class="text">'+esc(v)+'</span>';
+    }
+    return '<span class="dir">'+esc(raw)+'</span>';
+  }
+
+  // Speaker lines like "Ruby: hello"
+  const m = raw.match(/^\s*([A-Za-z0-9_ -]{1,32}):\s*(.*)$/);
+  if(m){
+    return '<span class="speaker">'+esc(m[1]+':')+'</span> <span class="text">'+esc(m[2]||'')+'</span>';
+  }
+
+  return '<span class="text">'+esc(raw)+'</span>';
+}
+
+async function load(){
+  const r = await fetch('/api/sfml/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t));
+  if(!r.ok){
+    document.getElementById('meta').textContent = 'Not found';
+    return;
+  }
+  const txt = await r.text();
+  const lines = txt.replace(/\r\n/g,'\n').split('\n');
+  document.getElementById('stats').textContent = `${lines.length} lines`;
+
+  // try to show title
+  const titleLine = lines.find(l=>l.startsWith('@title:'));
+  if(titleLine){
+    document.getElementById('h').textContent = titleLine.split(':',1)[0] ? titleLine.slice(7).trim() : 'SFML';
+    document.getElementById('h').textContent = titleLine.replace('@title:','').trim() || 'SFML';
+  }
+
+  const el = document.getElementById('code');
+  el.innerHTML = '';
+  for(let i=0;i<lines.length;i++){
+    const row = document.createElement('div');
+    row.className = 'row';
+    const ln = document.createElement('div');
+    ln.className = 'ln';
+    ln.textContent = String(i+1);
+    const src = document.createElement('div');
+    src.className = 'src';
+    src.innerHTML = highlightLine(lines[i]);
+    row.appendChild(ln);
+    row.appendChild(src);
+    el.appendChild(row);
+  }
+
+  document.getElementById('meta').textContent = 'Loaded.';
+}
+
+load();
+</script>
+</body>
+</html>

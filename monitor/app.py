@@ -531,6 +531,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, body, "text/html; charset=utf-8")
             return
 
+        if path.startswith("/view/"):
+            body = (root / "static" / "sfml_view.html").read_bytes()
+            self._send(200, body, "text/html; charset=utf-8")
+            return
+
         if path == "/api/jobs":
             conn = db_connect(self.server.db_path)
             db_init(conn)
@@ -555,6 +560,31 @@ class Handler(BaseHTTPRequestHandler):
             st = job_status(root, jid)
             self._send(200, (json.dumps(st) + "\n").encode(), "application/json")
             return
+
+        m = re.match(r"^/api/sfml/([a-zA-Z0-9_-]+)$", path)
+        if m:
+            jid = m.group(1)
+            conn = db_connect(self.server.db_path)
+            db_init(conn)
+            meta = db_get_job(conn, jid)
+            conn.close()
+            if not meta:
+                self._send(404, b"job_not_found\n")
+                return
+            sfml = meta.get("sfml")
+            if not sfml:
+                self._send(404, b"sfml_missing\n")
+                return
+            sfml_path = Path(sfml)
+            if not sfml_path.is_absolute():
+                sfml_path = Path("/raid/storyforge_test") / sfml_path
+            if not sfml_path.exists():
+                self._send(404, b"sfml_not_found\n")
+                return
+            data = sfml_path.read_bytes()
+            self._send(200, data, "text/plain; charset=utf-8")
+            return
+
 
 
 

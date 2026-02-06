@@ -191,7 +191,7 @@ async function refresh(){
   const lm = document.getElementById('logMeta');
   if(lm) lm.textContent = metaLine;
   const sb = document.getElementById('sfmlTopBtn');
-  if(sb) sb.href = '/sfml/' + encodeURIComponent(jobId) + '?t=' + encodeURIComponent(t);
+  if(sb) sb.href = '/view/' + encodeURIComponent(jobId) + '?t=' + encodeURIComponent(t);
 
   // status badge
   const st = (j.status && j.status.state) ? j.status.state : 'unknown';
