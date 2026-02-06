@@ -52,6 +52,12 @@ def db_init(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    # schema migrations
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "state" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN state TEXT")
+    if "finished_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN finished_at INTEGER")
+    if "aborted_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN aborted_at INTEGER")
+    if "segments_done" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN segments_done INTEGER")
     conn.commit()
 
 
@@ -76,6 +82,12 @@ def db_upsert_job(conn: sqlite3.Connection, meta: dict) -> None:
             meta.get("mp3"),
         ),
     )
+    # schema migrations
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "state" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN state TEXT")
+    if "finished_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN finished_at INTEGER")
+    if "aborted_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN aborted_at INTEGER")
+    if "segments_done" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN segments_done INTEGER")
     conn.commit()
 
 
@@ -148,7 +160,14 @@ def job_status_light(root: Path, job_id: str) -> dict:
     if mp3_path and mp3_path.exists() and total and done == 0:
         done = total
 
-    status = job_runtime_status(job_base, tmp_job, mp3_path if (mp3_path and mp3_path.exists()) else None, done, total)
+    st = (meta.get("state") or "pending").lower()
+    status = {
+        'state': st,
+        'finished_at': meta.get('finished_at'),
+        'aborted_at': meta.get('aborted_at'),
+        'last_activity_at': meta.get('finished_at') or meta.get('aborted_at') or None,
+    }
+
 
     return {
         "ok": True,
@@ -368,15 +387,13 @@ def job_runtime_status(job_base: Path, tmp_job: Path | None, mp3_path: Path | No
         except Exception:
             pass
 
-    # running? best-effort: if ANY process references this job tmp path
+    # running? if any process references this job tmp path (voicegen writes full tmp paths)
     running = False
     try:
         import subprocess
         probe = job_base.as_posix().rstrip('/') + '/'
-        out = subprocess.check_output(
-            ['bash','-lc', f"ps -eo args | grep -F {probe!r} | grep -v grep | wc -l"],
-            text=True,
-        ).strip()
+        cmd = f"ps -eo args | grep -F {probe!r} | grep -v grep | wc -l"
+        out = subprocess.check_output(['bash','-lc', cmd], text=True).strip()
         running = int(out) > 0
     except Exception:
         running = False
@@ -455,7 +472,13 @@ def job_status(root: Path, job_id: str) -> dict:
     if mp3_path and total and done == 0:
         done = total
 
-    status = job_runtime_status(job_base, tmp_job, mp3_path, done, total)
+    st = (meta.get("state") or "pending").lower()
+    status = {
+        'state': st,
+        'finished_at': meta.get('finished_at'),
+        'aborted_at': meta.get('aborted_at'),
+        'last_activity_at': meta.get('finished_at') or meta.get('aborted_at') or None,
+    }
 
     return {
         "ok": True,

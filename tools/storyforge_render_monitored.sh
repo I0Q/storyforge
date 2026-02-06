@@ -99,6 +99,21 @@ conn.execute(
 conn.commit(); conn.close()
 PYIN
 
+python3 - <<PYIN
+import sqlite3
+DB="$DB"
+JOB_ID="$JOB_ID"
+STARTED=int("$STARTED")
+conn=sqlite3.connect(DB)
+conn.execute("PRAGMA journal_mode=WAL")
+cols={r[1] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+if "state" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN state TEXT")
+if "finished_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN finished_at INTEGER")
+if "aborted_at" not in cols: conn.execute("ALTER TABLE jobs ADD COLUMN aborted_at INTEGER")
+conn.execute("UPDATE jobs SET state=?, finished_at=NULL, aborted_at=NULL, mp3=NULL WHERE id=?", ("running", JOB_ID))
+conn.commit(); conn.close()
+PYIN
+
 
 TOKEN=$(cat $ROOT/token.txt)
 HOST=$(hostname -I | awk '{print $1}')
@@ -133,7 +148,7 @@ cands.sort(key=lambda p:p.stat().st_mtime, reverse=True)
 mp3=str((Path.cwd()/cands[0]).resolve()) if cands else None
 if mp3:
     conn=sqlite3.connect(DB)
-    conn.execute("UPDATE jobs SET mp3=? WHERE id=?", (mp3, JOB_ID))
+    conn.execute("UPDATE jobs SET state=?, finished_at=?, aborted_at=NULL, mp3=? WHERE id=?", ("completed", int(Path(mp3).stat().st_mtime), mp3, JOB_ID))
     conn.commit(); conn.close()
 PYIN
 fi
