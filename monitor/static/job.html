@@ -73,16 +73,7 @@
       <div class="ptext" id="ptext">--</div>
     </div>
   </div>
-
-  <div id="cpu" class="cpuRow"><span class="muted">Loading...</span></div>
-  <div id="gpu" class="gpu"><span class="muted">Loading...</span></div>
-
-  <details id="procs" open="false">
-    <summary>Show processes</summary>
-    <div class="plist" id="ps"></div>
-  </details>
-
-  <details id="logs" open>
+<details id="logs" open>
     <summary>Log tail</summary>
     <div class="logtop">
       <div class="muted" id="logMeta"></div>
@@ -122,34 +113,7 @@ function metricRow(label, pct, cls, valueText){
   `;
 }
 
-function renderGpu(gpus){
-  const el = document.getElementById('gpu');
-  if(!gpus){ el.innerHTML = '<span class="muted">(no GPU data)</span>'; return; }
-  el.innerHTML = '';
-  for(const g of gpus){
-    const div = document.createElement('div');
-    div.className = 'g';
-
-    const utilPct = clampPct(g.util);
-    const memPct = g.mem_total ? clampPct((g.mem_used/g.mem_total)*100) : 0;
-
-    const utilClass = klassForPct(utilPct);
-    const memClass = klassForPct(memPct);
-
-    const usedGb = mibToGb(g.mem_used||0);
-    const totalGb = mibToGb(g.mem_total||0);
-
-    div.innerHTML = `
-      <div class="ghead">
-        <div class="gt">GPU ${g.index}</div>
-        <div class="gsub">${(g.power||0).toFixed(0)}W · ${(g.temp||0).toFixed(0)}C</div>
-      </div>
-      ${metricRow('Util', utilPct, utilClass, utilPct.toFixed(0)+'%')}
-      ${metricRow('VRAM', memPct, memClass, usedGb.toFixed(1)+'/'+totalGb.toFixed(1)+'G')}
-    `;
-    el.appendChild(div);
-  }
-}
+function renderGpu(){ return; }
 
 function fmtElapsed(sec){
   sec = Math.max(0, Math.floor(sec));
@@ -160,23 +124,7 @@ function fmtElapsed(sec){
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
-function renderCpu(cpu, startedAt, nowTs, status){
-  const el = document.getElementById('cpu');
-  if(!cpu){ el.innerHTML = '<span class="muted">(no CPU data)</span>'; return; }
-  const mem = cpu.mem_gb || {};
-  const cpuPct = cpu.cpu_pct;
-  const endTs = (status && status.state==='completed' && status.finished_at) ? status.finished_at : nowTs;
-  const elapsed = (startedAt && endTs) ? (endTs - startedAt) : null;
-
-  el.innerHTML = `
-    <div class="pill">Time: ${elapsed===null ? '-' : fmtElapsed(elapsed)}</div>
-    <div class="pill">CPU: ${cpuPct ?? '-'}%</div>
-    <div class="pill">RAM: ${mem.used ?? '-'} / ${mem.total ?? '-'} GB (${mem.pct ?? '-'}%)</div>
-  `;
-
-  const ps = (cpu.ps || []).join('\n');
-  document.getElementById('ps').textContent = ps;
-}
+function renderCpu(){ return; }
 
 async function refresh(){
   const r = await fetch('/api/job/'+encodeURIComponent(jobId)+'?t='+encodeURIComponent(t));
@@ -220,9 +168,7 @@ async function refresh(){
   const pt = document.getElementById('ptext');
   if(pt){ pt.textContent = txt; pt.className = 'ptext' + ((pct!==null && pct>=55) ? ' light' : ''); }
 
-  renderCpu(j.cpu, j.job.started_at, j.now, j.status);
-  renderGpu(j.gpu);
-  document.getElementById('log').textContent = j.log_tail || '(no log yet)';
+    document.getElementById('log').textContent = j.log_tail || '(no log yet)';
 }
 refresh();
 setInterval(refresh, 2000);
