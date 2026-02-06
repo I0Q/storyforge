@@ -71,5 +71,154 @@ async function refresh(){
 refresh();
 setInterval(refresh, 3000);
 </script>
+
+
+<!-- Bottom sheet: system monitor -->
+<style>
+  .bs{position:fixed; left:0; right:0; bottom:0; z-index:9999; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;}
+  .bs .handle{margin:0 auto; width:46px; height:5px; background:#d1d5db; border-radius:999px;}
+  .bs .bar{background:rgba(255,255,255,.96); border-top:1px solid #e5e7eb; box-shadow:0 -10px 25px rgba(0,0,0,.08); padding:10px 14px;}
+  .bs .barTop{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .bs .title{font-weight:900; font-size:13px;}
+  .bs .mini{font-size:12px; color:#666;}
+  .bs .btn{display:inline-block; padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:12px; color:#0b63ce; background:#fff;}
+  .bs .panel{display:none; padding-top:10px;}
+  .bs.open .panel{display:block;}
+  .bs .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:10px;}
+  .bs .g{border:1px solid #ddd; border-radius:12px; padding:10px 12px; background:#fff;}
+  .bs .ghead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}
+  .bs .gt{font-weight:850;}
+  .bs .gsub{font-size:12px; color:#666; white-space:nowrap;}
+  .bs .metric{display:flex; align-items:center; gap:8px; margin:6px 0;}
+  .bs .label{width:42px; font-size:12px; color:#666;}
+  .bs .ibar{flex:1; height:8px; background:#f1f1f1; border-radius:999px; overflow:hidden;}
+  .bs .ifill{height:8px; width:0%;}
+  .bs .ifill.green{background:#1f9d55;}
+  .bs .ifill.amber{background:#d97706;}
+  .bs .ifill.red{background:#dc2626;}
+  .bs .val{min-width:64px; text-align:right; font-variant-numeric:tabular-nums; font-size:12px; font-weight:700;}
+  .bs details{border:1px solid #ddd; border-radius:12px; padding:10px 12px; margin-top:10px; background:#fff;}
+  .bs summary{cursor:pointer; font-weight:750;}
+  .bs .plist{margin-top:8px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#333; white-space:pre; overflow-x:auto;}
+  body{padding-bottom:90px;} /* room for bar */
+</style>
+
+<div id="bottomSheet" class="bs">
+  <div class="bar">
+    <div class="handle" aria-hidden="true"></div>
+    <div class="barTop" style="margin-top:8px;">
+      <div>
+        <div class="title">System Monitor</div>
+        <div class="mini" id="bsMini">Loading…</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <a href="#" id="bsToggle" class="btn">Show</a>
+      </div>
+    </div>
+
+    <div class="panel" id="bsPanel">
+      <div class="grid" id="bsGpu"></div>
+      <div class="grid" style="grid-template-columns:1fr;">
+        <div class="g" id="bsCpu"></div>
+      </div>
+      <details>
+        <summary>Processes</summary>
+        <div class="plist" id="bsPs"></div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const t = params.get('t') || '';
+  const bs = document.getElementById('bottomSheet');
+  const btn = document.getElementById('bsToggle');
+
+  function clampPct(x){
+    if(x===null || x===undefined || Number.isNaN(x)) return 0;
+    return Math.max(0, Math.min(100, x));
+  }
+  function klassForPct(p){
+    if(p >= 85) return 'red';
+    if(p >= 60) return 'amber';
+    return 'green';
+  }
+  function metricRow(label, pct, cls, valueText){
+    return `
+      <div class="metric">
+        <div class="label">${label}</div>
+        <div class="ibar"><div class="ifill ${cls}" style="width:${pct}%"></div></div>
+        <div class="val">${valueText}</div>
+      </div>
+    `;
+  }
+
+  function toggle(open){
+    const isOpen = (open !== undefined) ? open : !bs.classList.contains('open');
+    bs.classList.toggle('open', isOpen);
+    btn.textContent = isOpen ? 'Hide' : 'Show';
+    try{ localStorage.setItem('bsOpen', isOpen ? '1':'0'); }catch(e){}
+  }
+
+  btn.addEventListener('click', (e)=>{ e.preventDefault(); toggle(); });
+  bs.querySelector('.handle').addEventListener('click', ()=>toggle());
+
+  try{
+    const saved = localStorage.getItem('bsOpen');
+    if(saved==='1') toggle(true);
+  }catch(e){}
+
+  async function refresh(){
+    const r = await fetch('/api/stats?t='+encodeURIComponent(t));
+    if(!r.ok) return;
+    const j = await r.json();
+    if(!j.ok) return;
+
+    // Mini line
+    const mini = document.getElementById('bsMini');
+    const cpuPct = j.cpu && (j.cpu.cpu_pct ?? null);
+    const g0 = (j.gpu && j.gpu.length) ? j.gpu[0] : null;
+    const gtxt = g0 ? `GPU0 ${Math.round(g0.util||0)}%` : 'GPU n/a';
+    mini.textContent = `CPU ${cpuPct===null?'-':cpuPct}% • ${gtxt}`;
+
+    // GPU cards
+    const ge = document.getElementById('bsGpu');
+    if(!j.gpu){ ge.innerHTML = '<div class="muted">(no GPU data)</div>'; }
+    else {
+      ge.innerHTML = '';
+      for(const g of j.gpu){
+        const util = clampPct(g.util);
+        const vram = g.mem_total ? clampPct((g.mem_used/g.mem_total)*100.0) : 0;
+        const gdiv = document.createElement('div');
+        gdiv.className='g';
+        gdiv.innerHTML = `
+          <div class="ghead"><div class="gt">GPU ${g.index}</div><div class="gsub">${Math.round(g.power||0)}W • ${Math.round(g.temp||0)}C</div></div>
+          ${metricRow('Util', util, klassForPct(util), `${Math.round(util)}%`)}
+          ${metricRow('VRAM', vram, klassForPct(vram), `${(g.mem_used||0).toFixed(1)}/${(g.mem_total||0).toFixed(0)} MiB`)}
+        `;
+        ge.appendChild(gdiv);
+      }
+    }
+
+    // CPU
+    const ce = document.getElementById('bsCpu');
+    if(!j.cpu){ ce.innerHTML = '<span class="muted">(no CPU data)</span>'; }
+    else {
+      const mem = j.cpu.mem_gb || {};
+      ce.innerHTML = `
+        <div class="ghead"><div class="gt">CPU</div><div class="gsub">RAM ${(mem.used??'-')} / ${(mem.total??'-')} GB</div></div>
+        ${metricRow('CPU', clampPct(j.cpu.cpu_pct||0), klassForPct(j.cpu.cpu_pct||0), `${j.cpu.cpu_pct ?? '-'}%`)}
+      `;
+      document.getElementById('bsPs').textContent = (j.cpu.ps || []).join('\n');
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+})();
+</script>
+
 </body>
 </html>

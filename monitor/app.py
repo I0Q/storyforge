@@ -688,6 +688,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, data, "audio/mpeg")
             return
 
+        if path == "/api/stats":
+            data = {
+                "ok": True,
+                "gpu": gpu_stats(),
+                "cpu": cpu_stats(),
+                "now": now_ts(),
+            }
+            self._send(200, (json.dumps(data) + "\n").encode(), "application/json")
+            return
+
         if path == "/api/jobs":
             conn = db_connect(self.server.db_path)
             db_init(conn)
