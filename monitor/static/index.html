@@ -91,173 +91,183 @@
   <div id="hist"><div class="muted">(loading…)</div></div>
 
   <script>
-  window.onerror = function(msg, src, line, col, err){
-    const el=document.getElementById("hist");
-    if(el) el.innerHTML = `<div class="muted">JS error: ${msg} @ ${line}:${col}</div>`;
-    return false;
-  };
+  (function(){
+    window.onerror = function(msg, src, line, col){
+      var el = document.getElementById('hist');
+      if(el){ el.innerHTML = '<div class="muted">JS error: ' + String(msg) + ' @ ' + String(line||'?') + ':' + String(col||'?') + '</div>'; }
+      return false;
+    };
 
-  const params = new URLSearchParams(location.search);
-  const t = params.get('t') || '';
-  const vb=document.getElementById('voicesBtn');
-  if(vb) vb.href = '/voices?t='+encodeURIComponent(t);
-  // debug: prove JS is running
-  
+    var params = new URLSearchParams(location.search);
+    var t = params.get('t') || '';
 
-  function esc(s){
-    const m = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',''':'&#39;'};
-    return (s||'').replace(/[&<>"']/g, c => m[c] || c);
-  }
-  function fmtTs(ts){
-    if(!ts) return '-';
-    return new Date(ts*1000).toLocaleString();
-  }
-  function fmtElapsed(sec){
-    if(sec===null||sec===undefined) return '-';
-    sec = Math.max(0, Math.floor(sec));
-    const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
-    if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    return `${m}:${String(s).padStart(2,'0')}`;
-  }
+    var vb = document.getElementById('voicesBtn');
+    if(vb){ vb.href = '/voices?t=' + encodeURIComponent(t); }
 
-  function badge(state){
-    const st = state || 'unknown';
-    return `<span class="badge ${st}">${esc(st)}</span>`;
-  }
+    function esc(s){
+      s = (s===null||s===undefined) ? '' : String(s);
+      return s.replace(/[&<>"']/g, function(c){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',''':'&#39;'}[c]) || c;
+      });
+    }
 
-  function clampPct(x){
-    if(x===null||x===undefined||Number.isNaN(x)) return 0;
-    return Math.max(0, Math.min(100, x));
-  }
+    function fmtTs(ts){
+      if(!ts) return '-';
+      try { return new Date(ts*1000).toLocaleString(); } catch(e){ return String(ts); }
+    }
 
-  function getJson(url){
-    return new Promise((resolve,reject)=>{
-      const xhr = new XMLHttpRequest();
+    function fmtElapsed(sec){
+      if(sec===null || sec===undefined) return '-';
+      sec = Math.max(0, Math.floor(sec));
+      var h=Math.floor(sec/3600);
+      var m=Math.floor((sec%3600)/60);
+      var s=sec%60;
+      function p2(x){ return (x<10?'0':'')+String(x); }
+      if(h>0) return String(h)+':' + p2(m) + ':' + p2(s);
+      return String(m)+':' + p2(s);
+    }
+
+    function badge(state){
+      var st = state || 'unknown';
+      return '<span class="badge ' + esc(st) + '">' + esc(st) + '</span>';
+    }
+
+    function getJson(url, cb){
+      var xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
       xhr.onreadystatechange = function(){
         if(xhr.readyState !== 4) return;
         if(xhr.status < 200 || xhr.status >= 300){
-          return reject(new Error('HTTP '+xhr.status));
+          cb(new Error('HTTP ' + xhr.status), null);
+          return;
         }
-        try{ resolve(JSON.parse(xhr.responseText)); }catch(e){ reject(e); }
+        try { cb(null, JSON.parse(xhr.responseText)); }
+        catch(e){ cb(e, null); }
       };
       xhr.send();
-    });
-  }
+    }
 
-  async function fetchJobs(){
-    return await getJson('/api/jobs?t='+encodeURIComponent(t));
-  }
-
-  async function fetchJob(id){
-    return await getJson('/api/job/'+encodeURIComponent(id)+'?t='+encodeURIComponent(t));
-  }
-
-  function renderHistory(jobs){
-    const el = document.getElementById('hist');
-    if(!jobs.length){ el.innerHTML='<div class="muted">No jobs yet.</div>'; return; }
-
-    el.innerHTML = jobs.map(j=>{
-      const st = (j.status && j.status.state) ? j.status.state : (j.state||'unknown');
-      const done = (j.segments_done!==null && j.segments_done!==undefined) ? j.segments_done : (j.status? j.status.done : null);
-      const total = j.total_segments || (j.status? j.status.total : null);
-      const finished_at = j.finished_at || (j.status? j.status.finished_at : null);
-      const elapsed = (j.started_at && finished_at) ? (finished_at - j.started_at) : null;
-
-      const audioBtn = (j.mp3 && st==='completed') ? `<a class="btn tiny" href="/dl/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}" target="_blank" rel="noopener">AUDIO</a>` : '';
-      const sfmlBtn = `<a class="btn tiny" href="/sfml/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}" target="_blank" rel="noopener">SFML</a>`;
-
-      return `
-        <div class="row">
-          <div class="rowMain">
-            <div class="rowTop">
-              <div class="rowTitle">${esc(j.title||j.id)}</div>
-              <div>${badge(st)}</div>
-            </div>
-            <div class="muted">${fmtTs(j.started_at)} • ${done===null||total===null?'-':(done+'/'+total)} seg • ${elapsed===null?'-':fmtElapsed(elapsed)}</div>
-          </div>
-          <div class="rowBtns">
-            <a class="btn tiny" href="/job/${encodeURIComponent(j.id)}?t=${encodeURIComponent(t)}">OPEN</a>
-            ${sfmlBtn}
-            ${audioBtn}
-          </div>
-        </div>
-      `;
-    }).join('
-');
-  }
-
-  async function renderRunning(running){
-    const noRun = document.getElementById('noRun');
-    const card = document.getElementById('runCard');
-    if(!running){
+    function setRunningNone(){
+      var noRun = document.getElementById('noRun');
+      var card = document.getElementById('runCard');
       if(noRun) noRun.style.display='block';
       if(card) card.style.display='none';
-      return;
-    }
-    if(noRun) noRun.style.display='none';
-    if(card) card.style.display='block';
-
-    // lightweight info
-    document.getElementById('runTitle').textContent = running.title || running.id;
-    document.getElementById('runMeta').textContent = `${fmtTs(running.started_at)} • ${running.sfml||''}`;
-    document.getElementById('runOpen').href = '/job/'+encodeURIComponent(running.id)+'?t='+encodeURIComponent(t);
-    document.getElementById('runSfml').href = '/view/'+encodeURIComponent(running.id)+'?t='+encodeURIComponent(t);
-
-    // detail for progress/log
-    const j = await fetchJob(running.id);
-    if(!j.ok){ document.getElementById('runLog').textContent='(job not found)'; return; }
-
-    const st = (j.status && j.status.state) ? j.status.state : 'running';
-    const done = (j.status && j.status.done!==undefined) ? j.status.done : 0;
-    const total = (j.status && j.status.total!==undefined) ? j.status.total : (running.total_segments||0);
-    const pct = total ? clampPct((done/total)*100.0) : 0;
-
-    document.getElementById('runFill').style.width = pct+'%';
-    const txt = total ? `${done}/${total} segments` : `${done} segments`;
-    document.getElementById('runText').textContent = txt;
-
-    const nowTs = j.now;
-    const elapsed = (j.job && j.job.started_at && nowTs) ? (nowTs - j.job.started_at) : null;
-    document.getElementById('runPills').innerHTML = `
-      <div class="pill">Time: ${elapsed===null?'-':fmtElapsed(elapsed)}</div>
-      <div class="pill">Status: ${esc(st)}</div>
-    `;
-
-    // audio button only if completed
-    const a = document.getElementById('runAudio');
-    if(j.mp3 && st==='completed'){
-      a.style.display='inline-block';
-      a.href='/dl/'+encodeURIComponent(running.id)+'?t='+encodeURIComponent(t);
-    } else {
-      a.style.display='none';
-      a.href='#';
     }
 
-    document.getElementById('runLog').textContent = (j.log_tail && j.log_tail.length) ? j.log_tail.join('\n') : '(no log yet)';
-  }
+    function setRunning(job){
+      var noRun = document.getElementById('noRun');
+      var card = document.getElementById('runCard');
+      if(noRun) noRun.style.display='none';
+      if(card) card.style.display='block';
 
-  async function refresh(){
-    try{
-      const j = await fetchJobs();
-    if(!j.ok){ document.getElementById('hist').innerHTML='<div class="muted">Failed to load.</div>'; return; }
-
-    const jobs = j.jobs || [];
-    const running = jobs.find(x => (x.state==='running') || (x.status && x.status.state==='running')) || null;
-    const hist = jobs.filter(x => !running || x.id !== running.id);
-
-    await renderRunning(running);
-    renderHistory(hist);
-    }catch(e){
-      const el=document.getElementById('hist');
-      if(el) el.innerHTML = `<div class="muted">Failed: ${e}</div>`;
+      document.getElementById('runTitle').textContent = job.title || job.id;
+      document.getElementById('runMeta').textContent = fmtTs(job.started_at) + (job.sfml ? ('  ' + job.sfml) : '');
+      document.getElementById('runOpen').href = '/job/' + encodeURIComponent(job.id) + '?t=' + encodeURIComponent(t);
+      document.getElementById('runSfml').href = '/view/' + encodeURIComponent(job.id) + '?t=' + encodeURIComponent(t);
     }
-  }
 
-  refresh();
-  setInterval(refresh, 5000);
+    function renderHistory(jobs){
+      var el = document.getElementById('hist');
+      if(!jobs || !jobs.length){ el.innerHTML = '<div class="muted">No jobs yet.</div>'; return; }
+
+      var out = [];
+      for(var i=0;i<jobs.length;i++){
+        var j = jobs[i];
+        var st = (j.status && j.status.state) ? j.status.state : (j.state||'unknown');
+        var done = (j.progress && (j.progress.done!==undefined)) ? j.progress.done : (j.segments_done!==null && j.segments_done!==undefined ? j.segments_done : null);
+        var total = (j.progress && (j.progress.total!==undefined)) ? j.progress.total : (j.total_segments||null);
+        var finished_at = j.finished_at || (j.status ? j.status.finished_at : null);
+        var elapsed = (j.started_at && finished_at) ? (finished_at - j.started_at) : null;
+
+        var openBtn = '<a class="btn tiny" href="/job/' + encodeURIComponent(j.id) + '?t=' + encodeURIComponent(t) + '">OPEN</a>';
+        var sfmlBtn = '<a class="btn tiny" href="/sfml/' + encodeURIComponent(j.id) + '?t=' + encodeURIComponent(t) + '" target="_blank" rel="noopener">SFML</a>';
+        var audioBtn = (j.mp3 && st==='completed') ? ('<a class="btn tiny" href="/dl/' + encodeURIComponent(j.id) + '?t=' + encodeURIComponent(t) + '" target="_blank" rel="noopener">AUDIO</a>') : '';
+
+        out.push(
+          '<div class="row">' +
+            '<div class="rowMain">' +
+              '<div class="rowTop">' +
+                '<div class="rowTitle">' + esc(j.title||j.id) + '</div>' +
+                '<div>' + badge(st) + '</div>' +
+              '</div>' +
+              '<div class="muted">' + esc(fmtTs(j.started_at)) + '  ' + (done===null||total===null?'-':(done + '/' + total)) + ' seg  ' + esc(fmtElapsed(elapsed)) + '</div>' +
+            '</div>' +
+            '<div class="rowBtns">' + openBtn + sfmlBtn + audioBtn + '</div>' +
+          '</div>'
+        );
+      }
+      el.innerHTML = out.join('
+');
+    }
+
+    function refresh(){
+      var histEl = document.getElementById('hist');
+      if(histEl) histEl.innerHTML = '<div class="muted">(loading...)</div>';
+
+      getJson('/api/jobs?t=' + encodeURIComponent(t), function(err, data){
+        if(err || !data || !data.ok){
+          if(histEl) histEl.innerHTML = '<div class="muted">Failed to load: ' + esc(err?err.message:'bad response') + '</div>';
+          return;
+        }
+
+        var jobs = data.jobs || [];
+        var running = null;
+        for(var i=0;i<jobs.length;i++){
+          var st = (jobs[i].status && jobs[i].status.state) ? jobs[i].status.state : jobs[i].state;
+          if(st === 'running'){ running = jobs[i]; break; }
+        }
+
+        if(!running){
+          setRunningNone();
+        } else {
+          setRunning(running);
+          getJson('/api/job/' + encodeURIComponent(running.id) + '?t=' + encodeURIComponent(t), function(err2, j2){
+            if(!err2 && j2 && j2.ok){
+              var done = (j2.status && (j2.status.done!==undefined)) ? j2.status.done : 0;
+              var total = (j2.status && (j2.status.total!==undefined)) ? j2.status.total : (running.total_segments||0);
+              var pct = (total>0) ? Math.max(0, Math.min(100, (done/total)*100.0)) : 0;
+              var fill = document.getElementById('runFill');
+              if(fill) fill.style.width = String(pct) + '%';
+              var rt = document.getElementById('runText');
+              if(rt) rt.textContent = total ? (done + '/' + total + ' segments') : (done + ' segments');
+              var log = document.getElementById('runLog');
+              if(log) log.textContent = (j2.log_tail && j2.log_tail.length) ? j2.log_tail.join('
+') : '(no log yet)';
+              var pills = document.getElementById('runPills');
+              var nowTs = j2.now;
+              var startedAt = (j2.job && j2.job.started_at) ? j2.job.started_at : null;
+              var elapsed = (startedAt && nowTs) ? (nowTs - startedAt) : null;
+              var st2 = (j2.status && j2.status.state) ? j2.status.state : 'running';
+              if(pills){
+                pills.innerHTML = '<div class="pill">Time: ' + esc(fmtElapsed(elapsed)) + '</div>' +
+                                  '<div class="pill">Status: ' + esc(st2) + '</div>';
+              }
+              var a = document.getElementById('runAudio');
+              if(a){
+                if(j2.mp3 && st2==='completed'){
+                  a.style.display='inline-block';
+                  a.href='/dl/' + encodeURIComponent(running.id) + '?t=' + encodeURIComponent(t);
+                } else {
+                  a.style.display='none';
+                }
+              }
+            }
+          });
+        }
+
+        var hist = [];
+        for(var k=0;k<jobs.length;k++){
+          if(running && jobs[k].id === running.id) continue;
+          hist.push(jobs[k]);
+        }
+        renderHistory(hist);
+      });
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+  })();
   </script>
-
 
 <!-- Bottom sheet: system monitor -->
 <style>
