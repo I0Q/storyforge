@@ -132,9 +132,9 @@ load();
 
 <!-- Bottom sheet: system monitor -->
 <style>
-  .bs{position:fixed; left:0; right:0; bottom:0; z-index:9999; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;}
+  .bs{position:fixed; left:0; right:0; bottom:0; z-index:9999; pointer-events:auto; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; will-change:transform;}
   .bs .handle{margin:0 auto; width:46px; height:5px; background:#d1d5db; border-radius:999px;}
-  .bs .bar{background:rgba(255,255,255,.96); border-top:1px solid #e5e7eb; box-shadow:0 -10px 25px rgba(0,0,0,.08); padding:10px 14px;}
+  .bs .bar{background:rgba(255,255,255,.96); border-top:1px solid #e5e7eb; box-shadow:0 -10px 25px rgba(0,0,0,.08); padding:10px 14px calc(10px + env(safe-area-inset-bottom));}
   .bs .barTop{display:flex; justify-content:space-between; align-items:center; gap:10px;}
   .bs .title{font-weight:900; font-size:13px;}
   .bs .mini{font-size:12px; color:#666;}
@@ -157,7 +157,8 @@ load();
   .bs details{border:1px solid #ddd; border-radius:12px; padding:10px 12px; margin-top:10px; background:#fff;}
   .bs summary{cursor:pointer; font-weight:750;}
   .bs .plist{margin-top:8px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#333; white-space:pre; overflow-x:auto;}
-  body{padding-bottom:90px;} /* room for bar */
+  html,body{height:100%;}
+  body{padding-bottom:90px; -webkit-overflow-scrolling:touch;} /* room for bar */
 </style>
 
 <div id="bottomSheet" class="bs">
@@ -216,16 +217,10 @@ load();
     const isOpen = (open !== undefined) ? open : !bs.classList.contains('open');
     bs.classList.toggle('open', isOpen);
     btn.textContent = isOpen ? 'Hide' : 'Show';
-    try{ localStorage.setItem('bsOpen', isOpen ? '1':'0'); }catch(e){}
-  }
+      }
 
   btn.addEventListener('click', (e)=>{ e.preventDefault(); toggle(); });
   bs.querySelector('.handle').addEventListener('click', ()=>toggle());
-
-  try{
-    const saved = localStorage.getItem('bsOpen');
-    if(saved==='1') toggle(true);
-  }catch(e){}
 
   async function refresh(){
     const r = await fetch('/api/stats?t='+encodeURIComponent(t));
