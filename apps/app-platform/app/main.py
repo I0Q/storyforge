@@ -6,6 +6,8 @@ from typing import Any
 
 import requests
 from fastapi import FastAPI
+
+from .db import db_connect, db_init, db_list_jobs
 from fastapi.responses import HTMLResponse
 
 APP_NAME = "storyforge"
@@ -116,6 +118,18 @@ def api_ping():
 def api_metrics():
     return _get('/v1/metrics')
 
+
+
+
+@app.get('/api/history')
+def api_history(limit: int = 60):
+    conn = db_connect()
+    try:
+        db_init(conn)
+        jobs = db_list_jobs(conn, limit=limit)
+    finally:
+        conn.close()
+    return {'ok': True, 'jobs': jobs}
 
 @app.post('/api/tts')
 def api_tts(payload: dict[str, Any]):
