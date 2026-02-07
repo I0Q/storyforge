@@ -4,11 +4,14 @@ import os
 from pathlib import Path
 from typing import Any
 
+import json
+import time
+
 import requests
 from fastapi import FastAPI
 
 from .db import db_connect, db_init, db_list_jobs
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 APP_NAME = "storyforge"
 
@@ -140,6 +143,8 @@ function showTab(name){
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
+  if (name === 'metrics') startMetricsStream();
+  else stopMetricsStream();
 }
 
 function pill(state){
@@ -192,10 +197,41 @@ async function loadHistory(){
   }).join('');
 }
 
+let metricsES = null;
+let lastMetrics = null;
+
+function renderMetrics(m){
+  lastMetrics = m;
+  document.getElementById('metrics').textContent = JSON.stringify(m, null, 2);
+}
+
+function startMetricsStream(){
+  stopMetricsStream();
+  // SSE stream (server pushes metrics continuously)
+  metricsES = new EventSource('/api/metrics/stream');
+  metricsES.onmessage = (ev) => {
+    try{
+      const m = JSON.parse(ev.data);
+      renderMetrics(m);
+    }catch(e){}
+  };
+  metricsES.onerror = () => {
+    // Browser will auto-reconnect; we keep it simple.
+  };
+}
+
+function stopMetricsStream(){
+  if (metricsES){
+    metricsES.close();
+    metricsES = null;
+  }
+}
+
 async function loadMetrics(){
-  const r=await fetch('/api/metrics');
-  const j=await r.json();
-  document.getElementById('metrics').textContent=JSON.stringify(j, null, 2);
+  // one-shot fallback
+  const r = await fetch('/api/metrics');
+  const j = await r.json();
+  renderMetrics(j);
 }
 
 async function refreshAll(){
@@ -221,6 +257,8 @@ async function tts(){
 }
 
 refreshAll();
+// Start streaming immediately so the Metrics tab is instant.
+startMetricsStream();
 </script>
 </body>
 </html>"""
@@ -238,6 +276,25 @@ def api_metrics():
     return _get('/v1/metrics')
 
 
+@app.get('/api/metrics/stream')
+def api_metrics_stream():
+    def gen():
+        # Keep-alive + periodic samples. EventSource will auto-reconnect.
+        while True:
+            try:
+                m = _get('/v1/metrics')
+                data = json.dumps(m, separators=(',', ':'))
+                yield f"data: {data}\n\n"
+            except Exception as e:
+                # Don't leak secrets; just emit a small error payload.
+                yield f"data: {json.dumps({'ok': False, 'error': type(e).__name__})}\n\n"
+            time.sleep(1.0)
+
+    headers = {
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+    }
+    return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
 
 
 @app.get('/api/history')
