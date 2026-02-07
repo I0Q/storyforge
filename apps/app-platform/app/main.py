@@ -129,6 +129,12 @@ def index():
 
   <div id='pane-advanced' class='hide'>
     <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Monitor</div>
+      <div class='muted'>Toggle realtime monitor dock (controls SSE connection).</div>
+      <div class='row' style='margin-top:10px;'>
+        <button id='monToggle' class='secondary' onclick='toggleMonitor()'>Disable monitor</button>
+      </div>
+      <div style='height:14px'></div>
       <div style='font-weight:950;margin-bottom:6px;'>TTS (gateway passthrough)</div>
       <div class='muted'>This will work once Tinybox <code>/v1/tts</code> is implemented.</div>
       <div style='margin-top:10px;'>
@@ -205,6 +211,7 @@ async function loadHistory(){
 }
 
 let metricsES = null;
+let monitorEnabled = true;
 let lastMetrics = null;
 
 function renderMetrics(m){
@@ -244,6 +251,7 @@ function renderProc(m){
 }
 
 function startMetricsStream(){
+  if (!monitorEnabled) return;
   stopMetricsStream();
   // SSE stream (server pushes metrics continuously)
   metricsES = new EventSource('/api/metrics/stream');
@@ -269,6 +277,33 @@ function stopMetricsStream(){
 }
 
 
+function setMonitorEnabled(on){
+  monitorEnabled = !!on;
+  const dock = document.getElementById('monitorDock');
+  const backdrop = document.getElementById('monitorBackdrop');
+  const sheet = document.getElementById('monitorSheet');
+  const btn = document.getElementById('monToggle');
+
+  if (!monitorEnabled){
+    stopMetricsStream();
+    if (dock) dock.classList.add('hide');
+    if (backdrop) backdrop.classList.add('hide');
+    if (sheet) sheet.classList.add('hide');
+    if (btn){ btn.textContent = 'Enable monitor'; btn.classList.remove('secondary'); }
+    return;
+  }
+
+  if (dock) dock.classList.remove('hide');
+  if (btn){ btn.textContent = 'Disable monitor'; btn.classList.add('secondary'); }
+  const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+  startMetricsStream();
+}
+
+function toggleMonitor(){
+  setMonitorEnabled(!monitorEnabled);
+}
+
+
 async function refreshAll(){
   await Promise.allSettled([loadHistory()]);
 }
@@ -290,9 +325,11 @@ function fmtPct(x){
 }
 
 function openMonitor(){
+  if (!monitorEnabled) return;
   document.getElementById('monitorBackdrop')?.classList.remove('hide');
   document.getElementById('monitorSheet')?.classList.remove('hide');
-  showTab('metrics'); // ensures SSE is connected
+  const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+  startMetricsStream();
   // render last metrics immediately if we have them
   if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
 }
@@ -376,8 +413,7 @@ function updateMonitorFromMetrics(m){
 
   const ts = b.ts ? fmtTs(b.ts) : '—';
   document.getElementById('monSub').textContent = `Last update: ${ts}`;
-  document.getElementById('monRaw').textContent = JSON.stringify(m, null, 2);
-  updateDockFromMetrics(m);
+    updateDockFromMetrics(m);
 }
 
 async function tts(){
@@ -394,7 +430,7 @@ async function tts(){
 
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
-startMetricsStream();
+setMonitorEnabled(true);
 loadHistory();
 </script>
 
@@ -404,7 +440,7 @@ loadHistory();
   <div id='monitorDock' class='dock' onclick='openMonitor()'>
     <div class='dockInner'>
       <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Connecting…</div>
+      <div class='dockStats' id='dockStats'>Monitor off</div>
     </div>
   </div>
 
@@ -437,16 +473,6 @@ loadHistory();
 
       <div style='font-weight:950;margin-top:12px;'>GPUs</div>
       <div id='monGpus' class='grid2' style='margin-top:8px;'></div
-
-      <div class='card' style='margin-top:12px;background:#0b1020;'>
-        <div class='row' style='justify-content:space-between;'>
-          <div style='font-weight:950;'>Raw</div>
-          <div class='muted'>last event</div>
-        </div>
-        <pre id='monRaw' style='margin-top:10px;max-height:240px;'>—</pre>
-      </div>
-
-    </div>
   </div>
 
 </body>
