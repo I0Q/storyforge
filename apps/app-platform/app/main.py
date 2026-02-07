@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from .db import db_connect, db_init, db_list_jobs
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import Response
 
 APP_NAME = "storyforge"
 
@@ -34,7 +35,9 @@ def _get(path: str) -> dict[str, Any]:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(response: Response):
+    # iOS Safari can be aggressive about caching; keep the UI fresh.
+    response.headers["Cache-Control"] = "no-store"
     return """<!doctype html>
 <html>
 <head>
@@ -76,8 +79,8 @@ def index():
 
     /* bottom sheet */
     .sheetBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;}
-    .sheet{position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);}
-    .sheetInner{padding:12px 14px;}
+    .sheet{position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
+    .sheetInner{padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
     .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
     .sheetTitle{font-weight:950;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -435,7 +438,7 @@ function updateMonitorFromMetrics(m){
   renderGpus(b);
 
   const ts = b.ts ? fmtTs(b.ts) : '—';
-  document.getElementById('monSub').textContent = `Last update: ${ts}`;
+  document.getElementById('monSub').textContent = `Tinybox time: ${ts}`;
     updateDockFromMetrics(m);
 }
 
