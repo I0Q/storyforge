@@ -81,6 +81,15 @@ def index():
     .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
     .sheetTitle{font-weight:950;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .gpuGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .gpuCard{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;}
+    .gpuHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+    .gpuHead .l{font-weight:950;}
+    .gpuHead .r{color:var(--muted);font-size:12px;white-space:nowrap;}
+    .gpuRow{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;}
+    .gpuRow .k{color:var(--muted);font-size:12px;}
+    .gpuRow .v{font-weight:950;font-size:13px;}
+    .bar.small{height:8px;margin-top:6px;}
     @media (max-width:520px){.grid2{grid-template-columns:1fr;}}
     .meter{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;}
     .meter .k{color:var(--muted);font-size:12px;}
@@ -347,31 +356,46 @@ function renderGpus(b){
     el.innerHTML = '<div class="muted">No GPU data</div>';
     return;
   }
+
   el.innerHTML = gpus.slice(0,8).map((g,i)=>{
-    const name = g.name || `GPU ${i}`;
+    const idx = (g.index!=null) ? g.index : i;
     const util = Number(g.util_gpu_pct||0);
+    const power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
+    const temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
+    const right = [power, temp].filter(Boolean).join(' • ');
+
     const vt = Number(g.vram_total_mb||0);
     const vu = Number(g.vram_used_mb||0);
     const vp = vt ? (vu/vt*100) : 0;
-    const temp = (g.temp_c!=null) ? `${Number(g.temp_c).toFixed(0)}C` : '—';
-    return `<div class='meter'>
-      <div class='k'>GPU ${i}</div>
-      <div class='v' style='font-size:13px;'>${name} • ${temp}</div>
-      <div class='k' style='margin-top:6px;'>Util</div>
-      <div class='v'>${fmtPct(util)}</div>
-      <div class='bar' id='barGpu${i}'><div></div></div>
-      <div class='k' style='margin-top:6px;'>VRAM</div>
-      <div class='v'>${vt? `${vu.toFixed(0)} / ${vt.toFixed(0)} MB (${vp.toFixed(1)}%)` : '—'}</div>
-      <div class='bar' id='barVram${i}'><div></div></div>
+
+    return `<div class='gpuCard'>
+      <div class='gpuHead'>
+        <div class='l'>GPU ${idx}</div>
+        <div class='r'>${right || ''}</div>
+      </div>
+
+      <div class='gpuRow'>
+        <div class='k'>Util</div>
+        <div class='v'>${fmtPct(util)}</div>
+      </div>
+      <div class='bar small' id='barGpu${idx}'><div></div></div>
+
+      <div class='gpuRow' style='margin-top:10px'>
+        <div class='k'>VRAM</div>
+        <div class='v'>${vt ? `${(vu/1024).toFixed(1)} / ${(vt/1024).toFixed(1)} GB` : '—'}</div>
+      </div>
+      <div class='bar small' id='barVram${idx}'><div></div></div>
     </div>`;
   }).join('');
+
   gpus.slice(0,8).forEach((g,i)=>{
+    const idx = (g.index!=null) ? g.index : i;
     const util = Number(g.util_gpu_pct||0);
     const vt = Number(g.vram_total_mb||0);
     const vu = Number(g.vram_used_mb||0);
     const vp = vt ? (vu/vt*100) : 0;
-    setBar(`barGpu${i}`, util);
-    setBar(`barVram${i}`, vp);
+    setBar(`barGpu${idx}`, util);
+    setBar(`barVram${idx}`, vp);
   });
 }
 
