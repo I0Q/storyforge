@@ -139,6 +139,8 @@ load();
   .bs .title{font-weight:900; font-size:13px;}
   .bs .mini{font-size:12px; color:#666;}
   .bs .btn{display:inline-block; padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; text-decoration:none; font-weight:800; font-size:12px; color:#0b63ce; background:#fff;}
+  .bs #bsToggle::before{content:"📈 ";}
+  .bs.open #bsToggle::before{content:"📉 ";}
   .btn .ico{display:inline-block; width:1.1em; text-align:center; margin-right:6px;}
   .bs .panel{display:none; padding-top:10px;}
   .bs.open .panel{display:block;}
@@ -171,7 +173,7 @@ load();
         <div class="mini" id="bsMini">Loading…</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
-        <a href="#" id="bsToggle" class="btn"><span class="ico">📈</span><span class="txt">Show</span></a>
+        <a href="#" id="bsToggle" class="btn">Show</a>
       </div>
     </div>
 
@@ -217,7 +219,7 @@ load();
   function toggle(open){
     const isOpen = (open !== undefined) ? open : !bs.classList.contains('open');
     bs.classList.toggle('open', isOpen);
-    btn.innerHTML = isOpen ? '<span class=\"ico\">📉</span><span class=\"txt\">Hide</span>' : '<span class=\"ico\">📈</span><span class=\"txt\">Show</span>';
+    btn.textContent = isOpen ? 'Hide' : 'Show';
       }
 
   btn.addEventListener('click', (e)=>{ e.preventDefault(); toggle(); });
