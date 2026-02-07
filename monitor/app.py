@@ -781,7 +781,7 @@ class Handler(BaseHTTPRequestHandler):
                 btns.append('<a class=\"btn tiny\" href=\"/view/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\"><span class="ico">📝</span><span class="txt">SFML</span></a>')
                 if meta.get('mp3') and st == 'completed':
                     btns.append('<a class=\"btn tiny\" href=\"#\" data-play=\"' + jid + '\"><span class="ico">▶︎</span><span class="txt">PLAY</span></a>')
-                    btns.append('<a class=\"btn tiny\" href=\"/dl/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\"><span class="ico">⬇︎</span><span class="txt">DL</span></a>')
+                    btns.append('<a class=\"btn tiny\" href=\"/dl/' + jid + '?t=' + h(token) + '\" target=\"_blank\" rel=\"noopener\"><span class="ico">📥</span><span class="txt">DL</span></a>')
 
                 row = ''
                 row += '<div class=\"row ' + h(st) + '\">'
