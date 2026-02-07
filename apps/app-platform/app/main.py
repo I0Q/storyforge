@@ -117,7 +117,6 @@ def index():
   </div>
 
   <div id='pane-history'>
-
     <div class='card'>
       <div class='row' style='justify-content:space-between;'>
         <div>
@@ -131,8 +130,8 @@ def index():
       <div id='jobs'>Loading…</div>
       <div style='height:10px'></div>
       <div style='font-weight:950;'>Processes</div>
-      <div class='muted'>Live from Tinybox monitor (top CPU/RAM/GPU).</div>
-      <div id='proc' class='muted' style='margin-top:8px'>Loading…</div
+      <div class='muted'>Live from Tinybox compute node (top CPU/RAM/GPU).</div>
+      <div id='proc' class='muted' style='margin-top:8px'>Loading…</div>
     </div>
   </div>
 
