@@ -93,15 +93,13 @@ def index():
       <div class='muted'>Cloud control plane (App Platform) + Tinybox compute via VPC gateway.</div>
     </div>
     <div class='row'>
-      <button class='secondary' onclick='ping()'>Gateway ping</button>
-      <button class='secondary' onclick='refreshAll()'>Refresh</button>
+            <button class='secondary' onclick='refreshAll()'>Refresh</button>
     </div>
   </div>
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>History</button>
-    <button id='tab-metrics' class='tab' onclick='showTab("metrics")'>Metrics</button>
-    <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Advanced</button>
+        <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Advanced</button>
   </div>
 
   <div id='pane-history'>
@@ -128,21 +126,10 @@ def index():
         </div>
       </div>
       <div id='jobs'>Loading…</div>
-    </div>
-  </div>
-
-  <div id='pane-metrics' class='hide'>
-    <div class='card'>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div style='font-weight:950;'>Tinybox metrics</div>
-          <div class='muted'>Live via App Platform → VPC gateway → Tailscale → Tinybox.</div>
-        </div>
-        <div class='row'>
-          <button class='secondary' onclick='loadMetrics()'>Reload</button>
-        </div>
-      </div>
-      <pre id='metrics'>Loading…</pre>
+      <div style='height:10px'></div>
+      <div style='font-weight:950;'>Processes</div>
+      <div class='muted'>Live from Tinybox monitor (top CPU/RAM/GPU).</div>
+      <div id='proc' class='muted' style='margin-top:8px'>Loading…</div
     </div>
   </div>
 
@@ -167,12 +154,10 @@ def index():
 
 <script>
 function showTab(name){
-  for (const n of ['history','metrics','advanced']){
+  for (const n of ['history','advanced']){
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
-  if (name === 'metrics') startMetricsStream();
-  else stopMetricsStream();
 }
 
 function pill(state){
@@ -230,7 +215,38 @@ let lastMetrics = null;
 
 function renderMetrics(m){
   lastMetrics = m;
-  document.getElementById('metrics').textContent = JSON.stringify(m, null, 2);
+  const pre=document.getElementById('metrics'); if (pre) pre.textContent = JSON.stringify(m, null, 2);
+}
+
+
+function renderProc(m){
+  const el = document.getElementById('proc');
+  if (!el) return;
+  const b = m?.body || m || {};
+  const procs = b.processes || b.procs || null;
+  if (!procs || !Array.isArray(procs) || procs.length===0){
+    el.innerHTML = '<div class="muted">No process list available yet.</div>';
+    return;
+  }
+  // Expect list of {pid,name,cpu_pct,ram_mb,gpu_mem_mb}
+  el.innerHTML = procs.slice(0,12).map(p=>{
+    const pid = p.pid ?? '—';
+    const name = (p.name || p.cmd || '').toString();
+    const cpu = (p.cpu_pct!=null)? Number(p.cpu_pct).toFixed(1)+'%':'—';
+    const ram = (p.ram_mb!=null)? Number(p.ram_mb).toFixed(0)+' MB':'—';
+    const gmem = (p.gpu_mem_mb!=null)? Number(p.gpu_mem_mb).toFixed(0)+' MB':null;
+    return `<div class='job' style='margin:8px 0;'>
+      <div class='row' style='justify-content:space-between;'>
+        <div class='title' style='max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${name || '(unknown)'}</div>
+        <div class='pill'>pid ${pid}</div>
+      </div>
+      <div class='kvs'>
+        <div class='k'>cpu</div><div>${cpu}</div>
+        <div class='k'>ram</div><div>${ram}</div>
+        ${gmem ? `<div class='k'>gpu mem</div><div>${gmem}</div>` : ``}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function startMetricsStream(){
@@ -242,6 +258,7 @@ function startMetricsStream(){
       const m = JSON.parse(ev.data);
       renderMetrics(m);
       updateMonitorFromMetrics(m);
+      renderProc(m);
     }catch(e){}
   };
   metricsES.onerror = () => {
@@ -256,21 +273,9 @@ function stopMetricsStream(){
   }
 }
 
-async function loadMetrics(){
-  // one-shot fallback
-  const r = await fetch('/api/metrics');
-  const j = await r.json();
-  renderMetrics(j);
-}
 
 async function refreshAll(){
-  await Promise.allSettled([loadHistory(), loadMetrics()]);
-}
-
-async function ping(){
-  const r=await fetch('/api/ping');
-  const j=await r.json();
-  alert('gateway: ' + JSON.stringify(j));
+  await Promise.allSettled([loadHistory()]);
 }
 
 function setBar(elId, pct){
