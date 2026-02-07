@@ -43,7 +43,7 @@ def index():
   <title>StoryForge</title>
   <style>
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px 86px 18px;max-width:920px;margin:0 auto;}
     a{color:var(--accent);text-decoration:none}
     code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
@@ -68,6 +68,11 @@ def index():
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
+
+    /* bottom dock */
+    .dock{position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px;}
+    .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+    .dockStats{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
 
     /* bottom sheet */
     .sheetBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;}
@@ -103,17 +108,6 @@ def index():
   </div>
 
   <div id='pane-history'>
-    <div class='card'>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div style='font-weight:950;'>System monitor</div>
-          <div class='muted'>Live (SSE). Tap to open the bottom sheet overlay.</div>
-        </div>
-        <div class='row'>
-          <button class='secondary' onclick='openMonitor()'>Open monitor</button>
-        </div>
-      </div>
-    </div>
 
     <div class='card'>
       <div class='row' style='justify-content:space-between;'>
@@ -259,6 +253,7 @@ function startMetricsStream(){
       renderMetrics(m);
       updateMonitorFromMetrics(m);
       renderProc(m);
+      updateDockFromMetrics(m);
     }catch(e){}
   };
   metricsES.onerror = () => {
@@ -307,6 +302,64 @@ function closeMonitor(){
   document.getElementById('monitorSheet')?.classList.add('hide');
 }
 
+function renderGpus(b){
+  const el = document.getElementById('monGpus');
+  if (!el) return;
+  const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
+  if (!gpus.length){
+    el.innerHTML = '<div class="muted">No GPU data</div>';
+    return;
+  }
+  el.innerHTML = gpus.slice(0,8).map((g,i)=>{
+    const name = g.name || `GPU ${i}`;
+    const util = Number(g.util_gpu_pct||0);
+    const vt = Number(g.vram_total_mb||0);
+    const vu = Number(g.vram_used_mb||0);
+    const vp = vt ? (vu/vt*100) : 0;
+    const temp = (g.temp_c!=null) ? `${Number(g.temp_c).toFixed(0)}C` : '—';
+    return `<div class='meter'>
+      <div class='k'>GPU ${i}</div>
+      <div class='v' style='font-size:13px;'>${name} • ${temp}</div>
+      <div class='k' style='margin-top:6px;'>Util</div>
+      <div class='v'>${fmtPct(util)}</div>
+      <div class='bar' id='barGpu${i}'><div></div></div>
+      <div class='k' style='margin-top:6px;'>VRAM</div>
+      <div class='v'>${vt? `${vu.toFixed(0)} / ${vt.toFixed(0)} MB (${vp.toFixed(1)}%)` : '—'}</div>
+      <div class='bar' id='barVram${i}'><div></div></div>
+    </div>`;
+  }).join('');
+  gpus.slice(0,8).forEach((g,i)=>{
+    const util = Number(g.util_gpu_pct||0);
+    const vt = Number(g.vram_total_mb||0);
+    const vu = Number(g.vram_used_mb||0);
+    const vp = vt ? (vu/vt*100) : 0;
+    setBar(`barGpu${i}`, util);
+    setBar(`barVram${i}`, vp);
+  });
+}
+
+function updateDockFromMetrics(m){
+  const el = document.getElementById('dockStats');
+  if (!el) return;
+  const b = m?.body || m || {};
+  const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '—';
+  const rt = Number(b.ram_total_mb||0); const ru = Number(b.ram_used_mb||0);
+  const rp = rt ? (ru/rt*100) : 0;
+  const ram = rt ? rp.toFixed(1)+'%' : '—';
+  const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
+  let maxGpu = null;
+  if (gpus.length){
+    maxGpu = 0;
+    for (const g of gpus){
+      const u = Number(g.util_gpu_pct||0);
+      if (u > maxGpu) maxGpu = u;
+    }
+  }
+  const gpu = (maxGpu==null) ? '—' : maxGpu.toFixed(1)+'%';
+  el.textContent = `CPU ${cpu} • RAM ${ram} • GPU ${gpu}`;
+}
+
+
 function updateMonitorFromMetrics(m){
   // m is the /api/metrics response: {status, body}
   const b = m?.body || m || {};
@@ -319,21 +372,12 @@ function updateMonitorFromMetrics(m){
   const rp = rt ? (ru/rt*100) : 0;
   document.getElementById('monRam').textContent = rt ? `${ru.toFixed(0)} / ${rt.toFixed(0)} MB (${rp.toFixed(1)}%)` : '—';
   setBar('barRam', rp);
-
-  const g = b.gpu || {};
-  const gu = Number(g.util_gpu_pct || 0);
-  document.getElementById('monGpu').textContent = (g.name ? `${g.name} • ` : '') + fmtPct(gu);
-  setBar('barGpu', gu);
-
-  const vt = Number(g.vram_total_mb || 0);
-  const vu = Number(g.vram_used_mb || 0);
-  const vp = vt ? (vu/vt*100) : 0;
-  document.getElementById('monVram').textContent = vt ? `${vu.toFixed(0)} / ${vt.toFixed(0)} MB (${vp.toFixed(1)}%)` : '—';
-  setBar('barVram', vp);
+  renderGpus(b);
 
   const ts = b.ts ? fmtTs(b.ts) : '—';
   document.getElementById('monSub').textContent = `Last update: ${ts}`;
   document.getElementById('monRaw').textContent = JSON.stringify(m, null, 2);
+  updateDockFromMetrics(m);
 }
 
 async function tts(){
@@ -351,10 +395,20 @@ async function tts(){
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
 startMetricsStream();
+loadHistory();
 </script>
 
 
-  <div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitor()'></div>
+  
+
+  <div id='monitorDock' class='dock' onclick='openMonitor()'>
+    <div class='dockInner'>
+      <div style='font-weight:950;'>Monitor</div>
+      <div class='dockStats' id='dockStats'>Connecting…</div>
+    </div>
+  </div>
+
+<div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitor()'></div>
   <div id='monitorSheet' class='sheet hide' role='dialog' aria-modal='true'>
     <div class='sheetInner'>
       <div class='sheetHandle'></div>
@@ -379,17 +433,10 @@ startMetricsStream();
           <div class='v' id='monRam'>—</div>
           <div class='bar' id='barRam'><div></div></div>
         </div>
-        <div class='meter'>
-          <div class='k'>GPU util</div>
-          <div class='v' id='monGpu'>—</div>
-          <div class='bar' id='barGpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>VRAM</div>
-          <div class='v' id='monVram'>—</div>
-          <div class='bar' id='barVram'><div></div></div>
-        </div>
       </div>
+
+      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
+      <div id='monGpus' class='grid2' style='margin-top:8px;'></div
 
       <div class='card' style='margin-top:12px;background:#0b1020;'>
         <div class='row' style='justify-content:space-between;'>
