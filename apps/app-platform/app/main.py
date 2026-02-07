@@ -68,6 +68,22 @@ def index():
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
+
+    /* bottom sheet */
+    .sheetBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;}
+    .sheet{position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);}
+    .sheetInner{padding:12px 14px;}
+    .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
+    .sheetTitle{font-weight:950;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    @media (max-width:520px){.grid2{grid-template-columns:1fr;}}
+    .meter{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;}
+    .meter .k{color:var(--muted);font-size:12px;}
+    .meter .v{font-weight:950;margin-top:4px;}
+    .bar{height:10px;background:#0a0f20;border:1px solid rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-top:8px;}
+    .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#4aa3ff,#26d07c);}
+    .bar.warn > div{background:linear-gradient(90deg,#ffcc00,#ff7a00);}
+    .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
   </style>
 </head>
 <body>
@@ -89,6 +105,18 @@ def index():
   </div>
 
   <div id='pane-history'>
+    <div class='card'>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div style='font-weight:950;'>System monitor</div>
+          <div class='muted'>Live (SSE). Tap to open the bottom sheet overlay.</div>
+        </div>
+        <div class='row'>
+          <button class='secondary' onclick='openMonitor()'>Open monitor</button>
+        </div>
+      </div>
+    </div>
+
     <div class='card'>
       <div class='row' style='justify-content:space-between;'>
         <div>
@@ -213,6 +241,7 @@ function startMetricsStream(){
     try{
       const m = JSON.parse(ev.data);
       renderMetrics(m);
+      updateMonitorFromMetrics(m);
     }catch(e){}
   };
   metricsES.onerror = () => {
@@ -244,6 +273,64 @@ async function ping(){
   alert('gateway: ' + JSON.stringify(j));
 }
 
+function setBar(elId, pct){
+  const el=document.getElementById(elId);
+  if (!el) return;
+  const p=Math.max(0, Math.min(100, pct||0));
+  const fill=el.querySelector('div');
+  if (fill) fill.style.width = p.toFixed(0) + '%';
+  el.classList.remove('warn','bad');
+  if (p >= 85) el.classList.add('bad');
+  else if (p >= 60) el.classList.add('warn');
+}
+
+function fmtPct(x){
+  if (x==null) return '—';
+  return (Number(x).toFixed(1)) + '%';
+}
+
+function openMonitor(){
+  document.getElementById('monitorBackdrop')?.classList.remove('hide');
+  document.getElementById('monitorSheet')?.classList.remove('hide');
+  showTab('metrics'); // ensures SSE is connected
+  // render last metrics immediately if we have them
+  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
+}
+
+function closeMonitor(){
+  document.getElementById('monitorBackdrop')?.classList.add('hide');
+  document.getElementById('monitorSheet')?.classList.add('hide');
+}
+
+function updateMonitorFromMetrics(m){
+  // m is the /api/metrics response: {status, body}
+  const b = m?.body || m || {};
+  const cpu = Number(b.cpu_pct || 0);
+  document.getElementById('monCpu').textContent = fmtPct(cpu);
+  setBar('barCpu', cpu);
+
+  const rt = Number(b.ram_total_mb || 0);
+  const ru = Number(b.ram_used_mb || 0);
+  const rp = rt ? (ru/rt*100) : 0;
+  document.getElementById('monRam').textContent = rt ? `${ru.toFixed(0)} / ${rt.toFixed(0)} MB (${rp.toFixed(1)}%)` : '—';
+  setBar('barRam', rp);
+
+  const g = b.gpu || {};
+  const gu = Number(g.util_gpu_pct || 0);
+  document.getElementById('monGpu').textContent = (g.name ? `${g.name} • ` : '') + fmtPct(gu);
+  setBar('barGpu', gu);
+
+  const vt = Number(g.vram_total_mb || 0);
+  const vu = Number(g.vram_used_mb || 0);
+  const vp = vt ? (vu/vt*100) : 0;
+  document.getElementById('monVram').textContent = vt ? `${vu.toFixed(0)} / ${vt.toFixed(0)} MB (${vp.toFixed(1)}%)` : '—';
+  setBar('barVram', vp);
+
+  const ts = b.ts ? fmtTs(b.ts) : '—';
+  document.getElementById('monSub').textContent = `Last update: ${ts}`;
+  document.getElementById('monRaw').textContent = JSON.stringify(m, null, 2);
+}
+
 async function tts(){
   const payload = {
     engine: document.getElementById('engine').value,
@@ -260,6 +347,56 @@ refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
 startMetricsStream();
 </script>
+
+
+  <div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitor()'></div>
+  <div id='monitorSheet' class='sheet hide' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>System monitor</div>
+          <div id='monSub' class='muted'>Connecting…</div>
+        </div>
+        <div class='row'>
+          <button class='secondary' onclick='closeMonitor()'>Close</button>
+        </div>
+      </div>
+
+      <div class='grid2' style='margin-top:10px;'>
+        <div class='meter'>
+          <div class='k'>CPU</div>
+          <div class='v' id='monCpu'>—</div>
+          <div class='bar' id='barCpu'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>RAM</div>
+          <div class='v' id='monRam'>—</div>
+          <div class='bar' id='barRam'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>GPU util</div>
+          <div class='v' id='monGpu'>—</div>
+          <div class='bar' id='barGpu'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>VRAM</div>
+          <div class='v' id='monVram'>—</div>
+          <div class='bar' id='barVram'><div></div></div>
+        </div>
+      </div>
+
+      <div class='card' style='margin-top:12px;background:#0b1020;'>
+        <div class='row' style='justify-content:space-between;'>
+          <div style='font-weight:950;'>Raw</div>
+          <div class='muted'>last event</div>
+        </div>
+        <pre id='monRaw' style='margin-top:10px;max-height:240px;'>—</pre>
+      </div>
+
+    </div>
+  </div>
+
 </body>
 </html>"""
 
