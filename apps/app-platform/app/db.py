@@ -9,11 +9,15 @@ def db_connect():
     dsn = os.environ.get('DATABASE_URL', '').strip()
     if not dsn:
         raise RuntimeError('DATABASE_URL not set')
-    return psycopg2.connect(dsn)
+    return psycopg2.connect(dsn, connect_timeout=5)
 
 
 def db_init(conn) -> None:
     cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
     cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  created_at BIGINT NOT NULL\n);')
     cur.execute('CREATE TABLE IF NOT EXISTS voice_ratings (\n  engine TEXT NOT NULL,\n  voice_id TEXT NOT NULL,\n  rating INTEGER NOT NULL,\n  updated_at BIGINT NOT NULL,\n  PRIMARY KEY(engine, voice_id)\n);')
     cur.execute('CREATE TABLE IF NOT EXISTS metrics_samples (\n  ts BIGINT PRIMARY KEY,\n  payload_json TEXT NOT NULL\n);')
@@ -22,6 +26,10 @@ def db_init(conn) -> None:
 
 def db_list_jobs(conn, limit: int = 60):
     cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
     cur.execute(
         'SELECT id,title,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '        'FROM jobs ORDER BY created_at DESC LIMIT %s',
         (int(limit),),
