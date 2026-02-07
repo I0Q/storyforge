@@ -22,3 +22,10 @@ Environment overrides:
 
 See `docs/storyforge-markup.md` and `examples/umbrella.sfml`.
 
+
+## App Platform UI
+
+A small FastAPI UI for DigitalOcean App Platform lives at:
+- `apps/app-platform/`
+
+It talks to the droplet gateway over VPC.
