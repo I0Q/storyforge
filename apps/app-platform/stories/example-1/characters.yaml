@@ -1,0 +1,12 @@
+characters:
+  - id: narrator
+    name: Narrator
+    type: narrator
+    description: "Neutral storyteller voice (voice assignment happens later)."
+    aliases: []
+
+  - id: luna
+    name: Luna
+    type: character
+    description: "Curious child who asks thoughtful questions."
+    aliases: []
