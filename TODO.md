@@ -1,6 +1,7 @@
 # StoryForge – TODO
 
 ## Voices (curated samples)
+- [ ] Replace "Reload voices" button with "Generate / New" (no manual reload)
 - [ ] Voices tab is a **list of approved voices** (each must have a sample)
 - [x] Separate **Generate / New** screen for trying voices before saving
 - [x] Inline **audio player** in voice list (no popups/new tabs)
