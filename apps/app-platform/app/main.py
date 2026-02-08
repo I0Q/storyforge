@@ -192,8 +192,36 @@ def index(response: Response):
   </style>
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
+  // Emergency override: add ?mon=0 (or ?monitor=0 / ?monoff=1) to force monitor OFF even if the sheet is stuck.
   (function(){
+    function hasParam(name){
+      try{
+        var q = window.location.search || '';
+        if (q.indexOf('?')===0) q=q.slice(1);
+        var parts = q.split('&');
+        for (var i=0;i<parts.length;i++){
+          var kv = parts[i].split('=');
+          var k = decodeURIComponent(kv[0]||'');
+          var v = decodeURIComponent(kv.slice(1).join('=')||'');
+          if (k===name) return v;
+        }
+      }catch(e){}
+      return '';
+    }
+
     try{
+      var forceOff = false;
+      var mon = hasParam('mon');
+      var monitor = hasParam('monitor');
+      var monoff = hasParam('monoff');
+      if (mon==='0' || monitor==='0' || monoff==='1') forceOff = true;
+
+      if (forceOff){
+        try{ localStorage.setItem('sf_monitor_enabled','0'); }catch(e){}
+        document.documentElement.classList.remove('monOn');
+        return;
+      }
+
       var v = localStorage.getItem('sf_monitor_enabled');
       if (v === '0') document.documentElement.classList.remove('monOn');
       else document.documentElement.classList.add('monOn');
