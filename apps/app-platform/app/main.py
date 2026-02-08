@@ -833,7 +833,7 @@ function loadVoices(){
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
         + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='playVoiceEl(this)'>Play</button>"
-        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='editVoiceEl(this)'>Edit</button>"
+        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick="goVoiceEdit(this)">Edit</button>"
         + "</div>"
         + "</div>";
     }).join('');
@@ -872,6 +872,16 @@ function createVoice(){
 
 
 
+
+
+function goVoiceEdit(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    var id = decodeURIComponent(idEnc||'');
+    if (!id) return;
+    window.location.href = '/voices/' + encodeURIComponent(id) + '/edit';
+  }catch(e){}
+}
 function editVoiceEl(btn){
   try{
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
@@ -1327,6 +1337,92 @@ try{
 
     return html.replace("__BUILD__", str(build)).replace("__VOICE_SERVERS__", voice_servers_html)
 
+
+
+@app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
+def voices_edit_page(voice_id: str, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            v = get_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+    except Exception as e:
+        return HTMLResponse('<pre>failed: ' + pyhtml.escape(str(e)) + '</pre>', status_code=500)
+
+    def esc(x: str) -> str:
+        return pyhtml.escape(str(x or ''))
+
+    vid = esc(voice_id)
+    dn = esc(v.get('display_name') or '')
+
+    html = """<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge - Edit Voice</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:920px;margin:0 auto;}
+    a{color:#4aa3ff;text-decoration:none}
+    .nav{display:flex;justify-content:space-between;align-items:center;gap:12px;}
+    .left{display:flex;gap:10px;align-items:center;}
+    h1{font-size:18px;margin:0;}
+    .muted{color:#a8b3d8;font-size:12px;}
+    .card{border:1px solid #24305e;border-radius:16px;padding:12px;margin:12px 0;background:#0f1733;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    input{width:100%;padding:10px;border:1px solid #24305e;border-radius:12px;background:#0b1020;color:#e7edff;font-size:16px;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid #24305e;background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:#e7edff;}
+    .err{color:#ff4d4d;font-weight:950;margin-top:10px;}
+  </style>
+</head>
+<body>
+  <div class='nav'>
+    <div class='left'>
+      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+      <div>
+        <h1>Edit Voice</h1>
+        <div class='muted'><code>__VID__</code></div>
+      </div>
+    </div>
+    <div class='row'>
+      <a href='/logout'><button class='secondary' type='button'>Logout</button></a>
+    </div>
+  </div>
+
+  <div class='card'>
+    <div class='muted' style='margin-bottom:10px'>Basic fields.</div>
+    <div class='muted'>Display name</div>
+    <input id='display_name' value='__DN__' />
+
+    <div class='row' style='margin-top:12px'>
+      <button type='button' onclick='save()'>Save</button>
+    </div>
+
+    <div id='out' class='muted' style='margin-top:10px'>—</div>
+  </div>
+
+<script>
+function save(){
+  var out=document.getElementById('out'); if(out) out.textContent='Saving…';
+  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};
+  fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
+    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+    .then(function(j){
+      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }
+      if(out) out.innerHTML='<div class="err">'+String((j&&j.error)||'save failed')+'</div>';
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+String(e)+'</div>'; });
+}
+</script>
+</body>
+</html>"""
+
+    html = html.replace('__VID__', vid).replace('__DN__', dn).replace('__VID_RAW__', voice_id)
+    return html
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
