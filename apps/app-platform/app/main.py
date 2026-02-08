@@ -74,14 +74,22 @@ def index(response: Response):
     vs_items: list[str] = []
     for s in VOICE_SERVERS:
         try:
-            nm = pyhtml.escape(str(s.get("name") or "server"))
+            nm_raw = str(s.get("name") or "server")
+            nm = pyhtml.escape(nm_raw)
             base = pyhtml.escape(str(s.get("base") or ""))
             kind = pyhtml.escape(str(s.get("kind") or ""))
             meta = f" <span class='pill'>{kind}</span>" if kind else ""
+
+            # Tinybox-specific monitor toggle lives inline with the Tinybox server item.
+            mon_btn = ""
+            if nm_raw.lower() == "tinybox":
+                mon_btn = "<div class='row' style='margin-top:10px'><button id='monToggle' class='secondary' onclick='toggleMonitor()'>Disable monitor</button></div>"
+
             vs_items.append(
                 "<div class='job'>"
                 f"<div class='title'>{nm}{meta}</div>"
                 f"<div class='muted' style='margin-top:6px'><code>{base}</code></div>"
+                f"{mon_btn}"
                 "</div>"
             )
         except Exception:
@@ -139,13 +147,18 @@ def index(response: Response):
     .hide{display:none}
 
     /* bottom dock */
-    .dock{position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
+    .dock{display:none;position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
+    html.monOn .dock{display:block;}
     .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
     .dockStats{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
 
     /* bottom sheet */
-    .sheetBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;touch-action:none;}
-    .sheet{position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
+    .sheetBackdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;touch-action:none;}
+    .sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
+    html.monOn .sheetBackdrop{display:block;}
+    html.monOn .sheet{display:block;}
+    .sheetBackdrop.hide{display:none;}
+    .sheet.hide{display:none;}
     .sheetInner{padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
     .sheetTitle{font-weight:950;}
@@ -168,6 +181,18 @@ def index(response: Response):
     .bar.warn > div{background:linear-gradient(90deg,#ffcc00,#ff7a00);}
     .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
   </style>
+  <script>
+  // Ensure monitor UI is hidden on first paint when disabled.
+  (function(){
+    try{
+      var v = localStorage.getItem('sf_monitor_enabled');
+      if (v === '0') document.documentElement.classList.remove('monOn');
+      else document.documentElement.classList.add('monOn');
+    }catch(e){
+      document.documentElement.classList.add('monOn');
+    }
+  })();
+  </script>
 </head>
 <body>
   <div class='top'>
@@ -243,14 +268,6 @@ def index(response: Response):
   </div>
 
   <div id='pane-advanced' class='hide'>
-
-    <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Tinybox</div>
-      <div class='muted'>Compute provider + realtime system monitor (Tinybox only).</div>
-      <div class='row' style='margin-top:10px;'>
-        <button id='monToggle' class='secondary' onclick='toggleMonitor()'>Disable monitor</button>
-      </div>
-    </div>
 
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Voice servers</div>
@@ -611,6 +628,8 @@ function setMonitorEnabled(on){
   const backdrop = document.getElementById('monitorBackdrop');
   const sheet = document.getElementById('monitorSheet');
   const btn = document.getElementById('monToggle');
+
+  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
 
   if (!monitorEnabled){
     stopMetricsStream();

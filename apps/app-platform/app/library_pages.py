@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 import yaml
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .db import db_connect, db_init
@@ -65,7 +65,8 @@ def _parse_characters_yaml(chars_yaml: str) -> list[dict[str, Any]]:
 
 def register_library_pages(app: FastAPI) -> None:
     @app.get("/library", response_class=HTMLResponse)
-    def library_home(request: Request):
+    def library_home(request: Request, response: Response):
+        response.headers["Cache-Control"] = "no-store"
         err = str(request.query_params.get("err") or "")
 
         conn = db_connect()

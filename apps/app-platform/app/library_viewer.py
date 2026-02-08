@@ -5,6 +5,7 @@ import html
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi import Response
 
 from .db import db_connect, db_init
 from .library_db import get_story_db
@@ -31,7 +32,8 @@ def _render_md_simple(md: str) -> str:
 
 def register_library_viewer(app: FastAPI) -> None:
     @app.get("/library/story/{story_id}/view", response_class=HTMLResponse)
-    def library_story_view(story_id: str):
+    def library_story_view(story_id: str, response: Response):
+        response.headers["Cache-Control"] = "no-store"
         conn = db_connect()
         try:
             db_init(conn)
