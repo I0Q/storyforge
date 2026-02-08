@@ -271,6 +271,37 @@ function enableInlineEdit(textId, editId, inputId){{
 
 enableInlineEdit('titleText','titleEdit','titleInput');
 
+function showVTab(which){{
+  try{{
+    var ps=$('vp-story');
+    var pc=$('vp-chars');
+    var ts=$('vtab-story');
+    var tc=$('vtab-chars');
+    if (which==='chars'){{
+      if (ps) ps.classList.add('hide');
+      if (pc) pc.classList.remove('hide');
+      if (ts) ts.classList.remove('active');
+      if (tc) tc.classList.add('active');
+      try{{ window.location.hash = '#chars'; }}catch(e){{}}
+    }} else {{
+      if (pc) pc.classList.add('hide');
+      if (ps) ps.classList.remove('hide');
+      if (tc) tc.classList.remove('active');
+      if (ts) ts.classList.add('active');
+      try{{ window.location.hash = '#story'; }}catch(e){{}}
+    }}
+  }}catch(e){{}}
+}}
+
+(function initVTab(){{
+  try{{
+    var h = String(window.location.hash||'');
+    if (h==='#chars') showVTab('chars');
+    else showVTab('story');
+  }}catch(e){{}}
+}})();
+
+
 if ($('mdCode')) {{
   $('mdCode').addEventListener('input', function(){{ scheduleSave(1200); }});
   $('mdCode').addEventListener('blur', function(){{ scheduleSave(10); }});
@@ -308,13 +339,17 @@ if ($('mdCode')) {{
                 "</div>",
                 "",
                 "",
+                "<div id='vp-story' class='vPane'>",
                 "<div class='card'>",
                 "  <div class='row' style='justify-content:space-between;'>",
                 "    <div>",
+                "<div id='vp-chars' class='vPane hide'>",
                 "",
                 "<div class='card'>",
                 "  <div style='font-weight:950'>Characters</div>",
                 f"  {chars_html}",
+                "</div>",
+                "</div>",
                 "</div>",
                 "",
                 "<div class='card'>",
@@ -343,7 +378,25 @@ if ($('mdCode')) {{
                 ".charCard .cname{font-weight:950}",
                 ".charCard .cbody{min-width:0}",
                 "#titleInput,#mdCode{font-size:16px;line-height:1.35}",
-                "textarea{font-size:16px}\n.navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 0 10px 0;margin-bottom:10px}\n.navInner{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}\n.brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}\n.pageName{color:var(--muted);font-weight:900;font-size:12px}\n.menuWrap{position:relative;display:inline-block}\n.userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center}\n.userBtn:hover{background:rgba(255,255,255,0.06)}\n.menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45)}\n.menuCard.show{display:block}\n.menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px}\n.menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}\n.menuCard .uName{font-weight:950}\n.menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px}\n.menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}",
+                "textarea{font-size:16px}",
+                ".navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 0 10px 0;margin-bottom:10px}",
+                ".navInner{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}",
+                ".brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}",
+                ".pageName{color:var(--muted);font-weight:900;font-size:12px}",
+                ".vTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px 0;}",
+                ".vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}",
+                ".vTab.active{background:#163a74;}",
+                ".vPane.hide{display:none;}",
+                ".menuWrap{position:relative;display:inline-block}",
+                ".userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center}",
+                ".userBtn:hover{background:rgba(255,255,255,0.06)}",
+                ".menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45)}",
+                ".menuCard.show{display:block}",
+                ".menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px}",
+                ".menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}",
+                ".menuCard .uName{font-weight:950}",
+                ".menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px}",
+                ".menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}",
                 "</style>",
                 js,
             ]
