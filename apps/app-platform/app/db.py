@@ -28,7 +28,6 @@ def db_init(conn) -> None:
 CREATE TABLE IF NOT EXISTS sf_stories (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
-  tags JSONB NOT NULL DEFAULT '[]'::jsonb,
   story_md TEXT NOT NULL DEFAULT '',
   characters JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at BIGINT NOT NULL,
@@ -36,9 +35,13 @@ CREATE TABLE IF NOT EXISTS sf_stories (
 );
 """)
 
-    # Migration: drop description (no longer used)
+    # Migrations: drop deprecated columns
     try:
         cur.execute("ALTER TABLE sf_stories DROP COLUMN IF EXISTS description")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE sf_stories DROP COLUMN IF EXISTS tags")
     except Exception:
         pass
 

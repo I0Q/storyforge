@@ -34,7 +34,6 @@ def db_init_stories(conn) -> None:
 CREATE TABLE IF NOT EXISTS sf_stories (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
-  tags JSONB NOT NULL DEFAULT '[]'::jsonb,
   story_md TEXT NOT NULL DEFAULT '',
   characters JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at BIGINT NOT NULL,
@@ -52,21 +51,13 @@ def list_stories_db(conn, limit: int = 500) -> list[dict[str, Any]]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,title,tags,characters,updated_at FROM sf_stories ORDER BY updated_at DESC LIMIT %s",
+        "SELECT id,title,characters,updated_at FROM sf_stories ORDER BY updated_at DESC LIMIT %s",
         (int(limit),),
     )
     rows = cur.fetchall()
     out = []
     for r in rows:
-        tags = r[2]
-        # psycopg2 may return dict/list already for jsonb, but be defensive
-        if isinstance(tags, str):
-            try:
-                tags = json.loads(tags)
-            except Exception:
-                tags = []
-
-        chars = r[3]
+        chars = r[2]
         if isinstance(chars, str):
             try:
                 chars = json.loads(chars)
@@ -77,9 +68,8 @@ def list_stories_db(conn, limit: int = 500) -> list[dict[str, Any]]:
             {
                 "id": r[0],
                 "title": r[1],
-                "tags": tags or [],
                 "characters": chars or [],
-                "updated_at": r[4],
+                "updated_at": r[3],
             }
         )
     return out
@@ -92,21 +82,14 @@ def get_story_db(conn, story_id: str) -> dict[str, Any]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,title,tags,story_md,characters,created_at,updated_at FROM sf_stories WHERE id=%s",
+        "SELECT id,title,story_md,characters,created_at,updated_at FROM sf_stories WHERE id=%s",
         (story_id,),
     )
     r = cur.fetchone()
     if not r:
         raise FileNotFoundError("not found")
 
-    tags = r[2]
-    if isinstance(tags, str):
-        try:
-            tags = json.loads(tags)
-        except Exception:
-            tags = []
-
-    chars = r[4]
+    chars = r[3]
     if isinstance(chars, str):
         try:
             chars = json.loads(chars)
@@ -118,12 +101,11 @@ def get_story_db(conn, story_id: str) -> dict[str, Any]:
         "meta": {
             "id": r[0],
             "title": r[1],
-            "tags": tags or [],
         },
         "characters": chars or [],
-        "story_md": r[3] or "",
-        "created_at": r[5],
-        "updated_at": r[6],
+        "story_md": r[2] or "",
+        "created_at": r[4],
+        "updated_at": r[5],
     }
 
 
@@ -131,7 +113,6 @@ def upsert_story_db(
     conn,
     story_id: str,
     title: str,
-    tags: list[str],
     story_md: str,
     characters: list[dict[str, Any]],
 ) -> None:
@@ -144,11 +125,10 @@ def upsert_story_db(
 
     cur.execute(
         """
-INSERT INTO sf_stories (id,title,tags,story_md,characters,created_at,updated_at)
-VALUES (%s,%s,%s::jsonb,%s,%s::jsonb,%s,%s)
+INSERT INTO sf_stories (id,title,story_md,characters,created_at,updated_at)
+VALUES (%s,%s,%s,%s::jsonb,%s,%s)
 ON CONFLICT (id) DO UPDATE SET
   title=EXCLUDED.title,
-  tags=EXCLUDED.tags,
   story_md=EXCLUDED.story_md,
   characters=EXCLUDED.characters,
   updated_at=EXCLUDED.updated_at;
@@ -156,7 +136,6 @@ ON CONFLICT (id) DO UPDATE SET
         (
             story_id,
             title,
-            json.dumps(tags or []),
             story_md or "",
             json.dumps(characters or []),
             now,

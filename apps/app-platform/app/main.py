@@ -99,6 +99,9 @@ def index(response: Response):
     body.noScroll{overflow:hidden;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px calc(70px + env(safe-area-inset-bottom)) 18px;max-width:920px;margin:0 auto;}
     body.monOff{padding-bottom:18px;}
+    body.monOff .dock{display:none}
+    body.monOff #monitorBackdrop{display:none}
+    body.monOff #monitorSheet{display:none}
     a{color:var(--accent);text-decoration:none}
     code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
@@ -991,13 +994,12 @@ def api_library_story_create(payload: dict[str, Any]):
     try:
         story_id = validate_story_id(str(payload.get('id') or ''))
         title = str(payload.get('title') or story_id)
-        tags = payload.get('tags') or []
         story_md = str(payload.get('story_md') or '')
         characters = payload.get('characters') or []
         conn = db_connect()
         try:
             db_init(conn)
-            upsert_story_db(conn, story_id, title, tags, story_md, characters)
+            upsert_story_db(conn, story_id, title, story_md, characters)
         finally:
             conn.close()
         return {'ok': True, 'id': story_id}
@@ -1016,11 +1018,10 @@ def api_library_story_update(story_id: str, payload: dict[str, Any]):
             meta = existing.get('meta') or {}
 
             title = str(payload['title']) if 'title' in payload else str(meta.get('title') or story_id)
-            tags = payload['tags'] if 'tags' in payload else list(meta.get('tags') or [])
             story_md = str(payload['story_md']) if 'story_md' in payload else str(existing.get('story_md') or '')
             characters = payload['characters'] if 'characters' in payload else list(existing.get('characters') or [])
 
-            upsert_story_db(conn, story_id, title, tags, story_md, characters)
+            upsert_story_db(conn, story_id, title, story_md, characters)
         finally:
             conn.close()
         return {'ok': True}

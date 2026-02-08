@@ -40,18 +40,11 @@ def register_library_viewer(app: FastAPI) -> None:
             conn.close()
 
         meta = st.get("meta") or {}
-        tags = list(meta.get("tags") or [])
+        
         story_md = st.get("story_md") or ""
         chars = st.get("characters") or []
 
-        tag_html = "".join(
-            [
-                f"<span class='pill tagPill' style='margin-right:6px'>{html.escape(str(t))}</span>"
-                for t in tags
-            ]
-        )
-
-        # character cards
+# character cards
         char_cards = []
         for c in chars:
             cid = str(c.get("id") or c.get("name") or "")
@@ -86,7 +79,6 @@ def register_library_viewer(app: FastAPI) -> None:
         )
 
         title_txt = html.escape(str(meta.get("title") or story_id))
-        tags_csv = html.escape(", ".join([str(t) for t in tags]))
         story_md_esc = html.escape(story_md)
         rendered = _render_md_simple(story_md)
 
@@ -175,17 +167,6 @@ function escapeHtml(s){{
     .replace(/>/g,'&gt;');
 }}
 
-function parseTags(s){{
-  return (s||'').split(',').map(function(x){{return x.trim();}}).filter(Boolean);
-}}
-
-function renderTagPills(tags){{
-  if (!tags.length) return '—';
-  return tags.map(function(t){{
-    return "<span class='pill tagPill' style='margin-right:6px'>" + escapeHtml(t) + "</span>";
-  }}).join(' ');
-}}
-
 function renderMdSimple(md){{
   var lines = String(md||'').split('\\n');
   var out=[];
@@ -222,7 +203,6 @@ function doSave(){{
 
   var payload = {{
     title: ($('titleInput') ? $('titleInput').value : ''),
-    tags: parseTags($('tagsInput') ? $('tagsInput').value : ''),
     story_md: ($('mdCode') ? $('mdCode').value : '')
   }};
 
@@ -235,7 +215,6 @@ function doSave(){{
   }}).then(function(j){{
     if (!j.ok){{  saving=false; return; }}
     if ($('titleText')) $('titleText').textContent = payload.title || window.__STORY_ID;
-    if ($('tagsPills')) $('tagsPills').innerHTML = renderTagPills(payload.tags);
     // if we're in rendered mode, refresh HTML too
     if ($('mdRender') && $('mdCode') && !$('mdCode').classList.contains('hide')){{
       // in code mode, don't touch rendered
@@ -290,21 +269,6 @@ function enableInlineEdit(textId, editId, inputId){{
 
 enableInlineEdit('titleText','titleEdit','titleInput');
 
-if ($('tagsPills')) $('tagsPills').addEventListener('click', function(){{
-  $('tagsPills').classList.add('hide');
-  $('tagsEdit').classList.remove('hide');
-  try{{ $('tagsInput').focus(); $('tagsInput').select(); }}catch(_e){{}}
-}});
-
-if ($('tagsInput')) {{
-  $('tagsInput').addEventListener('blur', function(){{
-    $('tagsEdit').classList.add('hide');
-    $('tagsPills').classList.remove('hide');
-    scheduleSave(10);
-  }});
-  $('tagsInput').addEventListener('input', function(){{ scheduleSave(800); }});
-}}
-
 if ($('mdCode')) {{
   $('mdCode').addEventListener('input', function(){{ scheduleSave(1200); }});
   $('mdCode').addEventListener('blur', function(){{ scheduleSave(10); }});
@@ -330,15 +294,6 @@ if ($('mdCode')) {{
                 "<div class='card'>",
                 "  <div class='row' style='justify-content:space-between;'>",
                 "    <div>",
-                "      <div class='muted'>Tags</div>",
-                f"      <div id='tagsPills' style='margin-top:8px;cursor:pointer'>{tag_html or '—'}</div>",
-                "      <div id='tagsEdit' class='hide' style='margin-top:8px'>",
-                f"        <input id='tagsInput' value='{tags_csv}' placeholder='bedtime, calm' />",
-                "        <div class='muted' style='margin-top:6px'>Comma-separated</div>",
-                "      </div>",
-                "    </div>",
-                "  </div>",
-                "</div>",
                 "",
                 "<div class='card'>",
                 "  <div style='font-weight:950'>Characters</div>",
@@ -360,7 +315,7 @@ if ($('mdCode')) {{
                 ".charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}",
                 ".charCard .cname{font-weight:950}",
                 ".charCard .cbody{min-width:0}",
-                "#titleInput,#tagsInput,#mdCode{font-size:16px;line-height:1.35}",
+                "#titleInput,#mdCode{font-size:16px;line-height:1.35}",
                 "textarea{font-size:16px}",
                 "</style>",
                 js,

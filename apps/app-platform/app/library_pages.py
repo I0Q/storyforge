@@ -52,13 +52,6 @@ def _html_page(title: str, body: str) -> str:
 </html>"""
 
 
-def _parse_tags(tags_s: str) -> list[str]:
-    s = (tags_s or "").strip()
-    if not s:
-        return []
-    return [t.strip() for t in s.split(",") if t.strip()]
-
-
 def _parse_characters_yaml(chars_yaml: str) -> list[dict[str, Any]]:
     raw = yaml.safe_load(chars_yaml or "")
     if raw is None:
@@ -174,8 +167,6 @@ def register_library_pages(app: FastAPI) -> None:
     </script>
 
 
-    <div class='k'>Tags (comma-separated)</div>
-    <input name='tags' placeholder='bedtime, calm' />
 
     <div class='k'>Characters (YAML)</div>
     <textarea name='characters_yaml'>{chars_default}</textarea>
@@ -197,19 +188,17 @@ def register_library_pages(app: FastAPI) -> None:
     def library_new_post(
         id: str = Form(default=""),
         title: str = Form(default=""),
-        tags: str = Form(default=""),
         characters_yaml: str = Form(default=""),
         story_md: str = Form(default=""),
     ):
         try:
             sid = validate_story_id(id)
             chars = _parse_characters_yaml(characters_yaml)
-            tags_l = _parse_tags(tags)
 
             conn = db_connect()
             try:
                 db_init(conn)
-                upsert_story_db(conn, sid, title or sid, tags_l, story_md or "", chars)
+                upsert_story_db(conn, sid, title or sid, story_md or "", chars)
             finally:
                 conn.close()
 
@@ -231,7 +220,6 @@ def register_library_pages(app: FastAPI) -> None:
             conn.close()
 
         meta = s.get("meta") or {}
-        tags_s = ", ".join(meta.get("tags") or [])
         chars_yaml = yaml.safe_dump({"characters": s.get("characters") or []}, sort_keys=False, allow_unicode=True)
 
         body = f"""
@@ -252,8 +240,6 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='k'>Title</div>
     <input name='title' value={json.dumps(meta.get('title') or story_id)} required />
 
-    <div class='k'>Tags (comma-separated)</div>
-    <input name='tags' value={json.dumps(tags_s)} />
 
     <div class='k'>Characters (YAML)</div>
     <textarea name='characters_yaml'>{chars_yaml}</textarea>
@@ -267,7 +253,6 @@ def register_library_pages(app: FastAPI) -> None:
 (function(){{
   function byName(n){{ return document.getElementsByName(n)[0]; }}
   var elTitle=byName('title');
-  var elTags=byName('tags');
   var elChars=byName('characters_yaml');
   var elStory=document.getElementById('story_md');
   var st=document.getElementById('autosaveStatus');
@@ -283,7 +268,6 @@ def register_library_pages(app: FastAPI) -> None:
     if (st) st.textContent='Autosave: saving';
     var fd = new FormData();
     fd.append('title', elTitle ? elTitle.value : '');
-    fd.append('tags', elTags ? elTags.value : '');
     fd.append('characters_yaml', elChars ? elChars.value : '');
     fd.append('story_md', elStory ? elStory.value : '');
     fetch('/library/story/{story_id}/save', {{method:'POST', body: fd}})
@@ -312,19 +296,17 @@ def register_library_pages(app: FastAPI) -> None:
     def library_story_save(
         story_id: str,
         title: str = Form(default=""),
-        tags: str = Form(default=""),
         characters_yaml: str = Form(default=""),
         story_md: str = Form(default=""),
     ):
         try:
             sid = validate_story_id(story_id)
             chars = _parse_characters_yaml(characters_yaml)
-            tags_l = _parse_tags(tags)
 
             conn = db_connect()
             try:
                 db_init(conn)
-                upsert_story_db(conn, sid, title or sid, tags_l, story_md or "", chars)
+                upsert_story_db(conn, sid, title or sid, story_md or "", chars)
             finally:
                 conn.close()
             return RedirectResponse(url='/#tab-library', status_code=302)
@@ -364,7 +346,6 @@ def register_library_pages(app: FastAPI) -> None:
                         conn,
                         str(sid),
                         str(meta.get("title") or sid),
-                        list(meta.get("tags") or []),
                         str(s.get("story_md") or ""),
                         list(s.get("characters") or []),
                     )
