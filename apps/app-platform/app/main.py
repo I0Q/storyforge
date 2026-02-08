@@ -143,9 +143,10 @@ def index(response: Response):
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
     body.noScroll{overflow:hidden;}
     html,body{overscroll-behavior-y:none;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px calc(70px + env(safe-area-inset-bottom)) 18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    html.monOn body{padding-bottom:calc(18px + 74px + env(safe-area-inset-bottom));}
     body.monOff{padding-bottom:18px;}
-    body.monOff .dock{display:none}
+    body.monOff .dock{will-change:transform;display:none}
     body.monOff #monitorBackdrop{display:none}
     body.monOff #monitorSheet{display:none}
     a{color:var(--accent);text-decoration:none}
@@ -239,7 +240,7 @@ def index(response: Response):
 
     /* bottom sheet */
     .sheetBackdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;touch-action:none;}
-    .sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
+    .sheet{will-change:transform;display:none;position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
     html.monOn .sheetBackdrop{display:block;}
     html.monOn .sheet{display:block;}
     .sheetBackdrop.hide{display:none;}
