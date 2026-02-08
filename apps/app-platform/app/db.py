@@ -78,9 +78,13 @@ CREATE TABLE IF NOT EXISTS sf_todos (
 """
     )
 
-    # Ensure schema has category (free-text)
+    # Ensure schema has category (free-text) + archived
     try:
         cur.execute("ALTER TABLE sf_todos ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE sf_todos ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE")
     except Exception:
         pass
 
