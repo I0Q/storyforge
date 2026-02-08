@@ -366,6 +366,8 @@ if ($('mdCode')) {{
                 ".charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}",
                 ".charCard .cname{font-weight:950}",
                 ".charCard .cbody{min-width:0}",
+                "#titleInput,#tagsInput,#mdCode{font-size:16px;line-height:1.35}",
+                "textarea{font-size:16px}",
                 "</style>",
                 js,
             ]

@@ -289,18 +289,44 @@ function __sfToastInit(){
 try{ document.addEventListener('DOMContentLoaded', __sfToastInit); }catch(e){}
 try{ __sfToastInit(); }catch(e){}
 
-function showTab(name){
+function showTab(name, opts){
+  opts = opts || {};
   for (var i=0;i<['history','library','advanced'].length;i++){
     var n=['history','library','advanced'][i];
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
+  // persist in URL hash
+  try{
+    if (!opts.noHash){
+      var h = '#tab-' + name;
+      if (window.location.hash !== h) window.location.hash = h;
+    }
+  }catch(_e){}
+
   // lazy-load tab content
   try{
     if (name==='history') loadHistory();
     else if (name==='library') loadLibrary();
   }catch(_e){}
 }
+
+function getTabFromHash(){
+  try{
+    var h = (window.location.hash || '').replace('#','');
+    if (h==='tab-history') return 'history';
+    if (h==='tab-library') return 'library';
+    if (h==='tab-advanced') return 'advanced';
+  }catch(e){}
+  return '';
+}
+
+try{
+  window.addEventListener('hashchange', function(){
+    var t = getTabFromHash();
+    if (t) showTab(t, {noHash:true});
+  });
+}catch(e){}
 
 function pill(state){
   const s=(state||'unknown').toLowerCase();
@@ -747,7 +773,7 @@ try{
   if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
 }catch(_e){}
 
-var initTab = getQueryParam('tab');
+var initTab = getTabFromHash() || getQueryParam('tab');
 if (initTab==='library' || initTab==='history' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
 
 refreshAll();
