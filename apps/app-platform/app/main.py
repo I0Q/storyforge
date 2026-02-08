@@ -1739,11 +1739,29 @@ function applyHighlights(){
 }
 function toggleHighlight(id){
   try{
-    var m = loadHighlights();
-    var k = String(id);
-    m[k] = !m[k];
-    saveHighlights(m);
-    applyHighlights();
+    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{
+            var j = JSON.parse(xhr.responseText||'{}');
+            if (j && j.ok){
+              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+              if (el){
+                if (j.highlighted) el.classList.add('hi');
+                else el.classList.remove('hi');
+              }
+              return;
+            }
+          }catch(e){}
+        }
+      }
+    };
+    xhr.send('{}');
   }catch(e){}
 }
 function clearHighlights(){
@@ -1910,6 +1928,7 @@ def todo_page(request: Request, response: Response):
             tid = it.get('id')
             txt = esc(it.get('text') or '')
             checked = 'checked' if st != 'open' else ''
+            hi_cls = ' hi' if bool(it.get('highlighted')) else ''
             # If id is missing, render as plain text
             if tid is None:
                 box = '☑' if checked else '☐'
@@ -1918,14 +1937,14 @@ def todo_page(request: Request, response: Response):
 
             # Category is on the container; JS uses it to update counters.
             body_parts.append(
-                "<div class='todoItem' data-cat='" + cat_esc + "' data-id='" + str(int(tid)) + "'>"
+                "<div class='todoItem" + hi_cls + "' data-cat='" + cat_esc + "' data-id='" + str(int(tid)) + "'>"
                 + "<div class='todoSwipe'><div class='todoSwipeInner'>"
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
                 + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
                 + "<span class='todoText'>" + txt + "</span>"
                 + "</label>"
-                + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"deleteTodo(" + str(int(tid)) + ")\">Delete</button></div>"
+                + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\" ontouchend=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\">Delete</button></div>"
                 + "</div></div>"
                 + "</div>"
             )
@@ -2190,6 +2209,18 @@ def api_todos_delete_auth(todo_id: int):
     finally:
         conn.close()
 
+@app.post('/api/todos/{todo_id}/toggle_highlight_auth')
+def api_todos_toggle_highlight_auth(todo_id: int):
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import toggle_todo_highlight_db
+        v = toggle_todo_highlight_db(conn, todo_id=int(todo_id))
+        return {'ok': True, 'highlighted': bool(v)}
+    finally:
+        conn.close()
+
+
 
 
 @app.post('/api/todos/{todo_id}/open')
@@ -2224,6 +2255,41 @@ def api_todos_delete(todo_id: int, request: Request):
         return {'ok': bool(ok)}
     finally:
         conn.close()
+
+@app.post('/api/todos/{todo_id}/highlight')
+def api_todos_highlight(todo_id: int, request: Request):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import set_todo_highlight_db
+        set_todo_highlight_db(conn, todo_id=int(todo_id), highlighted=True)
+        return {'ok': True}
+    finally:
+        conn.close()
+
+@app.post('/api/todos/{todo_id}/unhighlight')
+def api_todos_unhighlight(todo_id: int, request: Request):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import set_todo_highlight_db
+        set_todo_highlight_db(conn, todo_id=int(todo_id), highlighted=False)
+        return {'ok': True}
+    finally:
+        conn.close()
+
 
 
 

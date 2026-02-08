@@ -15,7 +15,7 @@ def list_todos_db(conn, limit: int = 800) -> list[dict[str, Any]]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,category,text,status,archived,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
+        "SELECT id,category,text,status,archived,highlighted,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
         (int(limit),),
     )
     rows = cur.fetchall()
@@ -26,8 +26,9 @@ def list_todos_db(conn, limit: int = 800) -> list[dict[str, Any]]:
             'text': r[2] or '',
             'status': (r[3] or 'open'),
             'archived': bool(r[4]),
-            'created_at': r[5],
-            'updated_at': r[6],
+            'highlighted': bool(r[5]),
+            'created_at': r[6],
+            'updated_at': r[7],
         }
         for r in rows
     ]
@@ -86,3 +87,26 @@ def delete_todo_db(conn, todo_id: int) -> bool:
     ok = cur.rowcount > 0
     conn.commit()
     return ok
+
+
+def set_todo_highlight_db(conn, todo_id: int, highlighted: bool) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE sf_todos SET highlighted=%s, updated_at=NOW() WHERE id=%s",
+        (bool(highlighted), int(todo_id)),
+    )
+    conn.commit()
+
+
+def toggle_todo_highlight_db(conn, todo_id: int) -> bool:
+    cur = conn.cursor()
+    cur.execute("SELECT highlighted FROM sf_todos WHERE id=%s", (int(todo_id),))
+    row = cur.fetchone()
+    cur_high = bool(row[0]) if row else False
+    new_val = not cur_high
+    cur.execute(
+        "UPDATE sf_todos SET highlighted=%s, updated_at=NOW() WHERE id=%s",
+        (new_val, int(todo_id)),
+    )
+    conn.commit()
+    return new_val
