@@ -171,6 +171,7 @@ def index(response: Response):
     .sheetInner{padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
     .sheetTitle{font-weight:950;}
+    #monitorSheet button{touch-action:manipulation;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .gpuGrid{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;}
     .gpuCard{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;min-width:0;}
@@ -930,32 +931,24 @@ function fmtPct(x){
 function openMonitor(){
   if (!monitorEnabled) return;
   try{ bindMonitorClose(); }catch(e){}
-  var b=document.getElementById('monitorBackdrop'); if (b) b.classList.remove('hide');
-  var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.remove('hide');
-  document.body.classList.add('noScroll');
-  document.body.classList.add('sheetOpen');
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.remove('hide'); b.style.display='block'; }
+  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+  try{ document.body.classList.add('noScroll'); }catch(e){}
+  try{ document.body.classList.add('sheetOpen'); }catch(e){}
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
   startMetricsStream();
-  // render last metrics immediately if we have them
   if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
 }
 
-
-function emergencyKillMonitor(){
-  try{ localStorage.setItem('sf_monitor_enabled','0'); }catch(e){}
-  try{ document.documentElement.classList.remove('monOn'); }catch(e){}
-  try{ var b=document.getElementById('monitorBackdrop'); if (b) b.classList.add('hide'); }catch(e){}
-  try{ var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.add('hide'); }catch(e){}
+function closeMonitor(){
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.add('hide'); b.style.display='none'; }
+  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
   try{ document.body.classList.remove('noScroll'); }catch(e){}
   try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-  return false;
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop'); if (b) b.classList.add('hide');
-  var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.add('hide');
-  document.body.classList.remove('noScroll');
-  document.body.classList.remove('sheetOpen');
 }
 
 function closeMonitorEv(ev){
@@ -1124,8 +1117,8 @@ try{
     </div>
   </div>
 
-<div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' role='dialog' aria-modal='true'>
+<div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
+  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
     <div class='sheetInner'>
       <div class='sheetHandle'></div>
       <div class='row' style='justify-content:space-between;'>
