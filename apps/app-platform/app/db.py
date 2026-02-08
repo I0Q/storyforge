@@ -13,6 +13,13 @@ def db_connect():
 
 
 def db_init(conn) -> None:
+    # Be rollback-safe: a previously-failed statement can leave the transaction aborted,
+    # causing subsequent commands to raise InFailedSqlTransaction.
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+
     cur = conn.cursor()
     try:
         cur.execute("SET statement_timeout = '5000'")
@@ -85,6 +92,7 @@ CREATE TABLE IF NOT EXISTS sf_todos (
         pass
     try:
         cur.execute("ALTER TABLE sf_todos ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE")
+        cur.execute("ALTER TABLE sf_todos ADD COLUMN IF NOT EXISTS highlighted BOOLEAN NOT NULL DEFAULT FALSE")
     except Exception:
         pass
 
