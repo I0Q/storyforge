@@ -574,14 +574,22 @@ function loadLibrary(){
     if (!stories.length){ el.innerHTML = `<div class='muted'>No stories yet. Add folders under <code>stories/</code>.</div>`; return; }
 
       el.innerHTML = stories.map(st => {
-    var tags = Array.isArray(st.tags) ? st.tags : [];
-    var tagHtml = tags.map(function(t){ return "<span class='pill'>" + t + "</span>"; }).join(' ');
+    var chars = Array.isArray(st.characters) ? st.characters : [];
+    var names = chars.map(function(c){ return (c && (c.name || c.id)) ? String(c.name || c.id) : ''; }).filter(Boolean);
+    var shown = names.slice(0,3);
+    var more = Math.max(0, names.length - shown.length);
+    var charsLine = '';
+    if (shown.length){
+      charsLine = shown.join(', ');
+      if (more>0) charsLine += ' (+' + String(more) + ')';
+    }
+
     return '<a href="/library/story/' + encodeURIComponent(st.id) + '/view" style="text-decoration:none;color:inherit">'
       + '<div class="job">'
       + '<div class="row" style="justify-content:space-between;">'
       + '<div class="title">' + (st.title || st.id) + '</div>'
       + '</div>'
-      + (tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '')
+      + (charsLine ? ("<div class='muted' style='margin-top:6px'>" + charsLine + "</div>") : '')
       + '</div></a>';
     }).join('');
   }).catch(function(e){

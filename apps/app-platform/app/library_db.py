@@ -52,7 +52,7 @@ def list_stories_db(conn, limit: int = 500) -> list[dict[str, Any]]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,title,tags,updated_at FROM sf_stories ORDER BY updated_at DESC LIMIT %s",
+        "SELECT id,title,tags,characters,updated_at FROM sf_stories ORDER BY updated_at DESC LIMIT %s",
         (int(limit),),
     )
     rows = cur.fetchall()
@@ -65,12 +65,21 @@ def list_stories_db(conn, limit: int = 500) -> list[dict[str, Any]]:
                 tags = json.loads(tags)
             except Exception:
                 tags = []
+
+        chars = r[3]
+        if isinstance(chars, str):
+            try:
+                chars = json.loads(chars)
+            except Exception:
+                chars = []
+
         out.append(
             {
                 "id": r[0],
                 "title": r[1],
                 "tags": tags or [],
-                "updated_at": r[3],
+                "characters": chars or [],
+                "updated_at": r[4],
             }
         )
     return out
