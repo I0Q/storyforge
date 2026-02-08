@@ -490,7 +490,7 @@ function copyStory(){
 }
 
 
-async function refreshAll(){
+async async function refreshAll(){
   await Promise.allSettled([loadHistory()]);
 }
 
