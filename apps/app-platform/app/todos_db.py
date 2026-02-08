@@ -78,3 +78,11 @@ def archive_done_todos_db(conn) -> int:
     n = cur.rowcount or 0
     conn.commit()
     return int(n)
+
+
+def delete_todo_db(conn, todo_id: int) -> bool:
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sf_todos WHERE id=%s", (int(todo_id),))
+    ok = cur.rowcount > 0
+    conn.commit()
+    return ok

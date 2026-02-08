@@ -1706,6 +1706,32 @@ function toggleArchived(on){
     window.location.href = on ? '/todo?arch=1' : '/todo';
   }catch(e){}
 }
+
+
+function deleteTodo(id){
+  if (!confirm('Delete this todo?')) return;
+  try{
+    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{
+            var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          }catch(e){}
+          try{ recomputeCounts(); }catch(e){}
+        } else {
+          alert('Delete failed');
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){ alert('Delete failed'); }
+}
 function archiveDone(){
   if (!confirm('Archive all completed items?')) return;
   try{
@@ -1843,10 +1869,16 @@ def todo_page(request: Request, response: Response):
 
             # Category is on the container; JS uses it to update counters.
             body_parts.append(
-                "<label class='todoItem' data-cat='" + cat_esc + "'>"
+                "<div class='todoItem' data-cat='" + cat_esc + "' data-id='" + str(int(tid)) + "'>"
+                + "<div class='todoSwipe'><div class='todoSwipeInner'>"
+                + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
                 + "<span class='todoText'>" + txt + "</span>"
+                + "<span class='todoId'>#" + str(int(tid)) + "</span>"
                 + "</label>"
+                + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"deleteTodo(" + str(int(tid)) + " )\">Delete</button></div>"
+                + "</div></div>"
+                + "</div>"
             )
 
     body_html = "\n".join(body_parts) if body_parts else "<div class='muted'>No TODO items yet.</div>"
@@ -1914,7 +1946,15 @@ def todo_page(request: Request, response: Response):
     .catTitle{font-weight:950;font-size:16px;}
     .catCount{color:var(--muted);font-weight:800;font-size:12px;}
 
-    .todoItem{display:flex;gap:10px;align-items:flex-start;margin:10px 0;}
+    .todoItem{display:block;margin:10px 0;}
+    /* swipe-delete (implemented as horizontal scroll) */
+    .todoSwipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .todoSwipe::-webkit-scrollbar{display:none;}
+    .todoSwipeInner{display:flex;min-width:100%;}
+    .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
+    .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
+    .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
+    .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .todoItem input{margin-top:3px;transform:scale(1.15);}
     .todoText{line-height:1.25;}
     .todoPlain{margin:8px 0;color:var(--muted);}
@@ -2084,6 +2124,19 @@ def api_todos_done(todo_id: int, request: Request):
     finally:
         conn.close()
 
+@app.post('/api/todos/{todo_id}/delete_auth')
+def api_todos_delete_auth(todo_id: int):
+    # Requires passphrase session auth (middleware).
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import delete_todo_db
+        ok = delete_todo_db(conn, todo_id=int(todo_id))
+        return {'ok': bool(ok)}
+    finally:
+        conn.close()
+
+
 
 @app.post('/api/todos/{todo_id}/open')
 def api_todos_open(todo_id: int, request: Request):
@@ -2100,6 +2153,24 @@ def api_todos_open(todo_id: int, request: Request):
         return {'ok': True}
     finally:
         conn.close()
+
+@app.post('/api/todos/{todo_id}/delete')
+def api_todos_delete(todo_id: int, request: Request):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import delete_todo_db
+        ok = delete_todo_db(conn, todo_id=int(todo_id))
+        return {'ok': bool(ok)}
+    finally:
+        conn.close()
+
 
 
 @app.post('/api/todos/archive_done_auth')
