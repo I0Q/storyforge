@@ -10,6 +10,7 @@ import time
 import requests
 from fastapi import FastAPI
 
+from .auth import register_passphrase_auth
 from .db import db_connect, db_init, db_list_jobs
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi import Response
@@ -20,6 +21,7 @@ GATEWAY_BASE = os.environ.get("GATEWAY_BASE", "http://10.108.0.3:8791").rstrip("
 GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
 
 app = FastAPI(title=APP_NAME, version="0.1")
+register_passphrase_auth(app)
 
 
 def _h() -> dict[str, str]:
