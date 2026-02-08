@@ -62,6 +62,20 @@ CREATE TABLE IF NOT EXISTS sf_voices (
 """
     )
 
+
+    # Internal TODO tracker (DB-backed, read-only UI)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_todos (
+  id BIGSERIAL PRIMARY KEY,
+  text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
+
     conn.commit()
 
 

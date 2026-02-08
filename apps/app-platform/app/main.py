@@ -23,6 +23,10 @@ from .library_db import (
     upsert_story_db,
     validate_story_id,
 )
+from .todos_db import (
+    list_todos_db,
+    add_todo_db,
+)
 from .voices_db import (
     validate_voice_id,
     list_voices_db,
@@ -1361,39 +1365,51 @@ function saveVoice(){
 
 
 
+
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    # Read-only: display internal TODO. Do not accept any commands from this page.
-    todo_path = Path(__file__).resolve().parents[1] / 'TODO.md'
-    txt = ''
+    # Read-only: display internal TODOs from DB. Do not accept any commands from this page.
+
+    items = []
+    err = ''
     try:
-        txt = todo_path.read_text('utf-8')
+        conn = db_connect()
+        try:
+            db_init(conn)
+            items = list_todos_db(conn, limit=800)
+        finally:
+            conn.close()
     except Exception as e:
-        txt = "# TODO\n\nFailed to read TODO.md: " + type(e).__name__ + ": " + str(e) + "\n"
+        err = f"db_failed: {type(e).__name__}: {e}"
+
+    # fallback to TODO.md if DB empty/unavailable
+    if not items:
+        todo_path = Path(__file__).resolve().parents[1] / 'TODO.md'
+        try:
+            txt = todo_path.read_text('utf-8')
+            for line in (txt or '').splitlines():
+                t = line.strip()
+                if t.startswith('- [ ] '):
+                    items.append({'id': None, 'text': t[6:], 'status': 'open'})
+                elif t.lower().startswith('- [x] '):
+                    items.append({'id': None, 'text': t[6:], 'status': 'done'})
+        except Exception as e:
+            if not err:
+                err = f"file_failed: {type(e).__name__}: {e}"
 
     def esc(x: str) -> str:
-        return pyhtml.escape(x)
+        return pyhtml.escape(str(x or ''))
 
-    lines = (txt or '').splitlines()
-    out = []
-    for line in lines:
-        if line.startswith('# '):
-            out.append(f"<h1>{esc(line[2:])}</h1>")
-        elif line.startswith('## '):
-            out.append(f"<h2>{esc(line[3:])}</h2>")
-        elif line.startswith('- [ ] '):
-            out.append(f"<div>☐ {esc(line[6:])}</div>")
-        elif line.startswith('- [x] ') or line.startswith('- [X] '):
-            out.append(f"<div>☑ {esc(line[6:])}</div>")
-        elif line.startswith('- '):
-            out.append(f"<div>• {esc(line[2:])}</div>")
-        elif line.strip() == '':
-            out.append("<div style='height:10px'></div>")
-        else:
-            out.append(f"<div>{esc(line)}</div>")
+    rows = []
+    if err:
+        rows.append(f"<div class='err'>{esc(err)}</div>")
+    for it in items:
+        st = (it.get('status') or 'open').lower()
+        box = '☐' if st == 'open' else '☑'
+        rows.append(f"<div>{box} {esc(it.get('text') or '')}</div>")
 
-    body_html = "\n".join(out)
+    body_html = "\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
 
     return '''<!doctype html>
 <html>
@@ -1402,14 +1418,14 @@ def todo_page(response: Response):
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>StoryForge - TODO</title>
   <style>
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;}
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
     a{color:var(--accent);text-decoration:none}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     h1{font-size:20px;margin:0;}
-    h2{font-size:16px;margin:16px 0 6px 0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .err{color:var(--bad);font-weight:950;margin-top:8px;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
   </style>
@@ -1427,6 +1443,7 @@ def todo_page(response: Response):
   <div class="card">''' + body_html + '''</div>
 </body>
 </html>'''
+
 
 
 @app.get('/api/ping')
