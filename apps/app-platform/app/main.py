@@ -39,9 +39,10 @@ def _get(path: str) -> dict[str, Any]:
 
 @app.get("/", response_class=HTMLResponse)
 def index(response: Response):
+    build = int(time.time())
     # iOS Safari can be aggressive about caching; keep the UI fresh.
     response.headers["Cache-Control"] = "no-store"
-    return """<!doctype html>
+    html = """<!doctype html>
 <html>
 <head>
   <meta charset='utf-8'/>
@@ -57,6 +58,8 @@ def index(response: Response):
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
+    .boot{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);}
+    .boot strong{color:var(--text);}
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
     .tab{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;cursor:pointer}
     .tab.active{background:var(--card);}
@@ -122,6 +125,7 @@ def index(response: Response):
       <h1>StoryForge</h1>
       <div class='muted'>Cloud control plane (App Platform) + Tinybox compute via VPC gateway.</div>
     </div>
+    <div id='boot' class='boot muted'><strong>Build</strong>: __BUILD__ • JS: booting…</div>
     <div class='row'>
             <button class='secondary' onclick='refreshAll()'>Refresh</button>
     </div>
@@ -196,6 +200,20 @@ def index(response: Response):
       </div>
     </div>
   </div>
+
+<script>
+// minimal boot script (runs even if the main app script has a syntax error)
+window.__SF_BUILD = '__BUILD__';
+window.__SF_BOOT_TS = Date.now();
+window.addEventListener('error', (ev)=>{
+  const b=document.getElementById('boot');
+  if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS error: ${ev.message || ev.type}`;
+});
+window.addEventListener('unhandledrejection', (ev)=>{
+  const b=document.getElementById('boot');
+  if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS promise error`;
+});
+</script>
 
 <script>
 function showTab(name){
@@ -686,6 +704,8 @@ loadHistory();
 
 </body>
 </html>"""
+
+    return html.replace("__BUILD__", str(build))
 
 
 @app.get('/api/ping')
