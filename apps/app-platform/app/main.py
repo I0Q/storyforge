@@ -757,6 +757,21 @@ function createVoice(){
     .catch(function(e){ alert(String(e)); });
 }
 
+
+function renameVoiceEl(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    return renameVoice(idEnc);
+  }catch(e){}
+}
+
+function disableVoiceEl(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    return disableVoice(idEnc);
+  }catch(e){}
+}
+
 function renameVoice(idEnc){
   var id = decodeURIComponent(idEnc||'');
   var nm = prompt('New voice name:', '');
