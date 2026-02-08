@@ -11,8 +11,16 @@ import requests
 from fastapi import FastAPI
 
 from .auth import register_passphrase_auth
+from .library_pages import register_library_pages
 from .db import db_connect, db_init, db_list_jobs
 from .library import list_stories, list_stories_debug, get_story
+from .library_db import (
+    delete_story_db,
+    get_story_db,
+    list_stories_db,
+    upsert_story_db,
+    validate_story_id,
+)
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi import Response
 
@@ -23,6 +31,7 @@ GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
 
 app = FastAPI(title=APP_NAME, version="0.1")
 register_passphrase_auth(app)
+register_library_pages(app)
 
 
 def _h() -> dict[str, str]:
@@ -774,28 +783,87 @@ def api_metrics_stream():
 
 
 @app.get('/api/library/stories')
-def api_library_stories(debug: int = 0):
+def api_library_stories():
     try:
-        resp = {'ok': True, 'stories': list_stories()}
-        if debug:
-            resp['debug'] = list_stories_debug()
-        return resp
+        conn = db_connect()
+        try:
+            db_init(conn)
+            return {'ok': True, 'stories': list_stories_db(conn)}
+        finally:
+            conn.close()
     except Exception as e:
-        resp = {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
-        if debug:
-            resp['debug'] = list_stories_debug()
-        return resp
+        return {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
 
 
 @app.get('/api/library/story/{story_id}')
 def api_library_story(story_id: str):
     try:
-        story = get_story(story_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            story = get_story_db(conn, story_id)
+        finally:
+            conn.close()
     except FileNotFoundError:
         return Response(content='not found', status_code=404)
     except Exception as e:
         return {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
     return {'ok': True, 'story': story}
+
+
+@app.post('/api/library/story')
+def api_library_story_create(payload: dict[str, Any]):
+    try:
+        story_id = validate_story_id(str(payload.get('id') or ''))
+        title = str(payload.get('title') or story_id)
+        description = str(payload.get('description') or '')
+        tags = payload.get('tags') or []
+        story_md = str(payload.get('story_md') or '')
+        characters = payload.get('characters') or []
+        conn = db_connect()
+        try:
+            db_init(conn)
+            upsert_story_db(conn, story_id, title, description, tags, story_md, characters)
+        finally:
+            conn.close()
+        return {'ok': True, 'id': story_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'create_failed: {type(e).__name__}: {e}'}
+
+
+@app.put('/api/library/story/{story_id}')
+def api_library_story_update(story_id: str, payload: dict[str, Any]):
+    try:
+        story_id = validate_story_id(story_id)
+        title = str(payload.get('title') or story_id)
+        description = str(payload.get('description') or '')
+        tags = payload.get('tags') or []
+        story_md = str(payload.get('story_md') or '')
+        characters = payload.get('characters') or []
+        conn = db_connect()
+        try:
+            db_init(conn)
+            upsert_story_db(conn, story_id, title, description, tags, story_md, characters)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
+
+
+@app.delete('/api/library/story/{story_id}')
+def api_library_story_delete(story_id: str):
+    try:
+        story_id = validate_story_id(story_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            delete_story_db(conn, story_id)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'delete_failed: {type(e).__name__}: {e}'}
 
 
 @app.get('/api/history')

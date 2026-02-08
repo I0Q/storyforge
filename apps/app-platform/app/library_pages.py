@@ -1,0 +1,325 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import yaml
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+from .db import db_connect, db_init
+from .library import get_story, list_stories
+from .library_db import (
+    delete_story_db,
+    get_story_db,
+    list_stories_db,
+    upsert_story_db,
+    validate_story_id,
+)
+
+
+def _html_page(title: str, body: str) -> str:
+    return f"""<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>{title}</title>
+  <style>
+    :root{{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}}
+    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}}
+    a{{color:var(--accent);text-decoration:none}}
+    code,pre,textarea{{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}}
+    .top{{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}}
+    h1{{font-size:20px;margin:0;}}
+    .muted{{color:var(--muted);font-size:12px;}}
+    .card{{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}}
+    .row{{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}}
+    button{{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}}
+    button.secondary{{background:transparent;color:var(--text);}}
+    button.danger{{background:transparent;border-color:rgba(255,77,77,.35);color:var(--bad);}}
+    input,textarea{{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);}}
+    textarea{{min-height:130px;}}
+    .k{{color:var(--muted);font-size:12px;margin-top:10px;}}
+    .job{{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}}
+    .pill{{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--line);color:var(--muted)}}
+    .err{{color:var(--bad);font-weight:950;margin-top:10px;}}
+  </style>
+</head>
+<body>
+{body}
+</body>
+</html>"""
+
+
+def _parse_tags(tags_s: str) -> list[str]:
+    s = (tags_s or "").strip()
+    if not s:
+        return []
+    return [t.strip() for t in s.split(",") if t.strip()]
+
+
+def _parse_characters_yaml(chars_yaml: str) -> list[dict[str, Any]]:
+    raw = yaml.safe_load(chars_yaml or "")
+    if raw is None:
+        return []
+    if isinstance(raw, dict) and isinstance(raw.get("characters"), list):
+        return raw["characters"]
+    if isinstance(raw, list):
+        return raw
+    raise ValueError("Characters must be YAML list or {characters: [...]} ")
+
+
+def register_library_pages(app: FastAPI) -> None:
+    @app.get("/library", response_class=HTMLResponse)
+    def library_home(request: Request):
+        err = str(request.query_params.get("err") or "")
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            stories = list_stories_db(conn)
+        finally:
+            conn.close()
+
+        items = "".join(
+            [
+                f"<div class='job'><div class='row' style='justify-content:space-between;'>"
+                f"<div style='font-weight:950'>{s['title']}</div>"
+                f"<div class='pill'>{s['id']}</div></div>"
+                f"<div class='muted' style='margin-top:6px'>{s.get('description','')}</div>"
+                f"<div class='row' style='margin-top:10px'>"
+                f"<a href='/library/story/{s['id']}'><button class='secondary'>View / Edit</button></a>"
+                f"</div></div>"
+                for s in stories
+            ]
+        )
+        if not items:
+            items = "<div class='muted'>No stories yet.</div>"
+
+        err_html = f"<div class='err'>{err}</div>" if err else ""
+
+        body = f"""
+<div class='top'>
+  <div>
+    <h1>Story Library</h1>
+    <div class='muted'>Create, edit, and delete text-only source stories.</div>
+  </div>
+  <div class='row'>
+    <a href='/'><button class='secondary'>Back</button></a>
+    <a href='/library/new'><button>New story</button></a>
+  </div>
+</div>
+
+<div class='card'>
+  <div class='row' style='justify-content:space-between;'>
+    <div>
+      <div style='font-weight:950'>Stories</div>
+      <div class='muted'>Stored in managed Postgres.</div>
+    </div>
+    <form method='post' action='/library/import'>
+      <button class='secondary' type='submit'>Import bundled stories</button>
+    </form>
+  </div>
+  {err_html}
+  {items}
+</div>
+"""
+        return _html_page("StoryForge - Library", body)
+
+    @app.get("/library/new", response_class=HTMLResponse)
+    def library_new_get(request: Request):
+        err = str(request.query_params.get("err") or "")
+        err_html = f"<div class='err'>{err}</div>" if err else ""
+        chars_default = """characters:\n  - id: narrator\n    name: Narrator\n    type: narrator\n    description: \"Warm, calm storyteller.\"\n    aliases: []\n"""
+        body = f"""
+<div class='top'>
+  <div>
+    <h1>New story</h1>
+    <div class='muted'>Create a new text-only story (Markdown + characters).</div>
+  </div>
+  <div class='row'>
+    <a href='/library'><button class='secondary'>Back</button></a>
+  </div>
+</div>
+
+<div class='card'>
+  <form method='post' action='/library/new'>
+    <div class='k'>ID (lowercase, digits, - or _)</div>
+    <input name='id' placeholder='maris-lighthouse' required />
+
+    <div class='k'>Title</div>
+    <input name='title' placeholder='Maris and the Lighthouse' required />
+
+    <div class='k'>Description</div>
+    <input name='description' placeholder='Short summary…' />
+
+    <div class='k'>Tags (comma-separated)</div>
+    <input name='tags' placeholder='bedtime, calm' />
+
+    <div class='k'>Characters (YAML)</div>
+    <textarea name='characters_yaml'>{chars_default}</textarea>
+
+    <div class='k'>Story (Markdown)</div>
+    <textarea name='story_md' placeholder='# Title\n\nOnce upon a time…'></textarea>
+
+    {err_html}
+
+    <div class='row' style='margin-top:12px;'>
+      <button type='submit'>Create</button>
+    </div>
+  </form>
+</div>
+"""
+        return _html_page("StoryForge - New story", body)
+
+    @app.post("/library/new")
+    def library_new_post(
+        id: str = Form(default=""),
+        title: str = Form(default=""),
+        description: str = Form(default=""),
+        tags: str = Form(default=""),
+        characters_yaml: str = Form(default=""),
+        story_md: str = Form(default=""),
+    ):
+        try:
+            sid = validate_story_id(id)
+            chars = _parse_characters_yaml(characters_yaml)
+            tags_l = _parse_tags(tags)
+
+            conn = db_connect()
+            try:
+                db_init(conn)
+                upsert_story_db(conn, sid, title or sid, description or "", tags_l, story_md or "", chars)
+            finally:
+                conn.close()
+
+            return RedirectResponse(url=f"/library/story/{sid}", status_code=302)
+        except Exception as e:
+            return RedirectResponse(url=f"/library/new?err={str(e)}", status_code=302)
+
+    @app.get("/library/story/{story_id}", response_class=HTMLResponse)
+    def library_story_get(story_id: str, request: Request):
+        err = str(request.query_params.get("err") or "")
+        err_html = f"<div class='err'>{err}</div>" if err else ""
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            s = get_story_db(conn, story_id)
+        finally:
+            conn.close()
+
+        meta = s.get("meta") or {}
+        tags_s = ", ".join(meta.get("tags") or [])
+        chars_yaml = yaml.safe_dump({"characters": s.get("characters") or []}, sort_keys=False, allow_unicode=True)
+
+        body = f"""
+<div class='top'>
+  <div>
+    <h1>{meta.get('title') or story_id}</h1>
+    <div class='muted'><span class='pill'>{story_id}</span></div>
+  </div>
+  <div class='row'>
+    <a href='/library'><button class='secondary'>Back</button></a>
+    <form method='post' action='/library/story/{story_id}/delete' onsubmit="return confirm('Delete this story?');">
+      <button class='danger' type='submit'>Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class='card'>
+  <form method='post' action='/library/story/{story_id}/save'>
+    <div class='k'>Title</div>
+    <input name='title' value={json.dumps(meta.get('title') or story_id)} required />
+
+    <div class='k'>Description</div>
+    <input name='description' value={json.dumps(meta.get('description') or '')} />
+
+    <div class='k'>Tags (comma-separated)</div>
+    <input name='tags' value={json.dumps(tags_s)} />
+
+    <div class='k'>Characters (YAML)</div>
+    <textarea name='characters_yaml'>{chars_yaml}</textarea>
+
+    <div class='k'>Story (Markdown)</div>
+    <textarea name='story_md'>{s.get('story_md') or ''}</textarea>
+
+    {err_html}
+
+    <div class='row' style='margin-top:12px;'>
+      <button type='submit'>Save</button>
+    </div>
+  </form>
+</div>
+"""
+        return _html_page("StoryForge - Story", body)
+
+    @app.post("/library/story/{story_id}/save")
+    def library_story_save(
+        story_id: str,
+        title: str = Form(default=""),
+        description: str = Form(default=""),
+        tags: str = Form(default=""),
+        characters_yaml: str = Form(default=""),
+        story_md: str = Form(default=""),
+    ):
+        try:
+            sid = validate_story_id(story_id)
+            chars = _parse_characters_yaml(characters_yaml)
+            tags_l = _parse_tags(tags)
+
+            conn = db_connect()
+            try:
+                db_init(conn)
+                upsert_story_db(conn, sid, title or sid, description or "", tags_l, story_md or "", chars)
+            finally:
+                conn.close()
+            return RedirectResponse(url=f"/library/story/{sid}", status_code=302)
+        except Exception as e:
+            return RedirectResponse(url=f"/library/story/{story_id}?err={str(e)}", status_code=302)
+
+    @app.post("/library/story/{story_id}/delete")
+    def library_story_delete(story_id: str):
+        try:
+            sid = validate_story_id(story_id)
+            conn = db_connect()
+            try:
+                db_init(conn)
+                delete_story_db(conn, sid)
+            finally:
+                conn.close()
+            return RedirectResponse(url="/library", status_code=302)
+        except Exception as e:
+            return RedirectResponse(url=f"/library?err={str(e)}", status_code=302)
+
+    @app.post("/library/import")
+    def library_import_bundled():
+        # Import file-based stories bundled into the image/repo into DB.
+        try:
+            file_list = list_stories()
+            conn = db_connect()
+            try:
+                db_init(conn)
+                imported = 0
+                for item in file_list:
+                    sid = item.get("id")
+                    if not sid:
+                        continue
+                    s = get_story(str(sid))
+                    meta = s.get("meta") or {}
+                    upsert_story_db(
+                        conn,
+                        str(sid),
+                        str(meta.get("title") or sid),
+                        str(meta.get("description") or ""),
+                        list(meta.get("tags") or []),
+                        str(s.get("story_md") or ""),
+                        list(s.get("characters") or []),
+                    )
+                    imported += 1
+            finally:
+                conn.close()
+            return RedirectResponse(url=f"/library?err=Imported%20{imported}%20story%28ies%29", status_code=302)
+        except Exception as e:
+            return RedirectResponse(url=f"/library?err={str(e)}", status_code=302)
