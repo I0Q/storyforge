@@ -914,6 +914,12 @@ function closeMonitor(){
   document.body.classList.remove('noScroll');
 }
 
+function closeMonitorEv(ev){
+  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
+  closeMonitor();
+  return false;
+}
+
 function renderGpus(b){
   const el = document.getElementById('monGpus');
   if (!el) return;
@@ -1049,7 +1055,7 @@ try{
     </div>
   </div>
 
-<div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitor()'></div>
+<div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitorEv(event)'></div>
   <div id='monitorSheet' class='sheet hide' role='dialog' aria-modal='true'>
     <div class='sheetInner'>
       <div class='sheetHandle'></div>
@@ -1059,7 +1065,7 @@ try{
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
         <div class='row'>
-          <button class='secondary' onclick='closeMonitor()'>Close</button>
+          <button class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
 
