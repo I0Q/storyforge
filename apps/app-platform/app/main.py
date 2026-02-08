@@ -1514,6 +1514,7 @@ function save(){
 }
 try{ initArchivedToggle(); }catch(e){}
 try{ recomputeCounts(); }catch(e){}
+try{ applyHighlights(); }catch(e){}
 </script>
 </body>
 </html>"""
@@ -1703,6 +1704,52 @@ function initArchivedToggle(){
   }catch(e){}
 }
 
+
+function _hiKey(){ return 'sf_todo_hi'; }
+function loadHighlights(){
+  try{
+    var raw = localStorage.getItem(_hiKey()) || '';
+    var parts = raw.split(',');
+    var out = {};
+    for (var i=0;i<parts.length;i++){
+      var t = String(parts[i]||'').trim();
+      if (!t) continue;
+      out[t] = true;
+    }
+    return out;
+  }catch(e){ return {}; }
+}
+function saveHighlights(m){
+  try{
+    var ids=[];
+    for (var k in m){ if (m.hasOwnProperty(k) && m[k]) ids.push(k); }
+    localStorage.setItem(_hiKey(), ids.join(','));
+  }catch(e){}
+}
+function applyHighlights(){
+  try{
+    var m = loadHighlights();
+    var els = document.querySelectorAll('.todoItem[data-id]');
+    for (var i=0;i<els.length;i++){
+      var id = String(els[i].getAttribute('data-id')||'');
+      if (m[id]) els[i].classList.add('hi');
+      else els[i].classList.remove('hi');
+    }
+  }catch(e){}
+}
+function toggleHighlight(id){
+  try{
+    var m = loadHighlights();
+    var k = String(id);
+    m[k] = !m[k];
+    saveHighlights(m);
+    applyHighlights();
+  }catch(e){}
+}
+function clearHighlights(){
+  try{ localStorage.removeItem(_hiKey()); }catch(e){}
+  applyHighlights();
+}
 function toggleArchived(on){
   try{
     window.location.href = on ? '/todo?arch=1' : '/todo';
@@ -1875,7 +1922,7 @@ def todo_page(request: Request, response: Response):
                 + "<div class='todoSwipe'><div class='todoSwipeInner'>"
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
-                + "<span class='todoId'>#" + str(int(tid)) + "</span>"
+                + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
                 + "<span class='todoText'>" + txt + "</span>"
                 + "</label>"
                 + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"deleteTodo(" + str(int(tid)) + ")\">Delete</button></div>"
@@ -1956,6 +2003,10 @@ def todo_page(request: Request, response: Response):
     .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
     .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
     .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
+    .todoHiBtn{border:1px solid rgba(255,255,255,0.14);background:transparent;color:var(--muted);font-weight:950;border-radius:999px;padding:4px 8px;font-size:12px;line-height:1;cursor:pointer;}
+    .todoHiBtn:active{transform:translateY(1px);}
+    .todoItem.hi{background:rgba(74,163,255,0.08);border:1px solid rgba(74,163,255,0.25);border-radius:12px;padding:6px 8px;}
+    .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .todoItem input{margin-top:3px;transform:scale(1.15);}
     .todoText{line-height:1.25;}
@@ -1971,6 +2022,7 @@ def todo_page(request: Request, response: Response):
       </div>
       <div class="right">
         <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
+        <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
         
       </div>
     </div>
