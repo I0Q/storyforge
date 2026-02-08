@@ -165,6 +165,14 @@ def index(response: Response):
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
+
+    /* switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
     input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);}
     textarea{min-height:90px;}
     pre{background:#070b16;color:#d7e1ff;padding:12px;border-radius:12px;overflow:auto;border:1px solid var(--line)}
@@ -1417,6 +1425,8 @@ function save(){
       if(out) out.innerHTML='<div class="err">'+String((j&&j.error)||'save failed')+'</div>';
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+String(e)+'</div>'; });
 }
+try{ initArchivedToggle(); }catch(e){}
+try{ recomputeCounts(); }catch(e){}
 </script>
 </body>
 </html>"""
@@ -1446,6 +1456,14 @@ def voices_new_page(response: Response):
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
+
+    /* switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
     input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
     .kvs div.k{color:var(--muted)}
@@ -1530,6 +1548,49 @@ function saveVoice(){
 }
 </script>
 <script>
+
+
+function recomputeCounts(){
+  try{
+    var heads = document.querySelectorAll('h2');
+    for (var i=0;i<heads.length;i++){
+      var h = heads[i];
+      var done = 0;
+      var total = 0;
+      var el = h.nextElementSibling;
+      while (el && el.tagName && el.tagName.toLowerCase() !== 'h2'){
+        var cb = el.querySelector ? el.querySelector('input[type=checkbox]') : null;
+        if (cb){
+          total += 1;
+          if (cb.checked) done += 1;
+        }
+        el = el.nextElementSibling;
+      }
+      // Update header text: replace trailing (x/y)
+      try{
+        var txt = h.textContent || '';
+        txt = txt.replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, '');
+        h.textContent = txt + ' (' + String(done) + '/' + String(total) + ')';
+      }catch(e){}
+    }
+  }catch(e){}
+}
+
+function initArchivedToggle(){
+  try{
+    var t = document.getElementById('archToggle');
+    if (!t) return;
+    var q = window.location.search || '';
+    var on = (q.indexOf('arch=1')>=0) || (q.indexOf('archived=1')>=0);
+    t.checked = !!on;
+  }catch(e){}
+}
+
+function toggleArchived(on){
+  try{
+    window.location.href = on ? '/todo?arch=1' : '/todo';
+  }catch(e){}
+}
 function archiveDone(){
   if (!confirm('Archive all completed items?')) return;
   try{
@@ -1546,6 +1607,7 @@ function archiveDone(){
       }
     };
     xhr.send('{}');
+    try{ recomputeCounts(); }catch(e){}
   }catch(e){}
 }
 
@@ -1563,13 +1625,17 @@ function toggleTodo(id, checked){
           try{
             var el = document.querySelector('input[data-id="'+id+'"]');
             if (el) el.checked = !checked;
+            try{ recomputeCounts(); }catch(e){}
           }catch(e){}
         }
       }
     };
     xhr.send('{}');
+    try{ recomputeCounts(); }catch(e){}
   }catch(e){}
 }
+try{ initArchivedToggle(); }catch(e){}
+try{ recomputeCounts(); }catch(e){}
 </script>
 </body>
 </html>'''
@@ -1670,6 +1736,14 @@ def todo_page(request: Request, response: Response):
     .err{color:var(--bad);font-weight:950;margin-top:8px;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
+
+    /* switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
   </style>
 </head>
 <body>
@@ -1683,11 +1757,13 @@ def todo_page(request: Request, response: Response):
     </div>
   </div>
   <div class="row" style="justify-content:space-between;margin:12px 0">
-    <div class="muted">
-      <a href="/todo?arch=1" style="margin-right:12px">Show archived</a>
-      <a href="/todo">Hide archived</a>
-    </div>
-    <div>
+    <div class="muted"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <div class="muted" style="font-weight:950">Archived</div>
+      <label class="switch" style="transform:scale(0.95)">
+        <input id="archToggle" type="checkbox" onchange="toggleArchived(this.checked)" />
+        <span class="slider"></span>
+      </label>
       <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
     </div>
   </div>
@@ -1709,6 +1785,7 @@ function archiveDone(){
       }
     };
     xhr.send('{}');
+    try{ recomputeCounts(); }catch(e){}
   }catch(e){}
 }
 
@@ -1726,13 +1803,17 @@ function toggleTodo(id, checked){
           try{
             var el = document.querySelector('input[data-id="'+id+'"]');
             if (el) el.checked = !checked;
+            try{ recomputeCounts(); }catch(e){}
           }catch(e){}
         }
       }
     };
     xhr.send('{}');
+    try{ recomputeCounts(); }catch(e){}
   }catch(e){}
 }
+try{ initArchivedToggle(); }catch(e){}
+try{ recomputeCounts(); }catch(e){}
 </script>
 </body>
 </html>'''
