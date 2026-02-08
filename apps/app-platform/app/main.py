@@ -261,26 +261,6 @@ function renderProc(m){
   }
   el.textContent = lines.join('\\n');
 }
-  // Expect list of {pid,name,cpu_pct,ram_mb,gpu_mem_mb}
-  el.innerHTML = procs.slice(0,12).map(p=>{
-    const pid = p.pid ?? '—';
-    const name = (p.name || p.cmd || '').toString();
-    const cpu = (p.cpu_pct!=null)? Number(p.cpu_pct).toFixed(1)+'%':'—';
-    const ram = (p.ram_mb!=null)? Number(p.ram_mb).toFixed(0)+' MB':'—';
-    const gmem = (p.gpu_mem_mb!=null)? Number(p.gpu_mem_mb).toFixed(0)+' MB':null;
-    return `<div class='job' style='margin:8px 0;'>
-      <div class='row' style='justify-content:space-between;'>
-        <div class='title' style='max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${name || '(unknown)'}</div>
-        <div class='pill'>pid ${pid}</div>
-      </div>
-      <div class='kvs'>
-        <div class='k'>cpu</div><div>${cpu}</div>
-        <div class='k'>ram</div><div>${ram}</div>
-        ${gmem ? `<div class='k'>gpu mem</div><div>${gmem}</div>` : ``}
-      </div>
-    </div>`;
-  }).join('');
-}
 
 function startMetricsStream(){
   if (!monitorEnabled) return;
