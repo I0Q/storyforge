@@ -255,6 +255,7 @@ def index(response: Response):
     </div>
     <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
     <div class='row'>
+      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
             
     </div>
   </div>
@@ -274,6 +275,7 @@ def index(response: Response):
           <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
         <div class='row'>
+      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
           
         </div>
       </div>
@@ -291,6 +293,7 @@ def index(response: Response):
           <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
         </div>
         <div class='row'>
+      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
           <a href='/library/new'><button class='secondary'>New story</button></a>
           
         </div>
@@ -305,6 +308,7 @@ def index(response: Response):
           <div id='libDesc' class='muted'></div>
         </div>
         <div class='row'>
+      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
           <button class='secondary' onclick='closeStory()'>Close</button>
         </div>
       </div>
@@ -600,6 +604,9 @@ function loadDebugPref(){
 function setDebugUiEnabled(on){
   try{ localStorage.setItem('sf_debug_ui', on ? '1' : '0'); }catch(e){}
   document.body.classList.toggle('debugOff', !on);
+  var todo=document.getElementById('todoBtn');
+  if (todo) todo.classList.toggle('hide', !!(!on));
+
   var btn=document.getElementById('dbgToggle');
   if (btn){ btn.textContent = on ? 'Disable debug' : 'Enable debug'; btn.classList.toggle('secondary', on); }
 }
@@ -1212,6 +1219,7 @@ try{
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
         <div class='row'>
+      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
@@ -1286,6 +1294,7 @@ def voices_new_page(response: Response):
       <div class='muted'>Test a voice sample before saving it to the roster.</div>
     </div>
     <div class='row'>
+      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
     </div>
   </div>
@@ -1348,6 +1357,76 @@ function saveVoice(){
 </body>
 </html>'''
 
+
+
+
+
+@app.get('/todo', response_class=HTMLResponse)
+def todo_page(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    # Read-only: display internal TODO. Do not accept any commands from this page.
+    todo_path = Path(__file__).resolve().parents[1] / 'TODO.md'
+    txt = ''
+    try:
+        txt = todo_path.read_text('utf-8')
+    except Exception as e:
+        txt = "# TODO\n\nFailed to read TODO.md: " + type(e).__name__ + ": " + str(e) + "\n"
+
+    def esc(x: str) -> str:
+        return pyhtml.escape(x)
+
+    lines = (txt or '').splitlines()
+    out = []
+    for line in lines:
+        if line.startswith('# '):
+            out.append(f"<h1>{esc(line[2:])}</h1>")
+        elif line.startswith('## '):
+            out.append(f"<h2>{esc(line[3:])}</h2>")
+        elif line.startswith('- [ ] '):
+            out.append(f"<div>☐ {esc(line[6:])}</div>")
+        elif line.startswith('- [x] ') or line.startswith('- [X] '):
+            out.append(f"<div>☑ {esc(line[6:])}</div>")
+        elif line.startswith('- '):
+            out.append(f"<div>• {esc(line[2:])}</div>")
+        elif line.strip() == '':
+            out.append("<div style='height:10px'></div>")
+        else:
+            out.append(f"<div>{esc(line)}</div>")
+
+    body_html = "\n".join(out)
+
+    return '''<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>StoryForge - TODO</title>
+  <style>
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
+    a{color:var(--accent);text-decoration:none}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    h1{font-size:20px;margin:0;}
+    h2{font-size:16px;margin:16px 0 6px 0;}
+    .muted{color:var(--muted);font-size:12px;}
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1>TODO</h1>
+      <div class="muted">Read-only internal tracker (no commands accepted).</div>
+    </div>
+    <div>
+      <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
+    </div>
+  </div>
+  <div class="card">''' + body_html + '''</div>
+</body>
+</html>'''
 
 
 @app.get('/api/ping')
