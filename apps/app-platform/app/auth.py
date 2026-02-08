@@ -91,6 +91,18 @@ def register_passphrase_auth(app: FastAPI) -> None:
         if _is_session_authed(request):
             return await call_next(request)
 
+        # Allow token-gated TODO write API even when not logged in.
+        if request.url.path.startswith('/api/todos'):
+            token = (os.environ.get('TODO_API_TOKEN') or '').strip()
+            if token:
+                got = (request.headers.get('x-sf-todo-token') or '').strip()
+                if not got:
+                    auth = (request.headers.get('authorization') or '').strip()
+                    if auth.lower().startswith('bearer '):
+                        got = auth[7:].strip()
+                if got and hmac.compare_digest(got, token):
+                    return await call_next(request)
+
         # For API calls, always return JSON so the frontend can handle it.
         if request.url.path.startswith('/api/'):
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
