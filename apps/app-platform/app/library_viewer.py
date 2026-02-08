@@ -166,6 +166,7 @@ function __sfToastInit(){{
 }}
 window.__sfToastInit = __sfToastInit;
 try{{ document.addEventListener('DOMContentLoaded', __sfToastInit); }}catch(e){{}}
+try{{ __sfToastInit(); }}catch(e){{}}
 
 var saveTimer = null;
 var saving = false;

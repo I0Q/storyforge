@@ -287,6 +287,7 @@ function __sfToastInit(){
   window.__sfToastTimer = setTimeout(function(){ try{ el.style.display='none'; }catch(e){} }, Math.max(200, until - Date.now()));
 }
 try{ document.addEventListener('DOMContentLoaded', __sfToastInit); }catch(e){}
+try{ __sfToastInit(); }catch(e){}
 
 function showTab(name){
   for (var i=0;i<['history','library','advanced'].length;i++){
