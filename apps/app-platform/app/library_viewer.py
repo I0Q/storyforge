@@ -121,10 +121,33 @@ function renderTagPills(tags){{
   }}).join(' ');
 }}
 
+function renderMdSimple(md){{
+  var lines = String(md||'').split('\n');
+  var out=[];
+  for (var i=0;i<lines.length;i++){{
+    var line=lines[i];
+    if (line.startsWith('### ')) out.push('<h3>'+escapeHtml(line.slice(4))+'</h3>');
+    else if (line.startsWith('## ')) out.push('<h2>'+escapeHtml(line.slice(3))+'</h2>');
+    else if (line.startsWith('# ')) out.push('<h1>'+escapeHtml(line.slice(2))+'</h1>');
+    else if (line.trim()==='') out.push('');
+    else out.push('<p>'+escapeHtml(line)+'</p>');
+  }}
+  return out.join('\n');
+}}
+
 function scheduleSave(ms){{
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(doSave, ms||600);
   setStatus('Pending…');
+}}
+
+function doDelete(){{
+  if (!confirm('Delete this story?')) return;
+  setStatus('Deleting…');
+  fetch('/api/library/story/' + encodeURIComponent(window.__STORY_ID), {{method:'DELETE'}})
+    .then(function(r){{ return r.json().catch(function(){{return {{ok:false}};}}); }})
+    .then(function(j){{ if (j.ok){{ window.location.href='/?tab=library'; }} else {{ setStatus('Error'); }} }})
+    .catch(function(_e){{ setStatus('Error'); }});
 }}
 
 function doSave(){{
@@ -146,9 +169,14 @@ function doSave(){{
     return r.json().catch(function(){{ return {{ok:false,error:'bad_json'}}; }});
   }}).then(function(j){{
     if (!j.ok){{ setStatus('Error'); saving=false; return; }}
-    // update UI
     if ($('titleText')) $('titleText').textContent = payload.title || window.__STORY_ID;
     if ($('tagsPills')) $('tagsPills').innerHTML = renderTagPills(payload.tags);
+    // if we're in rendered mode, refresh HTML too
+    if ($('mdRender') && $('mdCode') && !$('mdCode').classList.contains('hide')){{
+      // in code mode, don't touch rendered
+    }} else if ($('mdRender') && $('mdCode')){{
+      $('mdRender').innerHTML = renderMdSimple(payload.story_md);
+    }}
     setStatus('Saved');
     saving=false;
   }}).catch(function(_e){{
@@ -164,10 +192,13 @@ function toggleMd(){{
   if (!r||!c||!b) return;
   var codeVisible = !c.classList.contains('hide');
   if (codeVisible){{
+    // code -> render
+    try{{ r.innerHTML = renderMdSimple(c.value); }}catch(_e){{}}
     c.classList.add('hide');
     r.classList.remove('hide');
     b.textContent='Show code';
   }} else {{
+    // render -> code
     r.classList.add('hide');
     c.classList.remove('hide');
     b.textContent='Render';
@@ -227,7 +258,7 @@ if ($('mdCode')) {{
                 "  </div>",
                 "  <div class='row'>",
                 "    <a href='/?tab=library'><button class='secondary' type='button'>Back</button></a>",
-                f"    <a href='/library/story/{html.escape(story_id)}'><button class='secondary' type='button'>Full editor</button></a>",
+                "    <button class='danger' type='button' onclick=\"doDelete()\">Delete</button>",
                 "  </div>",
                 "</div>",
                 "",
