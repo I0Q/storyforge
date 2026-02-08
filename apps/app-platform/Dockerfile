@@ -6,7 +6,6 @@ COPY apps/app-platform/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY apps/app-platform/app ./app
-COPY TODO.md ./TODO.md
 COPY apps/app-platform/stories ./stories
 ENV STORYFORGE_STORIES_DIR=/app/stories
 

@@ -26,7 +26,6 @@ from .library_db import (
 from .todos_db import (
     list_todos_db,
     add_todo_db,
-    bootstrap_todos_from_markdown,
 )
 from .voices_db import (
     validate_voice_id,
@@ -1368,6 +1367,7 @@ function saveVoice(){
 
 
 
+
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -1379,13 +1379,6 @@ def todo_page(response: Response):
         conn = db_connect()
         try:
             db_init(conn)
-            # If DB is empty, import from TODO.md (one-time bootstrap)
-            try:
-                todo_path = Path(__file__).resolve().parents[1] / 'TODO.md'
-                txt = todo_path.read_text('utf-8')
-                bootstrap_todos_from_markdown(conn, txt)
-            except Exception:
-                pass
             items = list_todos_db(conn, limit=800)
         finally:
             conn.close()
