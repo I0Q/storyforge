@@ -6,6 +6,7 @@ from typing import Any
 
 import json
 import time
+import html as pyhtml
 
 import requests
 from fastapi import FastAPI
@@ -30,6 +31,21 @@ APP_NAME = "storyforge"
 GATEWAY_BASE = os.environ.get("GATEWAY_BASE", "http://10.108.0.3:8791").rstrip("/")
 GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
 
+VOICE_SERVERS: list[dict[str, Any]] = []
+try:
+    _raw = os.environ.get("VOICE_SERVERS_JSON", "").strip()
+    if _raw:
+        _v = json.loads(_raw)
+        if isinstance(_v, list):
+            VOICE_SERVERS = [x for x in _v if isinstance(x, dict)]
+except Exception:
+    VOICE_SERVERS = []
+
+if not VOICE_SERVERS:
+    VOICE_SERVERS = [
+        {"name": "Tinybox", "base": GATEWAY_BASE, "kind": "gateway"},
+    ]
+
 app = FastAPI(title=APP_NAME, version="0.1")
 register_passphrase_auth(app)
 register_library_pages(app)
@@ -53,6 +69,25 @@ def index(response: Response):
     build = int(time.time())
     # iOS Safari can be aggressive about caching; keep the UI fresh.
     response.headers["Cache-Control"] = "no-store"
+
+    # Voice servers list (rendered server-side to avoid brittle JS)
+    vs_items: list[str] = []
+    for s in VOICE_SERVERS:
+        try:
+            nm = pyhtml.escape(str(s.get("name") or "server"))
+            base = pyhtml.escape(str(s.get("base") or ""))
+            kind = pyhtml.escape(str(s.get("kind") or ""))
+            meta = f" <span class='pill'>{kind}</span>" if kind else ""
+            vs_items.append(
+                "<div class='job'>"
+                f"<div class='title'>{nm}{meta}</div>"
+                f"<div class='muted' style='margin-top:6px'><code>{base}</code></div>"
+                "</div>"
+            )
+        except Exception:
+            continue
+    voice_servers_html = "".join(vs_items) if vs_items else "<div class='muted'>No voice servers configured.</div>"
+
     html = """<!doctype html>
 <html>
 <head>
@@ -69,7 +104,8 @@ def index(response: Response):
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
-    .boot{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);}
+    .boot{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
+    body.debugOff #boot{display:none}
     .boot strong{color:var(--text);}
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
     .tab{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;cursor:pointer}
@@ -204,13 +240,29 @@ def index(response: Response):
   </div>
 
   <div id='pane-advanced' class='hide'>
+
     <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Monitor</div>
-      <div class='muted'>Toggle realtime monitor dock (controls SSE connection).</div>
+      <div style='font-weight:950;margin-bottom:6px;'>Tinybox</div>
+      <div class='muted'>Compute provider + realtime system monitor (Tinybox only).</div>
       <div class='row' style='margin-top:10px;'>
         <button id='monToggle' class='secondary' onclick='toggleMonitor()'>Disable monitor</button>
       </div>
     </div>
+
+    <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Voice servers</div>
+      <div class='muted'>Configured endpoints used for voice/TTS work.</div>
+      <div style='margin-top:10px'>__VOICE_SERVERS__</div>
+    </div>
+
+    <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
+      <div class='muted'>Hide/show the build + JS error banner.</div>
+      <div class='row' style='margin-top:10px;'>
+        <button id='dbgToggle' class='secondary' onclick='toggleDebugUi()'>Disable debug</button>
+      </div>
+    </div>
+
   </div>
 
 <script>
@@ -433,6 +485,28 @@ function loadHistory(){
 let metricsES = null;
 let monitorEnabled = true;
 let lastMetrics = null;
+
+// Debug UI toggle (controls Build/JS banner visibility)
+function loadDebugPref(){
+  try{
+    var v = localStorage.getItem('sf_debug_ui');
+    if (v===null || v==='') return true;
+    return v === '1';
+  }catch(e){
+    return true;
+  }
+}
+
+function setDebugUiEnabled(on){
+  try{ localStorage.setItem('sf_debug_ui', on ? '1' : '0'); }catch(e){}
+  document.body.classList.toggle('debugOff', !on);
+  var btn=document.getElementById('dbgToggle');
+  if (btn){ btn.textContent = on ? 'Disable debug' : 'Enable debug'; btn.classList.toggle('secondary', on); }
+}
+
+function toggleDebugUi(){
+  setDebugUiEnabled(!loadDebugPref());
+}
 
 function renderMetrics(m){
   lastMetrics = m;
@@ -787,6 +861,7 @@ if (initTab==='library' || initTab==='history' || initTab==='advanced') { try{ s
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
 setMonitorEnabled(loadMonitorPref());
+setDebugUiEnabled(loadDebugPref());
 loadHistory();
 
 try{
@@ -844,7 +919,7 @@ try{
 </body>
 </html>"""
 
-    return html.replace("__BUILD__", str(build))
+    return html.replace("__BUILD__", str(build)).replace("__VOICE_SERVERS__", voice_servers_html)
 
 
 @app.get('/api/ping')
