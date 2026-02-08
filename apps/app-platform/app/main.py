@@ -525,13 +525,15 @@ loadHistory();
         </div>
       </div>
 
+      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
+      <div id='monGpus' class='grid2' style='margin-top:8px;'></div
+  </div>
+
       <div style='font-weight:950;margin-top:12px;'>Processes</div>
       <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
       <pre id='monProc' class='term' style='margin-top:8px;'>Loading…</pre>
 
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='grid2' style='margin-top:8px;'></div
-  </div>
+      
 
 </body>
 </html>"""
