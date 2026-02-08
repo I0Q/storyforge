@@ -1,0 +1,6 @@
+characters:
+  - id: narrator
+    name: Narrator
+    type: narrator
+    description: "Warm, calm storyteller."
+    aliases: []

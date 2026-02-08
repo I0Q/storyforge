@@ -1,0 +1,16 @@
+characters:
+  - id: narrator
+    name: Narrator
+    type: narrator
+    description: "Warm, calm storyteller."
+    aliases: []
+  - id: hare
+    name: Hare
+    type: character
+    description: "Fast, confident, easily distracted."
+    aliases: []
+  - id: tortoise
+    name: Tortoise
+    type: character
+    description: "Slow, steady, stubborn in the best way."
+    aliases: []
