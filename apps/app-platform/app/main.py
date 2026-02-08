@@ -256,6 +256,11 @@ function fetchJsonAuthed(url, opts){
       window.location.href = '/login';
       throw new Error('unauthorized');
     }
+    if (!r.ok){
+      return r.text().then(function(t){
+        throw new Error('HTTP ' + r.status + ' ' + (t || '').slice(0,200));
+      });
+    }
     return r.json();
   });
 }
@@ -481,7 +486,7 @@ function loadLibrary(){
     </div>`;
     }).join('');
   }).catch(function(e){
-    el.innerHTML = `<div class='muted'>Error loading library</div>`;
+    el.innerHTML = `<div class='muted'>Error loading library: ${String(e)}</div>`;
   });
 }
 
