@@ -19,8 +19,8 @@ def _repo_root() -> Path:
                 return parent
         except Exception:
             pass
-    # Fallback to a reasonable default.
-    return p.parents[3]
+    # Fallback: just use the directory containing this file.
+    return p.parent
 
 
 def _stories_dir() -> Path:
