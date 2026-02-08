@@ -154,8 +154,30 @@ def index(response: Response):
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .boot{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
@@ -296,9 +318,28 @@ def index(response: Response):
     <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
-        <div id='topMenu' class='menu'>
-          <a href='/logout'>Logout</a>
+        <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
+          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+          </svg>
+        </button>
+        <div id='topMenu' class='menuCard'>
+          <div class='uTop'>
+            <div class='uAvatar'>
+              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+              </svg>
+            </div>
+            <div>
+              <div class='uName'>User</div>
+              <div class='uSub'>Admin</div>
+            </div>
+          </div>
+          <div class='uActions'>
+            <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
+          </div>
         </div>
       </div>
             
@@ -1465,8 +1506,30 @@ def voices_new_page(response: Response):
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
@@ -1775,8 +1838,30 @@ def todo_page(request: Request, response: Response):
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .err{color:var(--bad);font-weight:950;margin:10px 0;}
@@ -1814,7 +1899,7 @@ def todo_page(request: Request, response: Response):
       </div>
       <div class="right">
         <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-        <a href="/logout"><button class="secondary" type="button">Logout</button></a>
+        
       </div>
     </div>
   </div>
