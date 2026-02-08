@@ -1410,8 +1410,15 @@ def todo_page(response: Response):
         rows.append(f"<div class='err'>{esc(err)}</div>")
 
     for cat in order:
-        rows.append(f"<h2>{esc(cat)}</h2>")
-        for it in groups.get(cat, []):
+        its = groups.get(cat, [])
+        open_n = 0
+        for it in its:
+            st = (it.get('status') or 'open').lower()
+            if st == 'open':
+                open_n += 1
+        total_n = len(its)
+        rows.append(f"<h2>{esc(cat)} <span class='count'>({open_n}/{total_n})</span></h2>")
+        for it in its:
             st = (it.get('status') or 'open').lower()
             box = '☐' if st == 'open' else '☑'
             rows.append(f"<div>{box} {esc(it.get('text') or '')}</div>")
@@ -1431,6 +1438,7 @@ def todo_page(response: Response):
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     h1{font-size:20px;margin:0;}
     h2{font-size:16px;margin:18px 0 8px 0;}
+    .count{color:var(--muted);font-weight:700;font-size:12px;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .err{color:var(--bad);font-weight:950;margin-top:8px;}

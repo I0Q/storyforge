@@ -14,6 +14,7 @@
 - [ ] Ensure monitor toggle uses iOS-style switch + correct labels
 
 ## Navigation / UI polish
+- [ ] TODO page: show (open/total) count in each category header
 - [ ] Add Logout button (header/settings) and wire to /logout
 - [ ] Add copy button for build number + JavaScript error code (boot banner)
 - [ ] Fix styling of the Debug UI option in the Settings tab (consistent card layout)
