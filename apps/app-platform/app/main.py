@@ -940,6 +940,17 @@ function openMonitor(){
   if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
 }
 
+
+function emergencyKillMonitor(){
+  try{ localStorage.setItem('sf_monitor_enabled','0'); }catch(e){}
+  try{ document.documentElement.classList.remove('monOn'); }catch(e){}
+  try{ var b=document.getElementById('monitorBackdrop'); if (b) b.classList.add('hide'); }catch(e){}
+  try{ var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.add('hide'); }catch(e){}
+  try{ document.body.classList.remove('noScroll'); }catch(e){}
+  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+  return false;
+}
+
 function closeMonitor(){
   var b=document.getElementById('monitorBackdrop'); if (b) b.classList.add('hide');
   var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.add('hide');
@@ -1074,6 +1085,16 @@ function tts(){
 }
 
 // boot status
+
+// Emergency hash: #close-monitor will force-close and disable monitor (useful if iOS gets stuck)
+try{
+  if ((window.location.hash||'') === '#close-monitor'){
+    emergencyKillMonitor();
+    // clear hash so back button doesn't keep killing
+    try{ history.replaceState(null,'', window.location.pathname + window.location.search); }catch(e){}
+  }
+}catch(e){}
+
 try{
   var __bootEl = document.getElementById('boot');
   if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
