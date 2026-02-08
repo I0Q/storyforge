@@ -27,6 +27,7 @@ from .todos_db import (
     list_todos_db,
     add_todo_db,
     set_todo_status_db,
+    archive_done_todos_db,
 )
 from .voices_db import (
     validate_voice_id,
@@ -304,13 +305,8 @@ def index(response: Response):
           <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
-        <div id='topMenu' class='menu'>
-          <a href='/logout'>Logout</a>
-        </div>
-      </div>
+      
+      
           
         </div>
       </div>
@@ -328,13 +324,8 @@ def index(response: Response):
           <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
-        <div id='topMenu' class='menu'>
-          <a href='/logout'>Logout</a>
-        </div>
-      </div>
+      
+      
           <a href='/library/new'><button class='secondary'>New story</button></a>
           
         </div>
@@ -349,13 +340,8 @@ def index(response: Response):
           <div id='libDesc' class='muted'></div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
-        <div id='topMenu' class='menu'>
-          <a href='/logout'>Logout</a>
-        </div>
-      </div>
+      
+      
           <button class='secondary' onclick='closeStory()'>Close</button>
         </div>
       </div>
@@ -1307,13 +1293,8 @@ try{
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
-        <div id='topMenu' class='menu'>
-          <a href='/logout'>Logout</a>
-        </div>
-      </div>
+      
+      
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
@@ -1391,13 +1372,8 @@ def voices_new_page(response: Response):
       <div class='muted'>Test a voice sample before saving it to the roster.</div>
     </div>
     <div class='row' style='justify-content:flex-end;'>
-      <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
-        <div id='topMenu' class='menu'>
-          <a href='/logout'>Logout</a>
-        </div>
-      </div>
+      
+      
       <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
     </div>
   </div>
@@ -1458,6 +1434,25 @@ function saveVoice(){
 }
 </script>
 <script>
+function archiveDone(){
+  if (!confirm('Archive all completed items?')) return;
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/todos/archive_done_auth',true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange=function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{ location.reload(); }catch(e){}
+        } else {
+          alert('Archive failed');
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){}
+}
+
 function toggleTodo(id, checked){
   try{
     var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
@@ -1469,7 +1464,7 @@ function toggleTodo(id, checked){
         if (xhr.status!==200){
           // revert checkbox on failure
           try{
-            var el = document.querySelector('input[data-id=+id+]');
+            var el = document.querySelector('input[data-id="'+id+'"]');
             if (el) el.checked = !checked;
           }catch(e){}
         }
@@ -1490,7 +1485,7 @@ function toggleTodo(id, checked){
 
 
 @app.get('/todo', response_class=HTMLResponse)
-def todo_page(response: Response):
+def todo_page(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
     # Read-only: display internal TODOs from DB. Do not accept any commands from this page.
 
@@ -1508,6 +1503,17 @@ def todo_page(response: Response):
 
     def esc(x: str) -> str:
         return pyhtml.escape(str(x or ''))
+
+    show_arch = False
+    try:
+        qp = dict(request.query_params)
+        if (qp.get('arch')=='1') or (qp.get('archived')=='1'):
+            show_arch = True
+    except Exception:
+        pass
+
+    if not show_arch:
+        items = [it for it in items if not it.get('archived')]
 
     # Group by category (free text). Blank -> General.
     groups = {}
@@ -1579,8 +1585,36 @@ def todo_page(response: Response):
       <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
     </div>
   </div>
+  <div class="row" style="justify-content:space-between;margin:12px 0">
+    <div class="muted">
+      <a href="/todo?arch=1" style="margin-right:12px">Show archived</a>
+      <a href="/todo">Hide archived</a>
+    </div>
+    <div>
+      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
+    </div>
+  </div>
   <div class="card">''' + body_html + '''</div>
 <script>
+function archiveDone(){
+  if (!confirm('Archive all completed items?')) return;
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/todos/archive_done_auth',true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange=function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{ location.reload(); }catch(e){}
+        } else {
+          alert('Archive failed');
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){}
+}
+
 function toggleTodo(id, checked){
   try{
     var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
@@ -1592,7 +1626,7 @@ function toggleTodo(id, checked){
         if (xhr.status!==200){
           // revert checkbox on failure
           try{
-            var el = document.querySelector('input[data-id=+id+]');
+            var el = document.querySelector('input[data-id="'+id+'"]');
             if (el) el.checked = !checked;
           }catch(e){}
         }
@@ -1663,6 +1697,17 @@ def api_todos_open(todo_id: int, request: Request):
         db_init(conn)
         set_todo_status_db(conn, todo_id=int(todo_id), status='open')
         return {'ok': True}
+    finally:
+        conn.close()
+
+
+@app.post('/api/todos/archive_done_auth')
+def api_todos_archive_done_auth():
+    conn = db_connect()
+    try:
+        db_init(conn)
+        n = archive_done_todos_db(conn)
+        return {'ok': True, 'archived': n}
     finally:
         conn.close()
 @app.get('/api/ping')

@@ -15,7 +15,7 @@ def list_todos_db(conn, limit: int = 800) -> list[dict[str, Any]]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,category,text,status,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
+        "SELECT id,category,text,status,archived,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
         (int(limit),),
     )
     rows = cur.fetchall()
@@ -25,8 +25,9 @@ def list_todos_db(conn, limit: int = 800) -> list[dict[str, Any]]:
             'category': r[1] or '',
             'text': r[2] or '',
             'status': (r[3] or 'open'),
-            'created_at': r[4],
-            'updated_at': r[5],
+            'archived': bool(r[4]),
+            'created_at': r[5],
+            'updated_at': r[6],
         }
         for r in rows
     ]
@@ -48,7 +49,6 @@ def add_todo_db(conn, text: str, status: str = 'open', category: str = '') -> in
     return int(rid)
 
 
-
 def set_todo_status_db(conn, todo_id: int, status: str) -> None:
     now = _now()
     cur = conn.cursor()
@@ -61,3 +61,20 @@ def set_todo_status_db(conn, todo_id: int, status: str) -> None:
         (str(status or 'open'), now, int(todo_id)),
     )
     conn.commit()
+
+
+def archive_done_todos_db(conn) -> int:
+    """Archive all completed (status != open) todos. Returns count updated."""
+    now = _now()
+    cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
+    cur.execute(
+        "UPDATE sf_todos SET archived=TRUE, updated_at=%s WHERE archived=FALSE AND status<>'open'",
+        (now,),
+    )
+    n = cur.rowcount or 0
+    conn.commit()
+    return int(n)

@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS sf_todos (
   id BIGSERIAL PRIMARY KEY,
   text TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'open',
+  archived BOOLEAN NOT NULL DEFAULT FALSE,
+  category TEXT NOT NULL DEFAULT '',
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
