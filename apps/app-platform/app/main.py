@@ -1875,10 +1875,10 @@ def todo_page(request: Request, response: Response):
                 + "<div class='todoSwipe'><div class='todoSwipeInner'>"
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
-                + "<span class='todoText'>" + txt + "</span>"
                 + "<span class='todoId'>#" + str(int(tid)) + "</span>"
+                + "<span class='todoText'>" + txt + "</span>"
                 + "</label>"
-                + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"deleteTodo(" + str(int(tid)) + " )\">Delete</button></div>"
+                + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"deleteTodo(" + str(int(tid)) + ")\">Delete</button></div>"
                 + "</div></div>"
                 + "</div>"
             )
