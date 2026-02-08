@@ -14,11 +14,28 @@ def list_todos_db(conn, limit: int = 800) -> list[dict[str, Any]]:
         cur.execute("SET statement_timeout = '5000'")
     except Exception:
         pass
-    cur.execute(
-        "SELECT id,category,text,status,archived,highlighted,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
-        (int(limit),),
-    )
-    rows = cur.fetchall()
+    try:
+        cur.execute(
+            "SELECT id,category,text,status,archived,highlighted,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
+            (int(limit),),
+        )
+        rows = cur.fetchall()
+    except Exception as e:
+        # If a deploy hits before migrations, self-heal.
+        msg = str(e)
+        if 'highlighted' in msg and ('does not exist' in msg or 'UndefinedColumn' in msg):
+            try:
+                cur.execute("ALTER TABLE sf_todos ADD COLUMN IF NOT EXISTS highlighted BOOLEAN NOT NULL DEFAULT FALSE")
+                conn.commit()
+            except Exception:
+                pass
+            cur.execute(
+                "SELECT id,category,text,status,archived,highlighted,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
+                (int(limit),),
+            )
+            rows = cur.fetchall()
+        else:
+            raise
     return [
         {
             'id': r[0],
