@@ -26,6 +26,7 @@ from .library_db import (
 from .todos_db import (
     list_todos_db,
     add_todo_db,
+    set_todo_status_db,
 )
 from .voices_db import (
     validate_voice_id,
@@ -62,6 +63,21 @@ app = FastAPI(title=APP_NAME, version="0.1")
 register_passphrase_auth(app)
 register_library_pages(app)
 register_library_viewer(app)
+
+def _todo_api_check(request: Request):
+    # Token-gated write API for the assistant only (no UI writes).
+    token = os.environ.get('TODO_API_TOKEN', '').strip()
+    if not token:
+        return 'disabled'
+    got = (request.headers.get('x-sf-todo-token') or '').strip()
+    if not got:
+        auth = (request.headers.get('authorization') or '').strip()
+        if auth.lower().startswith('bearer '):
+            got = auth[7:].strip()
+    if got != token:
+        return 'unauthorized'
+    return None
+
 
 
 def _h() -> dict[str, str]:
@@ -1455,6 +1471,64 @@ def todo_page(response: Response):
 
 
 
+
+
+@app.post('/api/todos')
+def api_todos_add(request: Request, payload: dict):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    text = (payload or {}).get('text') or ''
+    category = (payload or {}).get('category') or ''
+    status = (payload or {}).get('status') or 'open'
+
+    if not str(text).strip():
+        raise HTTPException(status_code=400, detail='text required')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        tid = add_todo_db(conn, text=str(text).strip(), status=str(status or 'open'), category=str(category or '').strip())
+        return {'ok': True, 'id': tid}
+    finally:
+        conn.close()
+
+
+@app.post('/api/todos/{todo_id}/done')
+def api_todos_done(todo_id: int, request: Request):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        set_todo_status_db(conn, todo_id=int(todo_id), status='done')
+        return {'ok': True}
+    finally:
+        conn.close()
+
+
+@app.post('/api/todos/{todo_id}/open')
+def api_todos_open(todo_id: int, request: Request):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        set_todo_status_db(conn, todo_id=int(todo_id), status='open')
+        return {'ok': True}
+    finally:
+        conn.close()
 @app.get('/api/ping')
 def api_ping():
     r = requests.get(GATEWAY_BASE + '/ping', timeout=4)

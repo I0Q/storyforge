@@ -46,3 +46,18 @@ def add_todo_db(conn, text: str, status: str = 'open', category: str = '') -> in
     rid = cur.fetchone()[0]
     conn.commit()
     return int(rid)
+
+
+
+def set_todo_status_db(conn, todo_id: int, status: str) -> None:
+    now = _now()
+    cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
+    cur.execute(
+        "UPDATE sf_todos SET status=%s, updated_at=%s WHERE id=%s",
+        (str(status or 'open'), now, int(todo_id)),
+    )
+    conn.commit()
