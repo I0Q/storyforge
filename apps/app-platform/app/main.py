@@ -158,6 +158,9 @@ def index(response: Response):
     .tab{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;cursor:pointer}
     .tab.active{background:var(--card);}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .todoItem{display:block;margin:6px 0;line-height:1.35;}
+    .todoItem input{transform:scale(1.1);margin-right:10px;}
+    .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
@@ -276,6 +279,7 @@ def index(response: Response):
     <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
     <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
+      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
             
     </div>
   </div>
@@ -296,6 +300,7 @@ def index(response: Response):
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
+      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
           
         </div>
       </div>
@@ -314,6 +319,7 @@ def index(response: Response):
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
+      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
           <a href='/library/new'><button class='secondary'>New story</button></a>
           
         </div>
@@ -329,6 +335,7 @@ def index(response: Response):
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
+      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
           <button class='secondary' onclick='closeStory()'>Close</button>
         </div>
       </div>
@@ -352,7 +359,7 @@ def index(response: Response):
       <div class='muted'>CRUD for voice metadata (samples can be generated later).</div>
 
       <div class='row' style='margin-top:10px;'>
-        <button class='secondary' onclick='loadVoices()'>Reload voices</button>
+        <a href='/voices/new'><button class='secondary' type='button'>Generate / New</button></a>
       </div>
 
       <div id='voicesList' style='margin-top:10px' class='muted'>Loading…</div>
@@ -367,7 +374,8 @@ def index(response: Response):
       <div style='margin-top:10px'>__VOICE_SERVERS__</div>
     </div>
 
-    <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
+    <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
       <div class='muted'>Hide/show the build + JS error banner.</div>
       <div class='row' style='margin-top:10px;'>
         <button id='dbgToggle' class='secondary' onclick='toggleDebugUi()'>Disable debug</button>
@@ -1240,6 +1248,7 @@ try{
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
+      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
@@ -1289,6 +1298,9 @@ def voices_new_page(response: Response):
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .todoItem{display:block;margin:6px 0;line-height:1.35;}
+    .todoItem input{transform:scale(1.1);margin-right:10px;}
+    .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
@@ -1315,6 +1327,7 @@ def voices_new_page(response: Response):
     </div>
     <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
+      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
       <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
     </div>
   </div>
@@ -1374,6 +1387,28 @@ function saveVoice(){
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
 </script>
+<script>
+function toggleTodo(id, checked){
+  try{
+    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status!==200){
+          // revert checkbox on failure
+          try{
+            var el = document.querySelector('input[data-id=+id+]');
+            if (el) el.checked = !checked;
+          }catch(e){}
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){}
+}
+</script>
 </body>
 </html>'''
 
@@ -1430,7 +1465,13 @@ def todo_page(response: Response):
         for it in its:
             st = (it.get('status') or 'open').lower()
             box = '☐' if st == 'open' else '☑'
-            rows.append(f"<div>{box} {esc(it.get('text') or '')}</div>")
+            tid = it.get('id')
+            txt = esc(it.get('text') or '')
+            if tid is None:
+                rows.append(f"<div>{box} {txt}</div>")
+            else:
+                checked = 'checked' if st != 'open' else ''
+                rows.append(f"<label class='todoItem'><input type='checkbox' data-id='{int(tid)}' onchange='toggleTodo({int(tid)}, this.checked)' {checked}/> <span>{txt}</span></label>")
 
     body_html = "\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
 
@@ -1450,6 +1491,9 @@ def todo_page(response: Response):
     .count{color:var(--muted);font-weight:700;font-size:12px;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .todoItem{display:block;margin:6px 0;line-height:1.35;}
+    .todoItem input{transform:scale(1.1);margin-right:10px;}
+    .todoItem span{vertical-align:middle;}
     .err{color:var(--bad);font-weight:950;margin-top:8px;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
@@ -1466,6 +1510,28 @@ def todo_page(response: Response):
     </div>
   </div>
   <div class="card">''' + body_html + '''</div>
+<script>
+function toggleTodo(id, checked){
+  try{
+    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status!==200){
+          // revert checkbox on failure
+          try{
+            var el = document.querySelector('input[data-id=+id+]');
+            if (el) el.checked = !checked;
+          }catch(e){}
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){}
+}
+</script>
 </body>
 </html>'''
 
