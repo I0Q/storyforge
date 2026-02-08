@@ -775,7 +775,10 @@ def api_metrics_stream():
 
 @app.get('/api/library/stories')
 def api_library_stories():
-    return {'ok': True, 'stories': list_stories()}
+    try:
+        return {'ok': True, 'stories': list_stories()}
+    except Exception as e:
+        return {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
 
 
 @app.get('/api/library/story/{story_id}')
@@ -784,6 +787,8 @@ def api_library_story(story_id: str):
         story = get_story(story_id)
     except FileNotFoundError:
         return Response(content='not found', status_code=404)
+    except Exception as e:
+        return {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
     return {'ok': True, 'story': story}
 
 
