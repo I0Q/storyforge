@@ -1458,6 +1458,7 @@ function toggleTodo(id, checked){
     var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
     var xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
+    xhr.withCredentials = true;
     xhr.setRequestHeader('Content-Type','application/json');
     xhr.onreadystatechange = function(){
       if (xhr.readyState===4){
@@ -1620,6 +1621,7 @@ function toggleTodo(id, checked){
     var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
     var xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
+    xhr.withCredentials = true;
     xhr.setRequestHeader('Content-Type','application/json');
     xhr.onreadystatechange = function(){
       if (xhr.readyState===4){
@@ -1667,6 +1669,29 @@ def api_todos_add(request: Request, payload: dict = Body(default={})):
         conn.close()
 
 
+
+
+@app.post('/api/todos/{todo_id}/done_auth')
+def api_todos_done_auth(todo_id: int):
+    # Requires passphrase session auth (middleware).
+    conn = db_connect()
+    try:
+        db_init(conn)
+        set_todo_status_db(conn, todo_id=int(todo_id), status='done')
+        return {'ok': True}
+    finally:
+        conn.close()
+
+
+@app.post('/api/todos/{todo_id}/open_auth')
+def api_todos_open_auth(todo_id: int):
+    conn = db_connect()
+    try:
+        db_init(conn)
+        set_todo_status_db(conn, todo_id=int(todo_id), status='open')
+        return {'ok': True}
+    finally:
+        conn.close()
 @app.post('/api/todos/{todo_id}/done')
 def api_todos_done(todo_id: int, request: Request):
     err = _todo_api_check(request)
