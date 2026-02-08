@@ -31,7 +31,7 @@ def db_init_stories(conn) -> None:
 
     cur.execute(
         """
-CREATE TABLE IF NOT EXISTS stories (
+CREATE TABLE IF NOT EXISTS sf_stories (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
@@ -53,7 +53,7 @@ def list_stories_db(conn, limit: int = 500) -> list[dict[str, Any]]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,title,description,tags,updated_at FROM stories ORDER BY updated_at DESC LIMIT %s",
+        "SELECT id,title,description,tags,updated_at FROM sf_stories ORDER BY updated_at DESC LIMIT %s",
         (int(limit),),
     )
     rows = cur.fetchall()
@@ -85,7 +85,7 @@ def get_story_db(conn, story_id: str) -> dict[str, Any]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,title,description,tags,story_md,characters,created_at,updated_at FROM stories WHERE id=%s",
+        "SELECT id,title,description,tags,story_md,characters,created_at,updated_at FROM sf_stories WHERE id=%s",
         (story_id,),
     )
     r = cur.fetchone()
@@ -139,7 +139,7 @@ def upsert_story_db(
 
     cur.execute(
         """
-INSERT INTO stories (id,title,description,tags,story_md,characters,created_at,updated_at)
+INSERT INTO sf_stories (id,title,description,tags,story_md,characters,created_at,updated_at)
 VALUES (%s,%s,%s,%s::jsonb,%s,%s::jsonb,%s,%s)
 ON CONFLICT (id) DO UPDATE SET
   title=EXCLUDED.title,
@@ -169,5 +169,5 @@ def delete_story_db(conn, story_id: str) -> None:
         cur.execute("SET statement_timeout = '5000'")
     except Exception:
         pass
-    cur.execute("DELETE FROM stories WHERE id=%s", (story_id,))
+    cur.execute("DELETE FROM sf_stories WHERE id=%s", (story_id,))
     conn.commit()

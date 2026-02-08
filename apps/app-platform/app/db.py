@@ -23,8 +23,9 @@ def db_init(conn) -> None:
     cur.execute('CREATE TABLE IF NOT EXISTS metrics_samples (\n  ts BIGINT PRIMARY KEY,\n  payload_json TEXT NOT NULL\n);')
 
     # Story Library (text-only) stored in managed Postgres
+    # Use a non-generic table name to avoid collisions with any existing pg_type/name.
     cur.execute("""
-CREATE TABLE IF NOT EXISTS stories (
+CREATE TABLE IF NOT EXISTS sf_stories (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
