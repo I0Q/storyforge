@@ -98,6 +98,75 @@ def register_library_viewer(app: FastAPI) -> None:
 window.__STORY_ID = {story_id!r};
 
 function $(id){{ return document.getElementById(id); }}
+
+// --- Toasts (persist across fast navigation via localStorage) ---
+function toastSet(msg, kind, ms){{
+  try{{
+    localStorage.setItem('sf_toast_msg', String(msg||''));
+    localStorage.setItem('sf_toast_kind', String(kind||'info'));
+    localStorage.setItem('sf_toast_until', String(Date.now() + (ms||2600)));
+  }}catch(e){{}}
+}}
+
+function toastShowNow(msg, kind, ms){{
+  toastSet(msg, kind, ms);
+  try{{ window.__sfToastInit && window.__sfToastInit(); }}catch(e){{}}
+}}
+
+function __sfToastInit(){{
+  // Create container once
+  var el = document.getElementById('sfToast');
+  if (!el){{
+    el = document.createElement('div');
+    el.id = 'sfToast';
+    el.style.position='fixed';
+    el.style.left='12px';
+    el.style.right='12px';
+    el.style.bottom='calc(12px + env(safe-area-inset-bottom, 0px))';
+    el.style.zIndex='99999';
+    el.style.padding='10px 12px';
+    el.style.border='1px solid rgba(255,255,255,0.10)';
+    el.style.borderRadius='12px';
+    el.style.background='rgba(20,22,30,0.96)';
+    el.style.backdropFilter='blur(6px)';
+    el.style.webkitBackdropFilter='blur(6px)';
+    el.style.fontSize='14px';
+    el.style.display='none';
+    el.style.boxShadow='0 12px 40px rgba(0,0,0,0.35)';
+    el.onclick = function(){{ try{{ el.style.display='none'; toastSet('', 'info', 0); }}catch(e){{}} }};
+    document.body.appendChild(el);
+  }}
+
+  var msg='', kind='info', until=0;
+  try{{
+    msg = localStorage.getItem('sf_toast_msg') || '';
+    kind = localStorage.getItem('sf_toast_kind') || 'info';
+    until = parseInt(localStorage.getItem('sf_toast_until') || '0', 10) || 0;
+  }}catch(e){{}}
+
+  if (!msg || Date.now() > until){{
+    el.style.display='none';
+    return;
+  }}
+
+  // color accent
+  var border = 'rgba(255,255,255,0.10)';
+  if (kind==='ok') border='rgba(80,200,120,0.35)';
+  else if (kind==='err') border='rgba(255,90,90,0.35)';
+  el.style.borderColor = border;
+
+  el.textContent = msg;
+  el.style.display = 'block';
+
+  // auto-hide
+  if (window.__sfToastTimer) clearTimeout(window.__sfToastTimer);
+  window.__sfToastTimer = setTimeout(function(){{
+    try{{ el.style.display='none'; }}catch(e){{}}
+  }}, Math.max(200, until - Date.now()));
+}}
+window.__sfToastInit = __sfToastInit;
+try{{ document.addEventListener('DOMContentLoaded', __sfToastInit); }}catch(e){{}}
+
 var saveTimer = null;
 var saving = false;
 
@@ -178,6 +247,7 @@ function doSave(){{
       $('mdRender').innerHTML = renderMdSimple(payload.story_md);
     }}
     setStatus('Saved');
+    toastShowNow('Saved', 'ok', 2600);
     saving=false;
   }}).catch(function(_e){{
     setStatus('Error');
