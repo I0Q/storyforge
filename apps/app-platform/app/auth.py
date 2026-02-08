@@ -88,11 +88,6 @@ def register_passphrase_auth(app: FastAPI) -> None:
         if request.url.path in ("/login", "/logout", "/ping"):
             return await call_next(request)
 
-        # TEMP: allow unauthenticated access to library list for debugging.
-        # Remove after confirming iOS client can load the library.
-        if request.url.path == '/api/library/stories':
-            return await call_next(request)
-
         if _is_session_authed(request):
             return await call_next(request)
 
