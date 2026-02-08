@@ -15,23 +15,24 @@ def list_todos_db(conn, limit: int = 800) -> list[dict[str, Any]]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,text,status,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
+        "SELECT id,category,text,status,created_at,updated_at FROM sf_todos ORDER BY id DESC LIMIT %s",
         (int(limit),),
     )
     rows = cur.fetchall()
     return [
         {
             'id': r[0],
-            'text': r[1] or '',
-            'status': (r[2] or 'open'),
-            'created_at': r[3],
-            'updated_at': r[4],
+            'category': r[1] or '',
+            'text': r[2] or '',
+            'status': (r[3] or 'open'),
+            'created_at': r[4],
+            'updated_at': r[5],
         }
         for r in rows
     ]
 
 
-def add_todo_db(conn, text: str, status: str = 'open') -> int:
+def add_todo_db(conn, text: str, status: str = 'open', category: str = '') -> int:
     now = _now()
     cur = conn.cursor()
     try:
@@ -39,9 +40,53 @@ def add_todo_db(conn, text: str, status: str = 'open') -> int:
     except Exception:
         pass
     cur.execute(
-        "INSERT INTO sf_todos (text,status,created_at,updated_at) VALUES (%s,%s,%s,%s) RETURNING id",
-        (str(text or '').strip(), str(status or 'open'), now, now),
+        "INSERT INTO sf_todos (category,text,status,created_at,updated_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+        (str(category or '').strip(), str(text or '').strip(), str(status or 'open'), now, now),
     )
     rid = cur.fetchone()[0]
     conn.commit()
     return int(rid)
+
+
+def bootstrap_todos_from_markdown(conn, md_text: str) -> int:
+    """Best-effort one-time import of TODO.md into sf_todos.
+
+    - Heading lines: "## X" -> category "X" (free text)
+    - Items:
+      - "- [ ] text" -> status=open
+      - "- [x] text" -> status=done
+
+    Returns number of inserted rows.
+    """
+
+    if not md_text:
+        return 0
+
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(1) FROM sf_todos')
+    n = int(cur.fetchone()[0] or 0)
+    if n > 0:
+        return 0
+
+    cat = ''
+    inserted = 0
+    for raw in md_text.splitlines():
+        line = (raw or '').strip()
+        if line.startswith('## '):
+            cat = line[3:].strip()
+            continue
+
+        status = None
+        text = None
+        if line.startswith('- [ ] '):
+            status = 'open'
+            text = line[6:]
+        elif line.lower().startswith('- [x] '):
+            status = 'done'
+            text = line[6:]
+
+        if status and text and text.strip():
+            add_todo_db(conn, text=text.strip(), status=status, category=cat)
+            inserted += 1
+
+    return inserted

@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS sf_todos (
 """
     )
 
+    # Ensure schema has category (free-text)
+    try:
+        cur.execute("ALTER TABLE sf_todos ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+
     conn.commit()
 
 

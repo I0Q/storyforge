@@ -26,6 +26,7 @@ from .library_db import (
 from .todos_db import (
     list_todos_db,
     add_todo_db,
+    bootstrap_todos_from_markdown,
 )
 from .voices_db import (
     validate_voice_id,
@@ -1366,6 +1367,7 @@ function saveVoice(){
 
 
 
+
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -1377,39 +1379,44 @@ def todo_page(response: Response):
         conn = db_connect()
         try:
             db_init(conn)
+            # If DB is empty, import from TODO.md (one-time bootstrap)
+            try:
+                todo_path = Path(__file__).resolve().parents[1] / 'TODO.md'
+                txt = todo_path.read_text('utf-8')
+                bootstrap_todos_from_markdown(conn, txt)
+            except Exception:
+                pass
             items = list_todos_db(conn, limit=800)
         finally:
             conn.close()
     except Exception as e:
         err = f"db_failed: {type(e).__name__}: {e}"
 
-    # fallback to TODO.md if DB empty/unavailable
-    if not items:
-        todo_path = Path(__file__).resolve().parents[1] / 'TODO.md'
-        try:
-            txt = todo_path.read_text('utf-8')
-            for line in (txt or '').splitlines():
-                t = line.strip()
-                if t.startswith('- [ ] '):
-                    items.append({'id': None, 'text': t[6:], 'status': 'open'})
-                elif t.lower().startswith('- [x] '):
-                    items.append({'id': None, 'text': t[6:], 'status': 'done'})
-        except Exception as e:
-            if not err:
-                err = f"file_failed: {type(e).__name__}: {e}"
-
     def esc(x: str) -> str:
         return pyhtml.escape(str(x or ''))
+
+    # Group by category (free text). Blank -> General.
+    groups = {}
+    order = []
+    for it in items:
+        cat = (it.get('category') or '').strip() or 'General'
+        if cat not in groups:
+            groups[cat] = []
+            order.append(cat)
+        groups[cat].append(it)
 
     rows = []
     if err:
         rows.append(f"<div class='err'>{esc(err)}</div>")
-    for it in items:
-        st = (it.get('status') or 'open').lower()
-        box = '☐' if st == 'open' else '☑'
-        rows.append(f"<div>{box} {esc(it.get('text') or '')}</div>")
 
-    body_html = "\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
+    for cat in order:
+        rows.append(f"<h2>{esc(cat)}</h2>")
+        for it in groups.get(cat, []):
+            st = (it.get('status') or 'open').lower()
+            box = '☐' if st == 'open' else '☑'
+            rows.append(f"<div>{box} {esc(it.get('text') or '')}</div>")
+
+    body_html = "\\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
 
     return '''<!doctype html>
 <html>
@@ -1423,6 +1430,7 @@ def todo_page(response: Response):
     a{color:var(--accent);text-decoration:none}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     h1{font-size:20px;margin:0;}
+    h2{font-size:16px;margin:18px 0 8px 0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .err{color:var(--bad);font-weight:950;margin-top:8px;}
