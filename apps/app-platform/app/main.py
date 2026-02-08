@@ -91,7 +91,15 @@ def index(response: Response):
             # Tinybox-specific monitor toggle lives inline with the Tinybox server item.
             mon_btn = ""
             if nm_raw.lower() == "tinybox":
-                mon_btn = "<div class='row' style='margin-top:10px'><button id='monToggle' class='secondary' onclick='toggleMonitor()'>Disable monitor</button></div>"
+                mon_btn = (
+                    "<div class='row' style='justify-content:space-between;margin-top:10px'>"
+                    "<div class='muted' style='font-weight:950'>System monitoring</div>"
+                    "<label class='switch'>"
+                    "<input id='monToggleChk' type='checkbox' onchange='toggleMonitor()' />"
+                    "<span class='slider'></span>"
+                    "</label>"
+                    "</div>"
+                )
 
             vs_items.append(
                 "<div class='job'>"
@@ -153,6 +161,13 @@ def index(response: Response):
     .copyBtn:hover{background:rgba(255,255,255,0.06);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
+
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
 
     /* bottom dock */
     .dock{display:none;position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
@@ -245,10 +260,10 @@ def index(response: Response):
   </div>
 
   <div class='tabs'>
-    <button id='tab-history' class='tab active' onclick='showTab("history")'>History</button>
+    <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
     <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
     <button id='tab-voices' class='tab' onclick='showTab("voices")'>Voices</button>
-        <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Advanced</button>
+        <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Settings</button>
   </div>
 
   <div id='pane-history'>
@@ -317,17 +332,6 @@ def index(response: Response):
       </div>
 
       <div id='voicesList' style='margin-top:10px' class='muted'>Loading…</div>
-
-      <div style='font-weight:950;margin-top:12px;'>Add voice</div>
-      <div class='kvs' style='margin-top:8px'>
-        <div class='k'>id</div><div><input id='v_id' placeholder='mira' /></div>
-        <div class='k'>name</div><div><input id='v_name' placeholder='Mira' /></div>
-        <div class='k'>engine</div><div><input id='v_engine' placeholder='xtts' /></div>
-        <div class='k'>voice_ref</div><div><input id='v_ref' placeholder='speaker_12 / provider id' /></div>
-      </div>
-      <div class='row' style='margin-top:10px;'>
-        <button onclick='createVoice()'>Create</button>
-      </div>
     </div>
   </div>
 
@@ -704,6 +708,8 @@ function setMonitorEnabled(on){
   const backdrop = document.getElementById('monitorBackdrop');
   const sheet = document.getElementById('monitorSheet');
   const btn = document.getElementById('monToggle');
+  const chk = document.getElementById('monToggleChk');
+  if (chk) chk.checked = !!monitorEnabled;
 
   try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
 
@@ -814,10 +820,17 @@ function playVoiceEl(btn){
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
     var id = decodeURIComponent(idEnc||'');
     if (!id) return;
+    var a = document.getElementById('aud-' + idEnc);
+    if (a && a.src){
+      try{ a.play(); }catch(e){}
+      return;
+    }
+    // If no sample yet, generate then play.
     return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id) + '/sample', {method:'POST'})
       .then(function(j){
         if (j && j.ok && j.sample_url){
-          try{ window.location.href = j.sample_url; }catch(e){}
+          var a2 = document.getElementById('aud-' + idEnc);
+          if (a2){ a2.src = j.sample_url; a2.classList.remove('hide'); try{ a2.play(); }catch(e){} }
           return loadVoices();
         }
         alert((j && j.error) ? j.error : 'Play failed');
@@ -826,6 +839,24 @@ function playVoiceEl(btn){
 }
 
 function genSampleEl(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    var id = decodeURIComponent(idEnc||'');
+    if (!id) return;
+    return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id) + '/sample', {method:'POST'})
+      .then(function(j){
+        if (j && j.ok && j.sample_url){
+          var a = document.getElementById('aud-' + idEnc);
+          if (a){ a.src = j.sample_url; a.classList.remove('hide'); }
+          try{ toastSet('Sample generated', 'ok', 2000); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+          return loadVoices();
+        }
+        alert((j && j.error) ? j.error : 'Generate failed');
+      }).catch(function(e){ alert(String(e)); });
+  }catch(e){}
+}
+
+function renameVoiceEl(btn){
   try{
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
     var id = decodeURIComponent(idEnc||'');
@@ -1238,6 +1269,13 @@ def voices_new_page(response: Response):
     .kvs div.k{color:var(--muted)}
     audio{width:100%;margin-top:10px;}
     .hide{display:none}
+
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
     .err{color:var(--bad);font-weight:950;margin-top:10px;}
   </style>
 </head>
