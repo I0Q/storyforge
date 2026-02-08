@@ -149,7 +149,13 @@ def index(response: Response):
     body.monOff #monitorSheet{display:none}
     a{color:var(--accent);text-decoration:none}
     code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .boot{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
@@ -280,9 +286,10 @@ def index(response: Response):
   </script>
 </head>
 <body>
+  <div class='navBar'>
   <div class='top'>
     <div>
-      <h1>StoryForge</h1>
+      <div class='brandRow'><h1>StoryForge</h1><div id='pageName' class='pageName'>Jobs</div></div>
       <div class='muted'>Cloud control plane (App Platform) + Tinybox compute via VPC gateway.</div>
     </div>
     <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
@@ -298,11 +305,15 @@ def index(response: Response):
     </div>
   </div>
 
+  </div>
+
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
     <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
     <button id='tab-voices' class='tab' onclick='showTab("voices")'>Voices</button>
         <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Settings</button>
+  </div>
+
   </div>
 
   <div id='pane-history'>
@@ -488,6 +499,8 @@ function showTab(name, opts){
       if (window.location.hash !== h) window.location.hash = h;
     }
   }catch(_e){}
+
+  try{ var pn=document.getElementById('pageName'); if(pn){ pn.textContent = (name==='history'?'Jobs':(name==='library'?'Library':(name==='voices'?'Voices':'Settings'))); } }catch(e){}
 
   // lazy-load tab content
   try{
@@ -1393,13 +1406,14 @@ def voices_edit_page(voice_id: str, response: Response):
     <div class='left'>
       <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
       <div>
-        <h1>Edit Voice</h1>
+        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
     </div>
     <div class='row'>
       <a href='/logout'><button class='secondary' type='button'>Logout</button></a>
     </div>
+  </div>
   </div>
 
   <div class='card'>
@@ -1446,7 +1460,13 @@ def voices_new_page(response: Response):
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
     a{color:var(--accent);text-decoration:none}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
@@ -1480,9 +1500,10 @@ def voices_new_page(response: Response):
   </style>
 </head>
 <body>
+  <div class='navBar'>
   <div class='top'>
     <div>
-      <h1>Generate / New Voice</h1>
+      <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Generate voice</div></div>
       <div class='muted'>Test a voice sample before saving it to the roster.</div>
     </div>
     <div class='row' style='justify-content:flex-end;'>
@@ -1490,6 +1511,7 @@ def voices_new_page(response: Response):
       
       <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
     </div>
+  </div>
   </div>
 
   <div class='card'>
@@ -1748,7 +1770,13 @@ def todo_page(request: Request, response: Response):
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
     a{color:var(--accent);text-decoration:none}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .err{color:var(--bad);font-weight:950;margin:10px 0;}
@@ -1778,13 +1806,16 @@ def todo_page(request: Request, response: Response):
   </style>
 </head>
 <body>
-  <div class="top">
-    <div>
-      <h1>TODO</h1>
-      <div class="muted">Internal tracker (check/uncheck requires login).</div>
-    </div>
-    <div>
-      <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
+  <div class="navBar">
+    <div class="top">
+      <div>
+        <div class="brandRow"><h1>StoryForge</h1><div class="pageName">TODO</div></div>
+        <div class="muted">Internal tracker (check/uncheck requires login).</div>
+      </div>
+      <div class="right">
+        <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
+        <a href="/logout"><button class="secondary" type="button">Logout</button></a>
+      </div>
     </div>
   </div>
 
