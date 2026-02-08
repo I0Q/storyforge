@@ -502,7 +502,14 @@ function loadLibrary(){
       el.innerHTML = stories.map(st => {
     var tags = Array.isArray(st.tags) ? st.tags : [];
     var tagHtml = tags.map(function(t){ return "<span class='pill'>" + t + "</span>"; }).join(' ');
-    return '<a href="/library/story/' + encodeURIComponent(st.id) + '/view" style="text-decoration:none;color:inherit">' +'<div class="job">' +'<div class="row" style="justify-content:space-between;">' +'<div class="title">' + (st.title || st.id) + '</div>' +'<div class="pill">' + st.id + '</div>' +'</div>' (tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '') +'</div></a>';
+    return '<a href="/library/story/' + encodeURIComponent(st.id) + '/view" style="text-decoration:none;color:inherit">'
+      + '<div class="job">'
+      + '<div class="row" style="justify-content:space-between;">'
+      + '<div class="title">' + (st.title || st.id) + '</div>'
+      + '<div class="pill">' + st.id + '</div>'
+      + '</div>'
+      + (tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '')
+      + '</div></a>';
     }).join('');
   }).catch(function(e){
     el.innerHTML = `<div class='muted'>Error loading library: ${String(e)}</div>`;
