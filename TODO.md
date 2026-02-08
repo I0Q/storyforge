@@ -18,6 +18,7 @@
 - [ ] Add Story swatch editing (viewer + DB)
 
 ## Story editor
+- [ ] Story details: add tabbed navigation (Story default + Characters tab)
 - [ ] Story details: add fields used by pipeline (voice selection, etc.)
 - [ ] Character extraction tooling
 
