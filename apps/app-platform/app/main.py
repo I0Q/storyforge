@@ -280,7 +280,7 @@ function renderProc(m){
       right
     ].join(' '));
   }
-  el.textContent = lines.join('\\\\n');
+  el.textContent = lines.join(String.fromCharCode(10));
 }
 
 function startMetricsStream(){
