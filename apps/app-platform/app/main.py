@@ -239,7 +239,7 @@ async function fetchJsonAuthed(url, opts){
 }
 
 
-function copyToClipboard(text){
+async function copyToClipboard(text){
   try{
     await navigator.clipboard.writeText(text);
   }catch(e){
@@ -264,8 +264,13 @@ function fmtTs(ts){
 async function loadHistory(){
   const el=document.getElementById('jobs');
   el.textContent='Loading…';
-  const r=await fetch('/api/history?limit=60');
-  const j=await r.json();
+  let j;
+  try{
+    j = await fetchJsonAuthed('/api/history?limit=60');
+  }catch(e){
+    el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
+    return;
+  }
   if (!j.ok){
     el.innerHTML=`<div class='muted'>Error: ${j.error||'unknown'}</div>`;
     return;
