@@ -9,7 +9,7 @@ import time
 import html as pyhtml
 
 import requests
-from fastapi import FastAPI
+from fastapi import Body, FastAPI, HTTPException, Request
 
 from .auth import register_passphrase_auth
 from .library_pages import register_library_pages
@@ -1474,7 +1474,7 @@ def todo_page(response: Response):
 
 
 @app.post('/api/todos')
-def api_todos_add(request: Request, payload: dict):
+def api_todos_add(request: Request, payload: dict = Body(default={})): 
     err = _todo_api_check(request)
     if err == 'disabled':
         raise HTTPException(status_code=503, detail='todo api disabled')
