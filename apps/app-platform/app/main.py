@@ -899,6 +899,7 @@ function fmtPct(x){
 
 function openMonitor(){
   if (!monitorEnabled) return;
+  try{ bindMonitorClose(); }catch(e){}
   var b=document.getElementById('monitorBackdrop'); if (b) b.classList.remove('hide');
   var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.remove('hide');
   document.body.classList.add('noScroll');
@@ -919,6 +920,21 @@ function closeMonitorEv(ev){
   closeMonitor();
   return false;
 }
+
+
+// iOS Safari sometimes misses click events on fixed sheets; bind touchend as well.
+function bindMonitorClose(){
+  try{
+    var btn = document.getElementById('monCloseBtn');
+    if (btn && !btn.__bound){
+      btn.__bound = true;
+      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
+      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
+    }
+  }catch(e){}
+}
+try{ document.addEventListener('DOMContentLoaded', bindMonitorClose); }catch(e){}
+try{ bindMonitorClose(); }catch(e){}
 
 function renderGpus(b){
   const el = document.getElementById('monGpus');
@@ -1065,7 +1081,7 @@ try{
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
         <div class='row'>
-          <button class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
+          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
 
