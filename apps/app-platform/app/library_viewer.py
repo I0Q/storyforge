@@ -122,7 +122,7 @@ function renderTagPills(tags){{
 }}
 
 function renderMdSimple(md){{
-  var lines = String(md||'').split('\n');
+  var lines = String(md||'').split('\\n');
   var out=[];
   for (var i=0;i<lines.length;i++){{
     var line=lines[i];
@@ -132,7 +132,7 @@ function renderMdSimple(md){{
     else if (line.trim()==='') out.push('');
     else out.push('<p>'+escapeHtml(line)+'</p>');
   }}
-  return out.join('\n');
+  return out.join('\\n');
 }}
 
 function scheduleSave(ms){{
