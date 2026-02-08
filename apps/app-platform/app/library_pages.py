@@ -84,12 +84,15 @@ def register_library_pages(app: FastAPI) -> None:
 
         items = "".join(
             [
-                f"<div class='job'><div class='row' style='justify-content:space-between;'>"
+                f"<div class='job'>"
+                f"<div class='row' style='justify-content:space-between;'>"
                 f"<div style='font-weight:950'>{s['title']}</div>"
-                f"<div class='pill'>{s['id']}</div></div>"
-                                f"<div class='row' style='margin-top:10px'>"
-                f"<a href='/library/story/{s['id']}/view'><button class='secondary'>View</button></a> <a href='/library/story/{s['id']}'><button class='secondary'>Edit</button></a>"
-                f"</div></div>"
+                f"</div>"  # end header row
+                f"<div class='row' style='margin-top:10px'>"
+                f"<a href='/library/story/{s['id']}/view'><button class='secondary'>View</button></a> "
+                f"<a href='/library/story/{s['id']}'><button class='secondary'>Edit</button></a>"
+                f"</div>"  # end button row
+                f"</div>"  # end job
                 for s in stories
             ]
         )
@@ -144,8 +147,7 @@ def register_library_pages(app: FastAPI) -> None:
 
 <div class='card'>
   <form method='post' action='/library/new'>
-    <div class='k'>ID (lowercase, digits, - or _)</div>
-    <input name='id' placeholder='maris-lighthouse' required />
+    <input type='hidden' name='id' id='idHidden' value='' />
 
     <div class='k'>Title</div>
     <input name='title' placeholder='Maris and the Lighthouse' required />
@@ -159,7 +161,7 @@ def register_library_pages(app: FastAPI) -> None:
         x = x.slice(0,64);
         return x || 'story';
       }}
-      var idEl = document.getElementsByName('id')[0];
+      var idEl = document.getElementById('idHidden');
       var titleEl = document.getElementsByName('title')[0];
       if (!idEl || !titleEl) return;
       var touched = false;
@@ -236,7 +238,6 @@ def register_library_pages(app: FastAPI) -> None:
 <div class='top'>
   <div>
     <h1>{meta.get('title') or story_id}</h1>
-    <div class='muted'><span class='pill'>{story_id}</span></div>
   </div>
   <div class='row'>
     <a href='/?tab=library'><button class='secondary'>Back</button></a>

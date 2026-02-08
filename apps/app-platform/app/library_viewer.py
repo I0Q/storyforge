@@ -254,7 +254,6 @@ if ($('mdCode')) {{
                 "    <div id='titleEdit' class='hide' style='margin-top:8px'>",
                 f"      <input id='titleInput' value='{title_txt}' />",
                 "    </div>",
-                f"    <div class='muted'><span class='pill'>{html.escape(story_id)}</span></div>",
                 "  </div>",
                 "  <div class='row'>",
                 "    <a href='/?tab=library'><button class='secondary' type='button'>Back</button></a>",
