@@ -279,7 +279,12 @@ def index(response: Response):
     <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
     <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
+      <div class='menuWrap'>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <div id='topMenu' class='menu'>
+          <a href='/logout'>Logout</a>
+        </div>
+      </div>
             
     </div>
   </div>
@@ -300,7 +305,12 @@ def index(response: Response):
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
+      <div class='menuWrap'>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <div id='topMenu' class='menu'>
+          <a href='/logout'>Logout</a>
+        </div>
+      </div>
           
         </div>
       </div>
@@ -319,7 +329,12 @@ def index(response: Response):
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
+      <div class='menuWrap'>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <div id='topMenu' class='menu'>
+          <a href='/logout'>Logout</a>
+        </div>
+      </div>
           <a href='/library/new'><button class='secondary'>New story</button></a>
           
         </div>
@@ -335,7 +350,12 @@ def index(response: Response):
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
+      <div class='menuWrap'>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <div id='topMenu' class='menu'>
+          <a href='/logout'>Logout</a>
+        </div>
+      </div>
           <button class='secondary' onclick='closeStory()'>Close</button>
         </div>
       </div>
@@ -558,6 +578,22 @@ function copyToClipboard(text){
     ta.remove();
   }
 }
+
+function toggleMenu(){
+  var m=document.getElementById('topMenu');
+  if (!m) return;
+  if (m.classList.contains('show')) m.classList.remove('show');
+  else m.classList.add('show');
+}
+
+document.addEventListener('click', function(ev){
+  try{
+    var m=document.getElementById('topMenu');
+    if (!m) return;
+    var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
+    if (!w) m.classList.remove('show');
+  }catch(e){}
+});
 
 function copyBoot(){
   try{
@@ -1248,7 +1284,12 @@ try{
         </div>
         <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
+      <div class='menuWrap'>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <div id='topMenu' class='menu'>
+          <a href='/logout'>Logout</a>
+        </div>
+      </div>
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
@@ -1327,7 +1368,12 @@ def voices_new_page(response: Response):
     </div>
     <div class='row'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <a id='logoutBtn' href='/logout'><button class='secondary' type='button'>Logout</button></a>
+      <div class='menuWrap'>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <div id='topMenu' class='menu'>
+          <a href='/logout'>Logout</a>
+        </div>
+      </div>
       <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
     </div>
   </div>
