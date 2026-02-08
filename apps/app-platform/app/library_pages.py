@@ -30,7 +30,20 @@ def _html_page(title: str, body: str) -> str:
     body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}}
     a{{color:var(--accent);text-decoration:none}}
     code,pre,textarea{{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}}
+    .navBar{{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}}
     .top{{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}}
+    .brandRow{{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}}
+    .pageName{{color:var(--muted);font-weight:900;font-size:12px;}}
+    .menuWrap{{position:relative;display:inline-block;}}
+    .userBtn{{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}}
+    .userBtn:hover{{background:rgba(255,255,255,0.06);}}
+    .menuCard{{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}}
+    .menuCard.show{{display:block;}}
+    .menuCard .uTop{{display:flex;gap:10px;align-items:center;margin-bottom:10px;}}
+    .menuCard .uAvatar{{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}}
+    .menuCard .uName{{font-weight:950;}}
+    .menuCard .uSub{{color:var(--muted);font-size:12px;margin-top:2px;}}
+    .menuCard .uActions{{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}}
     h1{{font-size:20px;margin:0;}}
     .muted{{color:var(--muted);font-size:12px;}}
     .card{{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}}
@@ -48,6 +61,22 @@ def _html_page(title: str, body: str) -> str:
 </head>
 <body>
 {body}
+<script>
+function toggleUserMenu(){{
+  var m=document.getElementById('topMenu');
+  if(!m) return;
+  if(m.classList.contains('show')) m.classList.remove('show');
+  else m.classList.add('show');
+}}
+document.addEventListener('click', function(ev){{
+  try{{
+    var m=document.getElementById('topMenu');
+    if(!m) return;
+    var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
+    if(!w) m.classList.remove('show');
+  }}catch(e){{}}
+}});
+</script>
 </body>
 </html>"""
 
@@ -105,6 +134,47 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='row' style='justify-content:flex-end'>
       <a href='/#tab-library'><button class='secondary'>Back</button></a>
       <a href='/library/new'><button>New story</button></a>
+      <div class='menuWrap'>
+        <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
+          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+          </svg>
+        </button>
+        <div id='topMenu' class='menuCard'>
+          <div class='uTop'>
+            <div class='uAvatar'>
+              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+              </svg>
+            </div>
+            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
+          </div>
+          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
+        </div>
+      </div>
+
+      <div class='menuWrap'>
+        <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
+          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+          </svg>
+        </button>
+        <div id='topMenu' class='menuCard'>
+          <div class='uTop'>
+            <div class='uAvatar'>
+              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+              </svg>
+            </div>
+            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
+          </div>
+          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -139,6 +209,27 @@ def register_library_pages(app: FastAPI) -> None:
     </div>
     <div class='row' style='justify-content:flex-end'>
       <a href='/#tab-library'><button class='secondary'>Back</button></a>
+      <div class='menuWrap'>
+        <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
+          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+          </svg>
+        </button>
+        <div id='topMenu' class='menuCard'>
+          <div class='uTop'>
+            <div class='uAvatar'>
+              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+              </svg>
+            </div>
+            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
+          </div>
+          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
