@@ -645,16 +645,17 @@ function updateMonitorFromMetrics(m){
     updateDockFromMetrics(m);
 }
 
-async function tts(){
-  const payload = {
+function tts(){
+  var payload = {
     engine: document.getElementById('engine').value,
     voice: document.getElementById('voice').value,
     text: document.getElementById('text').value,
     upload: true,
   };
-  const r = await fetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-  const t = await r.text();
-  document.getElementById('ttsout').textContent = t;
+  return fetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(r){ return r.text(); })
+    .then(function(t){ document.getElementById('ttsout').textContent = t; })
+    .catch(function(e){ document.getElementById('ttsout').textContent = String(e); });
 }
 
 refreshAll();
