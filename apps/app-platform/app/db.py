@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS sf_stories (
     except Exception:
         pass
 
+    # Voices roster (metadata; samples may be generated externally)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_voices (
+  id TEXT PRIMARY KEY,
+  engine TEXT NOT NULL DEFAULT '',
+  voice_ref TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  sample_text TEXT NOT NULL DEFAULT '',
+  sample_url TEXT NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
+
     conn.commit()
 
 

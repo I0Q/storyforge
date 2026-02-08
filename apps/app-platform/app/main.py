@@ -23,6 +23,14 @@ from .library_db import (
     upsert_story_db,
     validate_story_id,
 )
+from .voices_db import (
+    validate_voice_id,
+    list_voices_db,
+    get_voice_db,
+    upsert_voice_db,
+    set_voice_enabled_db,
+    delete_voice_db,
+)
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi import Response
 
@@ -276,7 +284,30 @@ def index(response: Response):
     </div>
 
     <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
+      
+    <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Voices</div>
+      <div class='muted'>CRUD for voice metadata (samples can be generated later).</div>
+
+      <div class='row' style='margin-top:10px;'>
+        <button class='secondary' onclick='loadVoices()'>Reload voices</button>
+      </div>
+
+      <div id='voicesList' style='margin-top:10px' class='muted'>—</div>
+
+      <div style='font-weight:950;margin-top:12px;'>Add voice</div>
+      <div class='kvs' style='margin-top:8px'>
+        <div class='k'>id</div><div><input id='v_id' placeholder='mira' /></div>
+        <div class='k'>name</div><div><input id='v_name' placeholder='Mira' /></div>
+        <div class='k'>engine</div><div><input id='v_engine' placeholder='xtts' /></div>
+        <div class='k'>voice_ref</div><div><input id='v_ref' placeholder='speaker_12 / provider id' /></div>
+      </div>
+      <div class='row' style='margin-top:10px;'>
+        <button onclick='createVoice()'>Create</button>
+      </div>
+    </div>
+
+<div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
       <div class='muted'>Hide/show the build + JS error banner.</div>
       <div class='row' style='margin-top:10px;'>
         <button id='dbgToggle' class='secondary' onclick='toggleDebugUi()'>Disable debug</button>
@@ -656,6 +687,110 @@ function toggleMonitor(){
 
 
 
+
+function escapeHtml(s){
+  try{
+    return String(s||'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+  }catch(e){
+    return '';
+  }
+}
+
+function loadVoices(){
+  var el=document.getElementById('voicesList');
+  if (el) el.textContent='Loading…';
+  return fetchJsonAuthed('/api/voices').then(function(j){
+    if (!j.ok){ if(el) el.innerHTML = "<div class='muted'>Error loading voices</div>"; return; }
+    var voices = j.voices || [];
+    if (!voices.length){ if(el) el.innerHTML = "<div class='muted'>No voices yet.</div>"; return; }
+
+    if (!el) return;
+    el.innerHTML = voices.map(function(v){
+      var nm = v.display_name || v.id;
+      var meta = [];
+      if (v.engine) meta.push(v.engine);
+      if (v.voice_ref) meta.push(v.voice_ref);
+      var metaLine = meta.join(' • ');
+      var en = (v.enabled!==false);
+      var pill = en ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>";
+      return "<div class='job'>"
+        + "<div class='row' style='justify-content:space-between;'>"
+        + "<div class='title'>" + escapeHtml(nm) + "</div>"
+        + "<div>" + pill + "</div>"
+        + "</div>"
+        + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
+        + "<div class='row' style='margin-top:10px'>"
+        + "<button class='secondary' onclick="renameVoice('" + encodeURIComponent(v.id) + "')">Rename</button>"
+        + (en ? ("<button class='secondary' onclick="disableVoice('" + encodeURIComponent(v.id) + "')">Disable</button>") : "")
+        + "</div>"
+        + "</div>";
+    }).join('');
+  }).catch(function(e){
+    if (el) el.innerHTML = "<div class='muted'>Error loading voices: " + escapeHtml(String(e)) + "</div>";
+  });
+}
+
+function createVoice(){
+  var idEl=document.getElementById('v_id');
+  var nmEl=document.getElementById('v_name');
+  var engEl=document.getElementById('v_engine');
+  var refEl=document.getElementById('v_ref');
+  var payload={
+    id: idEl ? idEl.value : '',
+    display_name: nmEl ? nmEl.value : '',
+    engine: engEl ? engEl.value : '',
+    voice_ref: refEl ? refEl.value : ''
+  };
+  return fetchJsonAuthed('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(j){
+      if (j && j.ok){
+        try{ toastSet('Voice created', 'ok', 2600); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+        if (idEl) idEl.value='';
+        if (nmEl) nmEl.value='';
+        if (engEl) engEl.value='';
+        if (refEl) refEl.value='';
+        return loadVoices();
+      }
+      alert((j && j.error) ? j.error : 'Create failed');
+    })
+    .catch(function(e){ alert(String(e)); });
+}
+
+function renameVoice(idEnc){
+  var id = decodeURIComponent(idEnc||'');
+  var nm = prompt('New voice name:', '');
+  if (nm==null) return;
+  nm = String(nm||'').trim();
+  if (!nm) return;
+  return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id), {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({display_name: nm})})
+    .then(function(j){
+      if (j && j.ok){
+        try{ toastSet('Saved', 'ok', 2200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+        return loadVoices();
+      }
+      alert((j && j.error) ? j.error : 'Rename failed');
+    })
+    .catch(function(e){ alert(String(e)); });
+}
+
+function disableVoice(idEnc){
+  var id = decodeURIComponent(idEnc||'');
+  if (!confirm('Disable this voice?')) return;
+  return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id) + '/disable', {method:'POST'})
+    .then(function(j){
+      if (j && j.ok){
+        try{ toastSet('Disabled', 'ok', 2200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+        return loadVoices();
+      }
+      alert((j && j.error) ? j.error : 'Disable failed');
+    })
+    .catch(function(e){ alert(String(e)); });
+}
+
+
 function loadLibrary(){
   const el=document.getElementById('lib');
   el.textContent='Loading…';
@@ -751,8 +886,8 @@ function fmtPct(x){
 
 function openMonitor(){
   if (!monitorEnabled) return;
-  document.getElementById('monitorBackdrop')?.classList.remove('hide');
-  document.getElementById('monitorSheet')?.classList.remove('hide');
+  var b=document.getElementById('monitorBackdrop'); if (b) b.classList.remove('hide');
+  var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.remove('hide');
   document.body.classList.add('noScroll');
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
   startMetricsStream();
@@ -761,8 +896,8 @@ function openMonitor(){
 }
 
 function closeMonitor(){
-  document.getElementById('monitorBackdrop')?.classList.add('hide');
-  document.getElementById('monitorSheet')?.classList.add('hide');
+  var b=document.getElementById('monitorBackdrop'); if (b) b.classList.add('hide');
+  var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.add('hide');
   document.body.classList.remove('noScroll');
 }
 
@@ -977,6 +1112,110 @@ def api_metrics_stream():
     return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
 
 
+
+
+
+
+@app.get('/api/voices')
+def api_voices_list():
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            return {'ok': True, 'voices': list_voices_db(conn)}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {'ok': False, 'error': f'voices_failed: {type(e).__name__}: {e}'}
+
+
+@app.post('/api/voices')
+def api_voices_create(payload: dict[str, Any]):
+    try:
+        voice_id = validate_voice_id(str(payload.get('id') or ''))
+        engine = str(payload.get('engine') or '')
+        voice_ref = str(payload.get('voice_ref') or '')
+        display_name = str(payload.get('display_name') or payload.get('name') or voice_id)
+        enabled = bool(payload.get('enabled', True))
+        sample_text = str(payload.get('sample_text') or '')
+        sample_url = str(payload.get('sample_url') or '')
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, enabled, sample_text, sample_url)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'create_failed: {type(e).__name__}: {e}'}
+
+
+@app.get('/api/voices/{voice_id}')
+def api_voices_get(voice_id: str):
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            v = get_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+        return {'ok': True, 'voice': v}
+    except Exception as e:
+        return {'ok': False, 'error': f'get_failed: {type(e).__name__}: {e}'}
+
+
+@app.put('/api/voices/{voice_id}')
+def api_voices_update(voice_id: str, payload: dict[str, Any]):
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            existing = get_voice_db(conn, voice_id)
+            engine = str(payload.get('engine') if 'engine' in payload else existing.get('engine') or '')
+            voice_ref = str(payload.get('voice_ref') if 'voice_ref' in payload else existing.get('voice_ref') or '')
+            display_name = str(payload.get('display_name') if 'display_name' in payload else existing.get('display_name') or voice_id)
+            enabled = bool(payload.get('enabled') if 'enabled' in payload else existing.get('enabled', True))
+            sample_text = str(payload.get('sample_text') if 'sample_text' in payload else existing.get('sample_text') or '')
+            sample_url = str(payload.get('sample_url') if 'sample_url' in payload else existing.get('sample_url') or '')
+            upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, enabled, sample_text, sample_url)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
+
+
+@app.post('/api/voices/{voice_id}/disable')
+def api_voices_disable(voice_id: str):
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            set_voice_enabled_db(conn, voice_id, False)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'disable_failed: {type(e).__name__}: {e}'}
+
+
+@app.delete('/api/voices/{voice_id}')
+def api_voices_delete(voice_id: str):
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            delete_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'delete_failed: {type(e).__name__}: {e}'}
 
 
 @app.get('/api/library/stories')
