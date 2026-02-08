@@ -1503,7 +1503,7 @@ def todo_page(response: Response):
   <div class="top">
     <div>
       <h1>TODO</h1>
-      <div class="muted">Read-only internal tracker (no commands accepted).</div>
+      <div class="muted">Internal tracker (check/uncheck requires login).</div>
     </div>
     <div>
       <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
