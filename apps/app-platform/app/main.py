@@ -165,7 +165,7 @@ def index(response: Response):
           <button class='secondary' onclick='loadLibrary()'>Reload</button>
         </div>
       </div>
-      <div id='lib'>Loading…</div>
+      <div id='lib' class='muted'>Tap Reload to load stories.</div>
     </div>
 
     <div class='card' id='libDetailCard' style='display:none'>
@@ -217,10 +217,16 @@ window.addEventListener('unhandledrejection', (ev)=>{
 
 <script>
 function showTab(name){
-  for (const n of ['history','library','advanced']){
+  for (var i=0;i<['history','library','advanced'].length;i++){
+    var n=['history','library','advanced'][i];
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
+  // lazy-load tab content
+  try{
+    if (name==='history') loadHistory();
+    else if (name==='library') loadLibrary();
+  }catch(_e){}
 }
 
 function pill(state){
@@ -658,10 +664,20 @@ function tts(){
     .catch(function(e){ document.getElementById('ttsout').textContent = String(e); });
 }
 
+// boot status
+try{
+  var __bootEl = document.getElementById('boot');
+  if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
+}catch(_e){}
+
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
 setMonitorEnabled(loadMonitorPref());
 loadHistory();
+
+try{
+  if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: ok';
+}catch(_e){}
 </script>
 
 
