@@ -159,6 +159,7 @@ def index(response: Response):
     html.monOn .dock{display:block;}
     .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
     .dockStats{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
+    body.sheetOpen .dock{pointer-events:none;}
 
     /* bottom sheet */
     .sheetBackdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;touch-action:none;}
@@ -667,6 +668,7 @@ function setMonitorEnabled(on){
     if (backdrop) backdrop.classList.add('hide');
     if (sheet) sheet.classList.add('hide');
     document.body.classList.remove('noScroll');
+  document.body.classList.remove('sheetOpen');
     if (btn){ btn.textContent = 'Enable monitor'; btn.classList.remove('secondary'); }
     return;
   }
@@ -903,6 +905,7 @@ function openMonitor(){
   var b=document.getElementById('monitorBackdrop'); if (b) b.classList.remove('hide');
   var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.remove('hide');
   document.body.classList.add('noScroll');
+  document.body.classList.add('sheetOpen');
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
   startMetricsStream();
   // render last metrics immediately if we have them
@@ -913,6 +916,7 @@ function closeMonitor(){
   var b=document.getElementById('monitorBackdrop'); if (b) b.classList.add('hide');
   var sh=document.getElementById('monitorSheet'); if (sh) sh.classList.add('hide');
   document.body.classList.remove('noScroll');
+  document.body.classList.remove('sheetOpen');
 }
 
 function closeMonitorEv(ev){
@@ -1071,7 +1075,7 @@ try{
     </div>
   </div>
 
-<div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitorEv(event)'></div>
+<div id='monitorBackdrop' class='sheetBackdrop hide' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
   <div id='monitorSheet' class='sheet hide' role='dialog' aria-modal='true'>
     <div class='sheetInner'>
       <div class='sheetHandle'></div>
