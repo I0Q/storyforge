@@ -9,7 +9,7 @@ import yaml
 
 def _repo_root() -> Path:
     # apps/app-platform/app/library.py -> repo root is 4 levels up
-    return Path(__file__).resolve().parents[3]
+    return Path(__file__).resolve().parents[4]
 
 
 def _stories_dir() -> Path:
