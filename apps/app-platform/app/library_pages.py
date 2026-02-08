@@ -87,8 +87,7 @@ def register_library_pages(app: FastAPI) -> None:
                 f"<div class='job'><div class='row' style='justify-content:space-between;'>"
                 f"<div style='font-weight:950'>{s['title']}</div>"
                 f"<div class='pill'>{s['id']}</div></div>"
-                f"<div class='muted' style='margin-top:6px'>{s.get('description','')}</div>"
-                f"<div class='row' style='margin-top:10px'>"
+                                f"<div class='row' style='margin-top:10px'>"
                 f"<a href='/library/story/{s['id']}/view'><button class='secondary'>View</button></a> <a href='/library/story/{s['id']}'><button class='secondary'>Edit</button></a>"
                 f"</div></div>"
                 for s in stories
@@ -106,7 +105,7 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='muted'>Create, edit, and delete text-only source stories.</div>
   </div>
   <div class='row'>
-    <a href='/'><button class='secondary'>Back</button></a>
+    <a href='/?tab=library'><button class='secondary'>Back</button></a>
     <a href='/library/new'><button>New story</button></a>
   </div>
 </div>
@@ -139,7 +138,7 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='muted'>Create a new text-only story (Markdown + characters).</div>
   </div>
   <div class='row'>
-    <a href='/library'><button class='secondary'>Back</button></a>
+    <a href='/?tab=library'><button class='secondary'>Back</button></a>
   </div>
 </div>
 
@@ -150,9 +149,6 @@ def register_library_pages(app: FastAPI) -> None:
 
     <div class='k'>Title</div>
     <input name='title' placeholder='Maris and the Lighthouse' required />
-
-    <div class='k'>Description</div>
-    <input name='description' placeholder='Short summary…' />
 
     <div class='k'>Tags (comma-separated)</div>
     <input name='tags' placeholder='bedtime, calm' />
@@ -177,7 +173,6 @@ def register_library_pages(app: FastAPI) -> None:
     def library_new_post(
         id: str = Form(default=""),
         title: str = Form(default=""),
-        description: str = Form(default=""),
         tags: str = Form(default=""),
         characters_yaml: str = Form(default=""),
         story_md: str = Form(default=""),
@@ -190,67 +185,14 @@ def register_library_pages(app: FastAPI) -> None:
             conn = db_connect()
             try:
                 db_init(conn)
-                upsert_story_db(conn, sid, title or sid, description or "", tags_l, story_md or "", chars)
+                upsert_story_db(conn, sid, title or sid, tags_l, story_md or "", chars)
             finally:
                 conn.close()
 
-            return RedirectResponse(url=f"/library/story/{sid}", status_code=302)
+            return RedirectResponse(url='/?tab=library', status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library/new?err={str(e)}", status_code=302)
 
-
-    @app.get("/library/story/{story_id}/view", response_class=HTMLResponse)
-    def library_story_view(story_id: str):
-        conn = db_connect()
-        try:
-            db_init(conn)
-            st = get_story_db(conn, story_id)
-        finally:
-            conn.close()
-
-        meta = st.get("meta") or {}
-        tags = ', '.join(meta.get("tags") or [])
-        story_md = st.get("story_md") or ""
-        chars = st.get("characters") or []
-
-        chars_lines = []
-        for c in chars:
-            nm = c.get('name') or c.get('id') or ''
-            ty = c.get('type') or ''
-            desc = c.get('description') or ''
-            line = f"- {nm}{(' ('+ty+')') if ty else ''}{(': '+desc) if desc else ''}"
-            chars_lines.append(line)
-
-        body = f"""
-<div class='top'>
-  <div>
-    <h1>{meta.get('title') or story_id}</h1>
-    <div class='muted'><span class='pill'>{story_id}</span></div>
-  </div>
-  <div class='row'>
-    <a href='/library'><button class='secondary'>Back</button></a>
-    <a href='/library/story/{story_id}'><button>Edit</button></a>
-  </div>
-</div>
-
-<div class='card'>
-  <div class='muted'>Description</div>
-  <div style='font-weight:950;margin-top:4px'>{meta.get('description') or '—'}</div>
-  <div class='muted' style='margin-top:10px'>Tags</div>
-  <div style='font-weight:950;margin-top:4px'>{tags or '—'}</div>
-</div>
-
-<div class='card'>
-  <div style='font-weight:950'>Characters</div>
-  <pre style='white-space:pre-wrap;margin-top:10px'>{'\n'.join(chars_lines) if chars_lines else '—'}</pre>
-</div>
-
-<div class='card'>
-  <div style='font-weight:950'>Story</div>
-  <pre style='white-space:pre-wrap;line-height:1.5;margin-top:10px'>{story_md}</pre>
-</div>
-"""
-        return _html_page("StoryForge - Story", body)
 
     @app.get("/library/story/{story_id}", response_class=HTMLResponse)
     def library_story_get(story_id: str, request: Request):
@@ -275,7 +217,7 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='muted'><span class='pill'>{story_id}</span></div>
   </div>
   <div class='row'>
-    <a href='/library'><button class='secondary'>Back</button></a>
+    <a href='/?tab=library'><button class='secondary'>Back</button></a>
     <form method='post' action='/library/story/{story_id}/delete' onsubmit="return confirm('Delete this story?');">
       <button class='danger' type='submit'>Delete</button>
     </form>
@@ -287,9 +229,6 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='k'>Title</div>
     <input name='title' value={json.dumps(meta.get('title') or story_id)} required />
 
-    <div class='k'>Description</div>
-    <input name='description' value={json.dumps(meta.get('description') or '')} />
-
     <div class='k'>Tags (comma-separated)</div>
     <input name='tags' value={json.dumps(tags_s)} />
 
@@ -297,7 +236,44 @@ def register_library_pages(app: FastAPI) -> None:
     <textarea name='characters_yaml'>{chars_yaml}</textarea>
 
     <div class='k'>Story (Markdown)</div>
-    <textarea name='story_md'>{s.get('story_md') or ''}</textarea>
+    <textarea name='story_md' id='story_md'>{s.get('story_md') or ''}</textarea>
+
+    <div class='muted' id='autosaveStatus' style='margin-top:8px'>Autosave: idle</div>
+
+    <script>
+(function(){{
+  function byName(n){{ return document.getElementsByName(n)[0]; }}
+  var elTitle=byName('title');
+  var elTags=byName('tags');
+  var elChars=byName('characters_yaml');
+  var elStory=document.getElementById('story_md');
+  var st=document.getElementById('autosaveStatus');
+  var timer=null;
+
+  function schedule(){{
+    if (st) st.textContent='Autosave: pending';
+    if (timer) clearTimeout(timer);
+    timer=setTimeout(saveNow, 1200);
+  }}
+
+  function saveNow(){{
+    if (st) st.textContent='Autosave: saving';
+    var fd = new FormData();
+    fd.append('title', elTitle ? elTitle.value : '');
+    fd.append('tags', elTags ? elTags.value : '');
+    fd.append('characters_yaml', elChars ? elChars.value : '');
+    fd.append('story_md', elStory ? elStory.value : '');
+    fetch('/library/story/{story_id}/save', {{method:'POST', body: fd}})
+      .then(function(r){{ if (st) st.textContent = r.ok ? 'Autosave: saved' : ('Autosave: error ' + r.status); }})
+      .catch(function(_e){{ if (st) st.textContent='Autosave: error'; }});
+  }}
+
+  [elTitle, elTags, elChars, elStory].forEach(function(el){{
+    if (!el) return;
+    el.addEventListener('input', schedule);
+  }});
+}})();
+</script>
 
     {err_html}
 
@@ -313,7 +289,6 @@ def register_library_pages(app: FastAPI) -> None:
     def library_story_save(
         story_id: str,
         title: str = Form(default=""),
-        description: str = Form(default=""),
         tags: str = Form(default=""),
         characters_yaml: str = Form(default=""),
         story_md: str = Form(default=""),
@@ -326,10 +301,10 @@ def register_library_pages(app: FastAPI) -> None:
             conn = db_connect()
             try:
                 db_init(conn)
-                upsert_story_db(conn, sid, title or sid, description or "", tags_l, story_md or "", chars)
+                upsert_story_db(conn, sid, title or sid, tags_l, story_md or "", chars)
             finally:
                 conn.close()
-            return RedirectResponse(url=f"/library/story/{sid}", status_code=302)
+            return RedirectResponse(url='/?tab=library', status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library/story/{story_id}?err={str(e)}", status_code=302)
 
@@ -343,7 +318,7 @@ def register_library_pages(app: FastAPI) -> None:
                 delete_story_db(conn, sid)
             finally:
                 conn.close()
-            return RedirectResponse(url="/library", status_code=302)
+            return RedirectResponse(url='/?tab=library', status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library?err={str(e)}", status_code=302)
 
@@ -366,7 +341,6 @@ def register_library_pages(app: FastAPI) -> None:
                         conn,
                         str(sid),
                         str(meta.get("title") or sid),
-                        str(meta.get("description") or ""),
                         list(meta.get("tags") or []),
                         str(s.get("story_md") or ""),
                         list(s.get("characters") or []),

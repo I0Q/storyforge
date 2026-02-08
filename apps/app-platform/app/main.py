@@ -228,6 +228,19 @@ window.addEventListener('unhandledrejection', (ev)=>{
 </script>
 
 <script>
+function getQueryParam(key){
+  try{
+    var q = window.location.search || '';
+    if (q.startsWith('?')) q=q.slice(1);
+    var parts = q.split('&');
+    for (var i=0;i<parts.length;i++){
+      var kv = parts[i].split('=');
+      if (decodeURIComponent(kv[0]||'')===key) return decodeURIComponent(kv.slice(1).join('=')||'');
+    }
+  }catch(e){}
+  return '';
+}
+
 function showTab(name){
   for (var i=0;i<['history','library','advanced'].length;i++){
     var n=['history','library','advanced'][i];
@@ -489,7 +502,7 @@ function loadLibrary(){
       el.innerHTML = stories.map(st => {
     var tags = Array.isArray(st.tags) ? st.tags : [];
     var tagHtml = tags.map(function(t){ return "<span class='pill'>" + t + "</span>"; }).join(' ');
-    return '<a href="/library/story/' + encodeURIComponent(st.id) + '/view" style="text-decoration:none;color:inherit">' +'<div class="job">' +'<div class="row" style="justify-content:space-between;">' +'<div class="title">' + (st.title || st.id) + '</div>' +'<div class="pill">' + st.id + '</div>' +'</div>' +'<div class="muted" style="margin-top:6px">' + (st.description || '') + '</div>' +(tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '') +'</div></a>';
+    return '<a href="/library/story/' + encodeURIComponent(st.id) + '/view" style="text-decoration:none;color:inherit">' +'<div class="job">' +'<div class="row" style="justify-content:space-between;">' +'<div class="title">' + (st.title || st.id) + '</div>' +'<div class="pill">' + st.id + '</div>' +'</div>' (tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '') +'</div></a>';
     }).join('');
   }).catch(function(e){
     el.innerHTML = `<div class='muted'>Error loading library: ${String(e)}</div>`;
@@ -505,8 +518,7 @@ function openStory(id){
     const meta = currentStory.meta || {};
 
   document.getElementById('libTitle').textContent = meta.title || currentStory.id;
-  document.getElementById('libDesc').textContent = meta.description || '';
-
+  
   const chars = (currentStory.characters || []).map(c => {
     const nm = c.name || c.id || '';
     const ty = c.type || '';
@@ -681,6 +693,9 @@ try{
   if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
 }catch(_e){}
 
+var initTab = getQueryParam('tab');
+if (initTab==='library' || initTab==='history' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
+
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
 setMonitorEnabled(loadMonitorPref());
@@ -813,14 +828,13 @@ def api_library_story_create(payload: dict[str, Any]):
     try:
         story_id = validate_story_id(str(payload.get('id') or ''))
         title = str(payload.get('title') or story_id)
-        description = str(payload.get('description') or '')
         tags = payload.get('tags') or []
         story_md = str(payload.get('story_md') or '')
         characters = payload.get('characters') or []
         conn = db_connect()
         try:
             db_init(conn)
-            upsert_story_db(conn, story_id, title, description, tags, story_md, characters)
+            upsert_story_db(conn, story_id, title, tags, story_md, characters)
         finally:
             conn.close()
         return {'ok': True, 'id': story_id}
@@ -833,14 +847,13 @@ def api_library_story_update(story_id: str, payload: dict[str, Any]):
     try:
         story_id = validate_story_id(story_id)
         title = str(payload.get('title') or story_id)
-        description = str(payload.get('description') or '')
         tags = payload.get('tags') or []
         story_md = str(payload.get('story_md') or '')
         characters = payload.get('characters') or []
         conn = db_connect()
         try:
             db_init(conn)
-            upsert_story_db(conn, story_id, title, description, tags, story_md, characters)
+            upsert_story_db(conn, story_id, title, tags, story_md, characters)
         finally:
             conn.close()
         return {'ok': True}

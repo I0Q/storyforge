@@ -84,8 +84,7 @@ def list_stories() -> list[dict[str, Any]]:
             {
                 "id": sid,
                 "title": str(meta.get("title") or sid),
-                "description": str(meta.get("description") or ""),
-                "tags": meta.get("tags") or [],
+                                "tags": meta.get("tags") or [],
             }
         )
 
@@ -126,8 +125,7 @@ def get_story(story_id: str) -> dict[str, Any]:
         "meta": {
             "id": meta.get("id") or story_id,
             "title": meta.get("title") or story_id,
-            "description": meta.get("description") or "",
-            "tags": meta.get("tags") or [],
+                        "tags": meta.get("tags") or [],
         },
         "characters": chars.get("characters") or [],
         "story_md": story_md,

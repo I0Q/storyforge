@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import hashlib
 import html
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from .db import db_connect, db_init
 from .library_db import get_story_db
+
+
+def _swatch(key: str) -> str:
+    h = hashlib.sha256((key or "").encode("utf-8")).hexdigest()
+    return "#" + h[:6]
 
 
 def _render_md_simple(md: str) -> str:
@@ -42,16 +49,47 @@ def register_library_viewer(app: FastAPI) -> None:
         chars = st.get("characters") or []
 
         tag_html = "".join(
-            [f"<span class='pill' style='margin-right:6px'>{html.escape(str(t))}</span>" for t in tags]
+            [
+                f"<span class='pill' style='margin-right:6px'>{html.escape(str(t))}</span>"
+                for t in tags
+            ]
         )
 
-        chars_lines = []
+        char_cards = []
         for c in chars:
-            nm = c.get("name") or c.get("id") or ""
-            ty = c.get("type") or ""
-            desc = c.get("description") or ""
-            line = f"- {nm}{(' ('+ty+')') if ty else ''}{(': '+desc) if desc else ''}"
-            chars_lines.append(line)
+            cid = str(c.get("id") or c.get("name") or "")
+            nm = str(c.get("name") or c.get("id") or "")
+            desc = str(c.get("description") or "")
+            ty = str(c.get("type") or "")
+            color = _swatch(cid)
+
+            pill = (
+                f" <span class='pill' style='margin-left:6px'>{html.escape(ty)}</span>"
+                if ty
+                else ""
+            )
+            desc_html = (
+                f"<div class='muted' style='margin-top:4px'>{html.escape(desc)}</div>"
+                if desc
+                else ""
+            )
+            char_cards.append(
+                "<div style='display:flex;gap:10px;align-items:flex-start;"
+                "border:1px solid var(--line);border-radius:14px;padding:10px;"
+                "background:#0b1020;margin-top:8px'>"
+                f"<div style='width:18px;height:18px;border-radius:6px;background:{color};"
+                "flex:0 0 auto;margin-top:3px'></div>"
+                "<div style='min-width:0'>"
+                f"<div style='font-weight:950'>{html.escape(nm)}{pill}</div>"
+                f"{desc_html}"
+                "</div></div>"
+            )
+
+        chars_html = (
+            "<div style='margin-top:10px'>" + "".join(char_cards) + "</div>"
+            if char_cards
+            else "<div class='muted'>—</div>"
+        )
 
         body = "\n".join(
             [
@@ -61,21 +99,19 @@ def register_library_viewer(app: FastAPI) -> None:
                 f"    <div class='muted'><span class='pill'>{html.escape(story_id)}</span></div>",
                 "  </div>",
                 "  <div class='row'>",
-                "    <a href='/library'><button class='secondary'>Back</button></a>",
+                "    <a href='/?tab=library'><button class='secondary'>Back</button></a>",
                 f"    <a href='/library/story/{html.escape(story_id)}'><button>Edit</button></a>",
                 "  </div>",
                 "</div>",
                 "",
                 "<div class='card'>",
-                "  <div class='muted'>Description</div>",
-                f"  <div style='font-weight:950;margin-top:4px'>{html.escape(str(meta.get('description') or '—'))}</div>",
                 "  <div class='muted' style='margin-top:10px'>Tags</div>",
                 f"  <div style='margin-top:8px'>{tag_html or '—'}</div>",
                 "</div>",
                 "",
                 "<div class='card'>",
                 "  <div style='font-weight:950'>Characters</div>",
-                f"  <pre style='white-space:pre-wrap;margin-top:10px'>{html.escape(chr(10).join(chars_lines) if chars_lines else '—')}</pre>",
+                f"  {chars_html}",
                 "</div>",
                 "",
                 "<div class='card'>",
@@ -104,7 +140,6 @@ def register_library_viewer(app: FastAPI) -> None:
             ]
         )
 
-        # reuse the same base styling as the editor pages by importing their _html_page
         from .library_pages import _html_page  # local import to avoid cycles
 
         return _html_page("StoryForge - Story", body)
