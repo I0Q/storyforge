@@ -1,6 +1,7 @@
 # StoryForge – TODO
 
 ## Voices (curated samples)
+- [ ] Add "Add new voice server" option (manage VOICE_SERVERS_JSON)
 - [ ] Replace "Reload voices" button with "Generate / New" (no manual reload)
 - [ ] Voices tab is a **list of approved voices** (each must have a sample)
 - [x] Separate **Generate / New** screen for trying voices before saving
@@ -13,6 +14,7 @@
 - [ ] Ensure monitor toggle uses iOS-style switch + correct labels
 
 ## Navigation / UI polish
+- [ ] Add Logout button (header/settings) and wire to /logout
 - [ ] Add copy button for build number + JavaScript error code (boot banner)
 - [ ] Fix styling of the Debug UI option in the Settings tab (consistent card layout)
 - [x] History tab renamed to Jobs
