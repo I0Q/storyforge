@@ -247,6 +247,7 @@ def index(response: Response):
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>History</button>
     <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
+    <button id='tab-voices' class='tab' onclick='showTab("voices")'>Voices</button>
         <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Advanced</button>
   </div>
 
@@ -305,14 +306,8 @@ def index(response: Response):
     </div>
   </div>
 
-  <div id='pane-advanced' class='hide'>
 
-    <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Voice servers</div>
-      <div class='muted'>Configured endpoints used for voice/TTS work.</div>
-      <div style='margin-top:10px'>__VOICE_SERVERS__</div>
-    </div>
-
+  <div id='pane-voices' class='hide'>
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Voices</div>
       <div class='muted'>CRUD for voice metadata (samples can be generated later).</div>
@@ -334,8 +329,17 @@ def index(response: Response):
         <button onclick='createVoice()'>Create</button>
       </div>
     </div>
+  </div>
 
-<div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
+  <div id='pane-advanced' class='hide'>
+
+    <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Voice servers</div>
+      <div class='muted'>Configured endpoints used for voice/TTS work.</div>
+      <div style='margin-top:10px'>__VOICE_SERVERS__</div>
+    </div>
+
+    <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
       <div class='muted'>Hide/show the build + JS error banner.</div>
       <div class='row' style='margin-top:10px;'>
         <button id='dbgToggle' class='secondary' onclick='toggleDebugUi()'>Disable debug</button>
@@ -422,8 +426,8 @@ try{ __sfToastInit(); }catch(e){}
 
 function showTab(name, opts){
   opts = opts || {};
-  for (var i=0;i<['history','library','advanced'].length;i++){
-    var n=['history','library','advanced'][i];
+  for (var i=0;i<['history','library','voices','advanced'].length;i++){
+    var n=['history','library','voices','advanced'][i];
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
@@ -447,6 +451,7 @@ function getTabFromHash(){
     var h = (window.location.hash || '').replace('#','');
     if (h==='tab-history') return 'history';
     if (h==='tab-library') return 'library';
+    if (h==='tab-voices') return 'voices';
     if (h==='tab-advanced') return 'advanced';
   }catch(e){}
   return '';
@@ -1094,7 +1099,7 @@ try{
 }catch(_e){}
 
 var initTab = getTabFromHash() || getQueryParam('tab');
-if (initTab==='library' || initTab==='history' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
+if (initTab==='library' || initTab==='history' || initTab==='voices' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
 
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
