@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from .auth import register_passphrase_auth
 from .library_pages import register_library_pages
+from .library_viewer import register_library_viewer
 from .db import db_connect, db_init, db_list_jobs
 from .library import list_stories, list_stories_debug, get_story
 from .library_db import (
@@ -32,6 +33,7 @@ GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
 app = FastAPI(title=APP_NAME, version="0.1")
 register_passphrase_auth(app)
 register_library_pages(app)
+register_library_viewer(app)
 
 
 def _h() -> dict[str, str]:
@@ -485,8 +487,9 @@ function loadLibrary(){
     if (!stories.length){ el.innerHTML = `<div class='muted'>No stories yet. Add folders under <code>stories/</code>.</div>`; return; }
 
       el.innerHTML = stories.map(st => {
-    const tags = Array.isArray(st.tags) ? st.tags.join(', ') : '';
-    return '<a href="/library/story/' + encodeURIComponent(st.id) + '" style="text-decoration:none;color:inherit">' +'<div class="job">' +'<div class="row" style="justify-content:space-between;">' +'<div class="title">' + (st.title || st.id) + '</div>' +'<div class="pill">' + st.id + '</div>' +'</div>' +'<div class="muted" style="margin-top:6px">' + (st.description || '') + '</div>' +(tags ? ('<div class="muted" style="margin-top:6px">Tags: ' + tags + '</div>') : '') +'</div></a>';
+    var tags = Array.isArray(st.tags) ? st.tags : [];
+    var tagHtml = tags.map(function(t){ return "<span class='pill'>" + t + "</span>"; }).join(' ');
+    return '<a href="/library/story/' + encodeURIComponent(st.id) + '/view" style="text-decoration:none;color:inherit">' +'<div class="job">' +'<div class="row" style="justify-content:space-between;">' +'<div class="title">' + (st.title || st.id) + '</div>' +'<div class="pill">' + st.id + '</div>' +'</div>' +'<div class="muted" style="margin-top:6px">' + (st.description || '') + '</div>' +(tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '') +'</div></a>';
     }).join('');
   }).catch(function(e){
     el.innerHTML = `<div class='muted'>Error loading library: ${String(e)}</div>`;
