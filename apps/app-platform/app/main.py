@@ -72,6 +72,11 @@ def index(response: Response):
     .pill.bad{color:var(--bad);border-color:rgba(255,77,77,.35)}
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
+    .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
+    .fadeText{position:relative;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);padding-right:18px;}
+    .fadeText:after{content:'';position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(90deg, rgba(11,16,32,0), rgba(11,16,32,1));}
+    .copyBtn{border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;border-radius:10px;padding:6px 10px;font-size:12px;cursor:pointer;}
+    .copyBtn:active{transform:translateY(1px);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
 
@@ -165,6 +170,23 @@ function pill(state){
   return `<span class="${cls}">${s}</span>`;
 }
 
+function copyFromAttr(el){
+  const v = el?.getAttribute?.('data-copy') || '';
+  if (v) copyToClipboard(v);
+}
+
+async function copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta);
+    ta.select();
+    try{document.execCommand('copy');}catch(_e){}
+    ta.remove();
+  }
+}
+
 function fmtTs(ts){
   if (!ts) return '—';
   try{
@@ -199,8 +221,8 @@ async function loadHistory(){
         <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>segments</div><div>${job.total_segments||0}</div>
-        <div class='k'>mp3</div><div class='muted'>${job.mp3_url||'—'}</div>
-        <div class='k'>sfml</div><div class='muted'>${job.sfml_url||'—'}</div>
+        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
+        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
       </div>
     </div>`;
   }).join('');
