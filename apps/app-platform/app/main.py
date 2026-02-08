@@ -75,10 +75,12 @@ def index(response: Response):
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
-    .fadeText{position:relative;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);padding-right:18px;}
-    .fadeText:after{content:'';position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(90deg, rgba(11,16,32,0), rgba(11,16,32,1));}
-    .copyBtn{border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;border-radius:10px;padding:6px 10px;font-size:12px;cursor:pointer;}
+    .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .fadeText::-webkit-scrollbar{display:none;}
+        .copyBtn{border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;border-radius:10px;padding:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;}
     .copyBtn:active{transform:translateY(1px);}
+    .copyBtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;}
+    .copyBtn:hover{background:rgba(255,255,255,0.06);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
 
@@ -171,6 +173,13 @@ function pill(state){
   return `<span class="${cls}">${s}</span>`;
 }
 
+function copyIconSvg(){
+  // Heroicons (MIT) - clipboard-document
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">`
+    + `<path stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>`
+    + `</svg>`;
+}
+
 function copyFromAttr(el){
   const v = el?.getAttribute?.('data-copy') || '';
   if (v) copyToClipboard(v);
@@ -222,8 +231,8 @@ async function loadHistory(){
         <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>segments</div><div>${job.total_segments||0}</div>
-        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
-        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
+        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
     </div>`;
   }).join('');
