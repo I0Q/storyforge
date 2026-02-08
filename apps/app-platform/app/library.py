@@ -27,7 +27,17 @@ def _stories_dir() -> Path:
     p = os.environ.get("STORYFORGE_STORIES_DIR")
     if p:
         return Path(p).expanduser().resolve()
-    return (_repo_root() / "stories").resolve()
+
+    # Prefer repo-level stories/ if present.
+    rr = _repo_root()
+    repo_stories = (rr / "stories")
+    if repo_stories.exists():
+        return repo_stories.resolve()
+
+    # App Platform can deploy from apps/app-platform as the component root.
+    # In that case, stories are vendored into apps/app-platform/stories.
+    local = Path(__file__).resolve().parents[2] / "stories"
+    return local.resolve()
 
 
 def _safe_id(s: str) -> bool:
