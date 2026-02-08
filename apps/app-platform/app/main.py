@@ -853,13 +853,17 @@ def api_library_story_create(payload: dict[str, Any]):
 def api_library_story_update(story_id: str, payload: dict[str, Any]):
     try:
         story_id = validate_story_id(story_id)
-        title = str(payload.get('title') or story_id)
-        tags = payload.get('tags') or []
-        story_md = str(payload.get('story_md') or '')
-        characters = payload.get('characters') or []
         conn = db_connect()
         try:
             db_init(conn)
+            existing = get_story_db(conn, story_id)
+            meta = existing.get('meta') or {}
+
+            title = str(payload['title']) if 'title' in payload else str(meta.get('title') or story_id)
+            tags = payload['tags'] if 'tags' in payload else list(meta.get('tags') or [])
+            story_md = str(payload['story_md']) if 'story_md' in payload else str(existing.get('story_md') or '')
+            characters = payload['characters'] if 'characters' in payload else list(existing.get('characters') or [])
+
             upsert_story_db(conn, story_id, title, tags, story_md, characters)
         finally:
             conn.close()
@@ -868,7 +872,7 @@ def api_library_story_update(story_id: str, payload: dict[str, Any]):
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
-@app.delete('/api/library/story/{story_id}')
+@app.delete('/api/library/story/{story_id}')@app.delete('/api/library/story/{story_id}')
 def api_library_story_delete(story_id: str):
     try:
         story_id = validate_story_id(story_id)
