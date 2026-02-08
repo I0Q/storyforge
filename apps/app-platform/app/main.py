@@ -1436,7 +1436,7 @@ try{ recomputeCounts(); }catch(e){}
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    return '''<!doctype html>
+    html = '''<!doctype html>
 <html>
 <head>
   <meta charset='utf-8'/>
@@ -1641,6 +1641,11 @@ try{ recomputeCounts(); }catch(e){}
 </body>
 </html>'''
 
+    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
+    return html
+
+
+
 
 
 
@@ -1651,7 +1656,6 @@ try{ recomputeCounts(); }catch(e){}
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    # Read-only: display internal TODOs from DB. Do not accept any commands from this page.
 
     items = []
     err = ''
@@ -1665,23 +1669,24 @@ def todo_page(request: Request, response: Response):
     except Exception as e:
         err = f"db_failed: {type(e).__name__}: {e}"
 
-    def esc(x: str) -> str:
-        return pyhtml.escape(str(x or ''))
-
     show_arch = False
     try:
         qp = dict(request.query_params)
-        if (qp.get('arch')=='1') or (qp.get('archived')=='1'):
+        if (qp.get('arch') == '1') or (qp.get('archived') == '1'):
             show_arch = True
     except Exception:
         pass
 
+    # Hide archived by default
     if not show_arch:
         items = [it for it in items if not it.get('archived')]
 
-    # Group by category (free text). Blank -> General.
-    groups = {}
-    order = []
+    def esc(x: str) -> str:
+        return pyhtml.escape(str(x or ''))
+
+    # Group by category
+    groups: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
     for it in items:
         cat = (it.get('category') or '').strip() or 'General'
         if cat not in groups:
@@ -1689,9 +1694,10 @@ def todo_page(request: Request, response: Response):
             order.append(cat)
         groups[cat].append(it)
 
-    rows = []
+    # Render rows with stable data-cat and a dedicated count span (JS updates counts live)
+    body_parts: list[str] = []
     if err:
-        rows.append(f"<div class='err'>{esc(err)}</div>")
+        body_parts.append(f"<div class='err'>{esc(err)}</div>")
 
     for cat in order:
         its = groups.get(cat, [])
@@ -1701,50 +1707,74 @@ def todo_page(request: Request, response: Response):
             if st != 'open':
                 done_n += 1
         total_n = len(its)
-        rows.append(f"<h2>{esc(cat)} <span class='count'>({done_n}/{total_n})</span></h2>")
+        cat_esc = esc(cat)
+        body_parts.append(
+            "<div class='catHead' data-cat='" + cat_esc + "'>"
+            + "<div class='catTitle'>" + cat_esc + "</div>"
+            + "<div class='catCount'>(<span class='done'>" + str(done_n) + "</span>/<span class='total'>" + str(total_n) + "</span>)</div>"
+            + "</div>"
+        )
+
         for it in its:
             st = (it.get('status') or 'open').lower()
-            box = '☐' if st == 'open' else '☑'
             tid = it.get('id')
             txt = esc(it.get('text') or '')
+            checked = 'checked' if st != 'open' else ''
+            # If id is missing, render as plain text
             if tid is None:
-                rows.append(f"<div>{box} {txt}</div>")
-            else:
-                checked = 'checked' if st != 'open' else ''
-                rows.append(f"<label class='todoItem'><input type='checkbox' data-id='{int(tid)}' onchange='toggleTodo({int(tid)}, this.checked)' {checked}/> <span>{txt}</span></label>")
+                box = '☑' if checked else '☐'
+                body_parts.append(f"<div class='todoPlain'>{box} {txt}</div>")
+                continue
 
-    body_html = "\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
+            # Category is on the container; JS uses it to update counters.
+            body_parts.append(
+                "<label class='todoItem' data-cat='" + cat_esc + "'>"
+                + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
+                + "<span class='todoText'>" + txt + "</span>"
+                + "</label>"
+            )
 
-    return '''<!doctype html>
+    body_html = "\n".join(body_parts) if body_parts else "<div class='muted'>No TODO items yet.</div>"
+
+    arch_checked = 'checked' if show_arch else ''
+
+    html = '''<!doctype html>
 <html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>StoryForge - TODO</title>
   <style>
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
-    a{color:var(--accent);text-decoration:none}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    h1{font-size:20px;margin:0;}
-    h2{font-size:16px;margin:18px 0 8px 0;}
-    .count{color:var(--muted);font-weight:700;font-size:12px;}
-    .muted{color:var(--muted);font-size:12px;}
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-    .todoItem{display:block;margin:6px 0;line-height:1.35;}
-    .todoItem input{transform:scale(1.1);margin-right:10px;}
-    .todoItem span{vertical-align:middle;}
-    .err{color:var(--bad);font-weight:950;margin-top:8px;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
+    :root{{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}}
+    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}}
+    a{{color:var(--accent);text-decoration:none}}
+    .top{{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}}
+    h1{{font-size:20px;margin:0;}}
+    .muted{{color:var(--muted);font-size:12px;}}
+    .err{{color:var(--bad);font-weight:950;margin:10px 0;}}
+    .bar{{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}}
+    .right{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}}
+    button{{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}}
+    button.secondary{{background:transparent;color:var(--text);}}
 
-    /* switch */
-    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
-    .switch input{display:none;}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
-    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
-    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
-    .switch input:checked + .slider:before{transform:translateX(22px);}
+    /* iOS-like switch */
+    .switch{{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}}
+    .switch input{{display:none;}}
+    .slider{{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}}
+    .slider:before{{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}}
+    .switch input:checked + .slider{{background:#1f6feb;border-color:rgba(31,111,235,.35);}}
+    .switch input:checked + .slider:before{{transform:translateX(22px);}}
+
+    .card{{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}}
+
+    .catHead{{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}}
+    .catTitle{{font-weight:950;font-size:16px;}}
+    .catCount{{color:var(--muted);font-weight:800;font-size:12px;}}
+
+    .todoItem{{display:flex;gap:10px;align-items:flex-start;margin:10px 0;}}
+    .todoItem input{{margin-top:3px;transform:scale(1.15);}}
+    .todoText{{line-height:1.25;}}
+    .todoPlain{{margin:8px 0;color:var(--muted);}}
   </style>
 </head>
 <body>
@@ -1757,24 +1787,72 @@ def todo_page(request: Request, response: Response):
       <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
     </div>
   </div>
-  <div class="row" style="justify-content:space-between;margin:12px 0">
-    <div class="muted" style="flex:1"></div>
-    <div class="row" style="justify-content:flex-end;">
+
+  <div class="bar">
+    <div class="muted"></div>
+    <div class="right">
       <div class="muted" style="font-weight:950">Archived</div>
-      <label class="switch" style="transform:scale(0.95)">
-        <input id="archToggle" type="checkbox" onchange="toggleArchived(this.checked)" />
+      <label class="switch" aria-label="Toggle archived">
+        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
         <span class="slider"></span>
       </label>
       <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
     </div>
   </div>
-  <div class="card">''' + body_html + '''</div>
+
+  <div class="card">__BODY_HTML__</div>
+
 <script>
+function toggleArchived(on){
+  try{ window.location.href = on ? '/todo?arch=1' : '/todo'; }catch(e){}
+}
+
+function updateCatCount(cat){
+  try{
+    var head = document.querySelector(".catHead[data-cat='"+cat+"']");
+    if (!head) return;
+    var items = document.querySelectorAll(".todoItem[data-cat='"+cat+"'] input[type=checkbox]");
+    var done = 0; var total = items.length;
+    for (var i=0;i<items.length;i++){ if (items[i].checked) done++; }
+    var d = head.querySelector('span.done');
+    var t = head.querySelector('span.total');
+    if (d) d.textContent = String(done);
+    if (t) t.textContent = String(total);
+  }catch(e){}
+}
+
+function onTodoToggle(cb){
+  try{
+    var id = cb.getAttribute('data-id');
+    var wrap = cb.closest ? cb.closest('.todoItem') : null;
+    var cat = wrap ? (wrap.getAttribute('data-cat') || '') : '';
+    if (cat) updateCatCount(cat);
+
+    var checked = !!cb.checked;
+    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status!==200){
+          // revert
+          try{ cb.checked = !checked; }catch(e){}
+          if (cat) updateCatCount(cat);
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){}
+}
+
 function archiveDone(){
   if (!confirm('Archive all completed items?')) return;
   try{
     var xhr=new XMLHttpRequest();
     xhr.open('POST','/api/todos/archive_done_auth',true);
+    xhr.withCredentials = true;
     xhr.setRequestHeader('Content-Type','application/json');
     xhr.onreadystatechange=function(){
       if (xhr.readyState===4){
@@ -1786,41 +1864,14 @@ function archiveDone(){
       }
     };
     xhr.send('{}');
-    try{ recomputeCounts(); }catch(e){}
   }catch(e){}
 }
-
-function toggleTodo(id, checked){
-  try{
-    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    try{ recomputeCounts(); }catch(e){}
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status!==200){
-          // revert checkbox on failure
-          try{
-            var el = document.querySelector('input[data-id="'+id+'"]');
-            if (el) el.checked = !checked;
-            try{ recomputeCounts(); }catch(e){}
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
-    try{ recomputeCounts(); }catch(e){}
-  }catch(e){}
-}
-try{ initArchivedToggle(); }catch(e){}
-try{ recomputeCounts(); }catch(e){}
 </script>
 </body>
 </html>'''
 
-
+    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
+    return html
 
 
 
