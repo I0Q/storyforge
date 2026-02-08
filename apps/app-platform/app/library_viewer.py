@@ -9,11 +9,9 @@ from fastapi.responses import HTMLResponse
 from .db import db_connect, db_init
 from .library_db import get_story_db
 
-
 def _swatch(key: str) -> str:
     h = hashlib.sha256((key or "").encode("utf-8")).hexdigest()
     return "#" + h[:6]
-
 
 def _render_md_simple(md: str) -> str:
     lines = (md or "").splitlines()
@@ -30,7 +28,6 @@ def _render_md_simple(md: str) -> str:
         else:
             out.append(f"<p>{html.escape(line)}</p>")
     return "\n".join(out)
-
 
 def register_library_viewer(app: FastAPI) -> None:
     @app.get("/library/story/{story_id}/view", response_class=HTMLResponse)
@@ -171,8 +168,6 @@ try{{ __sfToastInit(); }}catch(e){{}}
 var saveTimer = null;
 var saving = false;
 
-function setStatus(t){{ var el=$('saveStatus'); if (el) el.textContent=t; }}
-
 function escapeHtml(s){{
   return String(s)
     .replace(/&/g,'&amp;')
@@ -208,22 +203,22 @@ function renderMdSimple(md){{
 function scheduleSave(ms){{
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(doSave, ms||600);
-  setStatus('Pending…');
+  
 }}
 
 function doDelete(){{
   if (!confirm('Delete this story?')) return;
-  setStatus('Deleting…');
+  
   fetch('/api/library/story/' + encodeURIComponent(window.__STORY_ID), {{method:'DELETE'}})
     .then(function(r){{ return r.json().catch(function(){{return {{ok:false}};}}); }})
-    .then(function(j){{ if (j.ok){{ window.location.href='/?tab=library'; }} else {{ setStatus('Error'); }} }})
-    .catch(function(_e){{ setStatus('Error'); }});
+    .then(function(j){{ if (j.ok){{ window.location.href='/?tab=library'; }} else {{  }} }})
+    .catch(function(_e){{  }});
 }}
 
 function doSave(){{
   if (saving) return;
   saving = true;
-  setStatus('Saving…');
+  
 
   var payload = {{
     title: ($('titleInput') ? $('titleInput').value : ''),
@@ -238,7 +233,7 @@ function doSave(){{
   }}).then(function(r){{
     return r.json().catch(function(){{ return {{ok:false,error:'bad_json'}}; }});
   }}).then(function(j){{
-    if (!j.ok){{ setStatus('Error'); saving=false; return; }}
+    if (!j.ok){{  saving=false; return; }}
     if ($('titleText')) $('titleText').textContent = payload.title || window.__STORY_ID;
     if ($('tagsPills')) $('tagsPills').innerHTML = renderTagPills(payload.tags);
     // if we're in rendered mode, refresh HTML too
@@ -247,11 +242,11 @@ function doSave(){{
     }} else if ($('mdRender') && $('mdCode')){{
       $('mdRender').innerHTML = renderMdSimple(payload.story_md);
     }}
-    setStatus('Saved');
+    
     toastShowNow('Saved', 'ok', 2600);
     saving=false;
   }}).catch(function(_e){{
-    setStatus('Error');
+    
     saving=false;
   }});
 }}
@@ -342,7 +337,6 @@ if ($('mdCode')) {{
                 "        <div class='muted' style='margin-top:6px'>Comma-separated</div>",
                 "      </div>",
                 "    </div>",
-                "    <div class='muted' id='saveStatus'>Saved</div>",
                 "  </div>",
                 "</div>",
                 "",
