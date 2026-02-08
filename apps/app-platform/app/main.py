@@ -506,7 +506,6 @@ function loadLibrary(){
       + '<div class="job">'
       + '<div class="row" style="justify-content:space-between;">'
       + '<div class="title">' + (st.title || st.id) + '</div>'
-      + '<div class="pill">' + st.id + '</div>'
       + '</div>'
       + (tagHtml ? ("<div class='muted' style='margin-top:6px'>" + tagHtml + "</div>") : '')
       + '</div></a>';
@@ -756,7 +755,7 @@ try{
 
       <div style='font-weight:950;margin-top:12px;'>Processes</div>
       <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;'>Loading…</pre>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
 
       
 
