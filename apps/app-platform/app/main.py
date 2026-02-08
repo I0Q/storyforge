@@ -92,8 +92,8 @@ def index(response: Response):
     .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
     .sheetTitle{font-weight:950;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    .gpuGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-    .gpuCard{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;}
+    .gpuGrid{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;}
+    .gpuCard{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;min-width:0;}
     .gpuHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
     .gpuHead .l{font-weight:950;}
     .gpuHead .r{color:var(--muted);font-size:12px;white-space:nowrap;}
@@ -540,7 +540,7 @@ loadHistory();
       </div>
 
       <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='grid2' style='margin-top:8px;'></div
+      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
   </div>
 
       <div style='font-weight:950;margin-top:12px;'>Processes</div>
