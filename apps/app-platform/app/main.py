@@ -244,8 +244,6 @@ function copyFromAttr(el){
   if (v) copyToClipboard(v);
 }
 
-async 
-
 async function fetchJsonAuthed(url, opts){
   const r = await fetch(url, opts);
   if (r.status === 401){
