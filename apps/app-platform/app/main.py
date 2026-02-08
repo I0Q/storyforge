@@ -284,8 +284,6 @@ def index(response: Response):
     </div>
 
     <div class='card'>
-      
-    <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Voices</div>
       <div class='muted'>CRUD for voice metadata (samples can be generated later).</div>
 
