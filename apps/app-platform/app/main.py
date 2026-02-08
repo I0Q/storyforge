@@ -226,7 +226,20 @@ function copyFromAttr(el){
   if (v) copyToClipboard(v);
 }
 
-async function copyToClipboard(text){
+async 
+
+async function fetchJsonAuthed(url, opts){
+  const r = await fetch(url, opts);
+  if (r.status === 401){
+    // Not logged in (or cookie expired). Bounce to login.
+    window.location.href = '/login';
+    throw new Error('unauthorized');
+  }
+  return await r.json();
+}
+
+
+function copyToClipboard(text){
   try{
     await navigator.clipboard.writeText(text);
   }catch(e){
@@ -414,8 +427,7 @@ async function loadLibrary(){
   el.textContent='Loading…';
   document.getElementById('libDetailCard').style.display='none';
 
-  const r=await fetch('/api/library/stories');
-  const j=await r.json();
+  const j=await fetchJsonAuthed('/api/library/stories');
   if (!j.ok){ el.innerHTML = `<div class='muted'>Error loading library</div>`; return; }
 
   const stories = j.stories || [];
@@ -440,9 +452,7 @@ async function loadLibrary(){
 let currentStory = null;
 
 async function openStory(id){
-  const r=await fetch('/api/library/story/' + encodeURIComponent(id));
-  if (!r.ok){ alert('Story not found'); return; }
-  const j=await r.json();
+  const j=await fetchJsonAuthed('/api/library/story/' + encodeURIComponent(id));
   if (!j.ok){ alert('Error loading story'); return; }
   currentStory = j.story;
   const meta = currentStory.meta || {};
