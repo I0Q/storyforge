@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from .auth import register_passphrase_auth
 from .db import db_connect, db_init, db_list_jobs
+from .library import list_stories, get_story
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi import Response
 
@@ -128,6 +129,7 @@ def index(response: Response):
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>History</button>
+    <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
         <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Advanced</button>
   </div>
 
@@ -146,6 +148,45 @@ def index(response: Response):
     </div>
   </div>
 
+  
+
+  <div id='pane-library' class='hide'>
+    <div class='card'>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div style='font-weight:950;'>Story Library</div>
+          <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
+        </div>
+        <div class='row'>
+          <button class='secondary' onclick='loadLibrary()'>Reload</button>
+        </div>
+      </div>
+      <div id='lib'>Loading…</div>
+    </div>
+
+    <div class='card' id='libDetailCard' style='display:none'>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div id='libTitle' style='font-weight:950;'>Story</div>
+          <div id='libDesc' class='muted'></div>
+        </div>
+        <div class='row'>
+          <button class='secondary' onclick='closeStory()'>Close</button>
+        </div>
+      </div>
+
+      <div style='font-weight:950;margin-top:12px;'>Characters</div>
+      <pre id='libChars' class='term' style='margin-top:8px;'>—</pre>
+
+      <div style='font-weight:950;margin-top:12px;'>Narrative (Markdown)</div>
+      <pre id='libStory' class='term' style='margin-top:8px;white-space:pre-wrap;'>—</pre>
+
+      <div class='row' style='margin-top:12px;'>
+        <button class='secondary' onclick='copyStory()'>Copy story text</button>
+      </div>
+    </div>
+  </div>
+
   <div id='pane-advanced' class='hide'>
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Monitor</div>
@@ -158,7 +199,7 @@ def index(response: Response):
 
 <script>
 function showTab(name){
-  for (const n of ['history','advanced']){
+  for (const n of ['history','library','advanced']){
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
@@ -363,6 +404,74 @@ function setMonitorEnabled(on){
 
 function toggleMonitor(){
   setMonitorEnabled(!monitorEnabled);
+}
+
+
+
+
+async function loadLibrary(){
+  const el=document.getElementById('lib');
+  el.textContent='Loading…';
+  document.getElementById('libDetailCard').style.display='none';
+
+  const r=await fetch('/api/library/stories');
+  const j=await r.json();
+  if (!j.ok){ el.innerHTML = `<div class='muted'>Error loading library</div>`; return; }
+
+  const stories = j.stories || [];
+  if (!stories.length){
+    el.innerHTML = `<div class='muted'>No stories yet. Add folders under <code>stories/</code>.</div>`;
+    return;
+  }
+
+  el.innerHTML = stories.map(st => {
+    const tags = Array.isArray(st.tags) ? st.tags.join(', ') : '';
+    return `<div class='job' style='cursor:pointer' onclick='openStory(${JSON.stringify(st.id)})'>
+      <div class='row' style='justify-content:space-between;'>
+        <div class='title'>${st.title || st.id}</div>
+        <div class='pill'>${st.id}</div>
+      </div>
+      <div class='muted' style='margin-top:6px'>${st.description || ''}</div>
+      ${tags ? `<div class='muted' style='margin-top:6px'>Tags: ${tags}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+let currentStory = null;
+
+async function openStory(id){
+  const r=await fetch('/api/library/story/' + encodeURIComponent(id));
+  if (!r.ok){ alert('Story not found'); return; }
+  const j=await r.json();
+  if (!j.ok){ alert('Error loading story'); return; }
+  currentStory = j.story;
+  const meta = currentStory.meta || {};
+
+  document.getElementById('libTitle').textContent = meta.title || currentStory.id;
+  document.getElementById('libDesc').textContent = meta.description || '';
+
+  const chars = (currentStory.characters || []).map(c => {
+    const nm = c.name || c.id || '';
+    const ty = c.type || '';
+    const desc = c.description || '';
+    return `- ${nm}${ty?` (${ty})`:''}${desc?`: ${desc}`:''}`;
+  }).join('
+') || '(none)';
+
+  document.getElementById('libChars').textContent = chars;
+  document.getElementById('libStory').textContent = currentStory.story_md || '';
+
+  document.getElementById('libDetailCard').style.display='block';
+}
+
+function closeStory(){
+  document.getElementById('libDetailCard').style.display='none';
+  currentStory = null;
+}
+
+function copyStory(){
+  const txt = currentStory?.story_md || '';
+  if (txt) copyToClipboard(txt);
 }
 
 
@@ -595,6 +704,22 @@ def api_metrics_stream():
         'X-Accel-Buffering': 'no',
     }
     return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
+
+
+
+
+@app.get('/api/library/stories')
+def api_library_stories():
+    return {'ok': True, 'stories': list_stories()}
+
+
+@app.get('/api/library/story/{story_id}')
+def api_library_story(story_id: str):
+    try:
+        story = get_story(story_id)
+    except FileNotFoundError:
+        return Response(content='not found', status_code=404)
+    return {'ok': True, 'story': story}
 
 
 @app.get('/api/history')
