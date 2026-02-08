@@ -47,7 +47,8 @@ def index(response: Response):
   <style>
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
     body.noScroll{overflow:hidden;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px 86px 18px;max-width:920px;margin:0 auto;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px calc(70px + env(safe-area-inset-bottom)) 18px;max-width:920px;margin:0 auto;}
+    body.monOff{padding-bottom:18px;}
     a{color:var(--accent);text-decoration:none}
     code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
@@ -75,7 +76,7 @@ def index(response: Response):
     .hide{display:none}
 
     /* bottom dock */
-    .dock{position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px;}
+    .dock{position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
     .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
     .dockStats{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
 
@@ -318,6 +319,7 @@ function setMonitorEnabled(on){
 
   if (!monitorEnabled){
     stopMetricsStream();
+    document.body.classList.add('monOff');
     if (dock) dock.classList.add('hide');
     if (backdrop) backdrop.classList.add('hide');
     if (sheet) sheet.classList.add('hide');
@@ -326,6 +328,7 @@ function setMonitorEnabled(on){
     return;
   }
 
+  document.body.classList.remove('monOff');
   if (dock) dock.classList.remove('hide');
   if (btn){ btn.textContent = 'Disable monitor'; btn.classList.add('secondary'); }
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
