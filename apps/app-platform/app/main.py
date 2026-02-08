@@ -379,7 +379,7 @@ def index(response: Response):
       <div class='muted'>CRUD for voice metadata (samples can be generated later).</div>
 
       <div class='row' style='margin-top:10px;'>
-        <a href='/voices/new'><button class='secondary' type='button'>Generate / New</button></a>
+        <a href='/voices/new'><button class='secondary' type='button'>Generate new voice model</button></a>
       </div>
 
       <div id='voicesList' style='margin-top:10px' class='muted'>Loading…</div>
@@ -847,9 +847,7 @@ function loadVoices(){
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
         + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='playVoiceEl(this)'>Play</button>"
-        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='genSampleEl(this)'>Gen sample</button>"
-        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='renameVoiceEl(this)'>Rename</button>"
-        + (en ? ("<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='disableVoiceEl(this)'>Disable</button>") : "")
+        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='editVoiceEl(this)'>Edit</button>"
         + "</div>"
         + "</div>";
     }).join('');
@@ -886,6 +884,32 @@ function createVoice(){
 
 
 
+
+
+function editVoiceEl(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    return editVoice(idEnc);
+  }catch(e){}
+}
+
+function editVoice(idEnc){
+  var id = decodeURIComponent(idEnc||'');
+  if (!id) return;
+  var nm = prompt('Display name:', '');
+  if (nm==null) return;
+  nm = String(nm||'').trim();
+  if (!nm) return;
+  return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id), {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({display_name: nm})})
+    .then(function(j){
+      if (j && j.ok){
+        try{ toastSet('Saved', 'ok', 2200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+        return loadVoices();
+      }
+      alert((j && j.error) ? j.error : 'Save failed');
+    })
+    .catch(function(e){ alert(String(e)); });
+}
 function playVoiceEl(btn){
   try{
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
