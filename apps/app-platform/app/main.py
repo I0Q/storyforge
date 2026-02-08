@@ -136,7 +136,7 @@ def index(response: Response):
     </div>
     <div id='boot' class='boot muted'><strong>Build</strong>: __BUILD__ • JS: booting…</div>
     <div class='row'>
-            <button class='secondary' onclick='refreshAll()'>Refresh</button>
+            
     </div>
   </div>
 
@@ -154,7 +154,7 @@ def index(response: Response):
           <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
         <div class='row'>
-          <button class='secondary' onclick='loadHistory()'>Reload</button>
+          
         </div>
       </div>
       <div id='jobs'>Loading…</div>
@@ -172,7 +172,7 @@ def index(response: Response):
         </div>
         <div class='row'>
           <a href='/library/new'><button class='secondary'>New story</button></a>
-          <button class='secondary' onclick='loadLibrary()'>Reload</button>
+          
         </div>
       </div>
       <div id='lib' class='muted'>Tap Reload to load stories.</div>

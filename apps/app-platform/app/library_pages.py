@@ -89,7 +89,7 @@ def register_library_pages(app: FastAPI) -> None:
                 f"<div class='pill'>{s['id']}</div></div>"
                 f"<div class='muted' style='margin-top:6px'>{s.get('description','')}</div>"
                 f"<div class='row' style='margin-top:10px'>"
-                f"<a href='/library/story/{s['id']}'><button class='secondary'>View / Edit</button></a>"
+                f"<a href='/library/story/{s['id']}/view'><button class='secondary'>View</button></a> <a href='/library/story/{s['id']}'><button class='secondary'>Edit</button></a>"
                 f"</div></div>"
                 for s in stories
             ]
@@ -197,6 +197,60 @@ def register_library_pages(app: FastAPI) -> None:
             return RedirectResponse(url=f"/library/story/{sid}", status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library/new?err={str(e)}", status_code=302)
+
+
+    @app.get("/library/story/{story_id}/view", response_class=HTMLResponse)
+    def library_story_view(story_id: str):
+        conn = db_connect()
+        try:
+            db_init(conn)
+            st = get_story_db(conn, story_id)
+        finally:
+            conn.close()
+
+        meta = st.get("meta") or {}
+        tags = ', '.join(meta.get("tags") or [])
+        story_md = st.get("story_md") or ""
+        chars = st.get("characters") or []
+
+        chars_lines = []
+        for c in chars:
+            nm = c.get('name') or c.get('id') or ''
+            ty = c.get('type') or ''
+            desc = c.get('description') or ''
+            line = f"- {nm}{(' ('+ty+')') if ty else ''}{(': '+desc) if desc else ''}"
+            chars_lines.append(line)
+
+        body = f"""
+<div class='top'>
+  <div>
+    <h1>{meta.get('title') or story_id}</h1>
+    <div class='muted'><span class='pill'>{story_id}</span></div>
+  </div>
+  <div class='row'>
+    <a href='/library'><button class='secondary'>Back</button></a>
+    <a href='/library/story/{story_id}'><button>Edit</button></a>
+  </div>
+</div>
+
+<div class='card'>
+  <div class='muted'>Description</div>
+  <div style='font-weight:950;margin-top:4px'>{meta.get('description') or '—'}</div>
+  <div class='muted' style='margin-top:10px'>Tags</div>
+  <div style='font-weight:950;margin-top:4px'>{tags or '—'}</div>
+</div>
+
+<div class='card'>
+  <div style='font-weight:950'>Characters</div>
+  <pre style='white-space:pre-wrap;margin-top:10px'>{'\n'.join(chars_lines) if chars_lines else '—'}</pre>
+</div>
+
+<div class='card'>
+  <div style='font-weight:950'>Story</div>
+  <pre style='white-space:pre-wrap;line-height:1.5;margin-top:10px'>{story_md}</pre>
+</div>
+"""
+        return _html_page("StoryForge - Story", body)
 
     @app.get("/library/story/{story_id}", response_class=HTMLResponse)
     def library_story_get(story_id: str, request: Request):
