@@ -142,7 +142,8 @@ def index(response: Response):
   <style>
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
     body.noScroll{overflow:hidden;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px calc(70px + env(safe-area-inset-bottom)) 18px;max-width:920px;margin:0 auto;}
+    html,body{overscroll-behavior-y:none;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px calc(70px + env(safe-area-inset-bottom)) 18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
     body.monOff{padding-bottom:18px;}
     body.monOff .dock{display:none}
     body.monOff #monitorBackdrop{display:none}
@@ -354,8 +355,6 @@ def index(response: Response):
     <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
     <button id='tab-voices' class='tab' onclick='showTab("voices")'>Voices</button>
         <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Settings</button>
-  </div>
-
   </div>
 
   <div id='pane-history'>
@@ -1435,7 +1434,9 @@ def voices_edit_page(voice_id: str, response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge - Edit Voice</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:920px;margin:0 auto;}
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
     a{color:#4aa3ff;text-decoration:none}
     .nav{display:flex;justify-content:space-between;align-items:center;gap:12px;}
     .left{display:flex;gap:10px;align-items:center;}
