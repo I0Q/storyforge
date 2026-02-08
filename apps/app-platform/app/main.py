@@ -486,16 +486,7 @@ function loadLibrary(){
 
       el.innerHTML = stories.map(st => {
     const tags = Array.isArray(st.tags) ? st.tags.join(', ') : '';
-    return `<a href='/library/story/${encodeURIComponent(st.id)}' style='text-decoration:none;color:inherit'>
-      <div class='job'>
-        <div class='row' style='justify-content:space-between;'>
-          <div class='title'>${st.title || st.id}</div>
-          <div class='pill'>${st.id}</div>
-        </div>
-        <div class='muted' style='margin-top:6px'>${st.description || ''}</div>
-        ${tags ? `<div class='muted' style='margin-top:6px'>Tags: ${tags}</div>` : ''}
-      </div>
-    </a>`;
+    return '<a href="/library/story/' + encodeURIComponent(st.id) + '" style="text-decoration:none;color:inherit">' +'<div class="job">' +'<div class="row" style="justify-content:space-between;">' +'<div class="title">' + (st.title || st.id) + '</div>' +'<div class="pill">' + st.id + '</div>' +'</div>' +'<div class="muted" style="margin-top:6px">' + (st.description || '') + '</div>' +(tags ? ('<div class="muted" style="margin-top:6px">Tags: ' + tags + '</div>') : '') +'</div></a>';
     }).join('');
   }).catch(function(e){
     el.innerHTML = `<div class='muted'>Error loading library: ${String(e)}</div>`;
