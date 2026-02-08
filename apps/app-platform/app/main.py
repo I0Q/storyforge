@@ -171,6 +171,7 @@ def index(response: Response):
           <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
         </div>
         <div class='row'>
+          <a href='/library/new'><button class='secondary'>New story</button></a>
           <button class='secondary' onclick='loadLibrary()'>Reload</button>
         </div>
       </div>
@@ -333,7 +334,7 @@ function loadHistory(){
         <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
         <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
-    </div>`;
+    </div></a>`;
     }).join('');
   }).catch(function(e){
     el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
@@ -485,14 +486,14 @@ function loadLibrary(){
 
       el.innerHTML = stories.map(st => {
     const tags = Array.isArray(st.tags) ? st.tags.join(', ') : '';
-    return `<div class='job' style='cursor:pointer' onclick='openStory(${JSON.stringify(st.id)})'>
+    return `<a href='/library/story/${encodeURIComponent(st.id)}' style='text-decoration:none;color:inherit'><div class='job'>`
       <div class='row' style='justify-content:space-between;'>
         <div class='title'>${st.title || st.id}</div>
         <div class='pill'>${st.id}</div>
       </div>
       <div class='muted' style='margin-top:6px'>${st.description || ''}</div>
       ${tags ? `<div class='muted' style='margin-top:6px'>Tags: ${tags}</div>` : ''}
-    </div>`;
+    </div></a>`;
     }).join('');
   }).catch(function(e){
     el.innerHTML = `<div class='muted'>Error loading library: ${String(e)}</div>`;
