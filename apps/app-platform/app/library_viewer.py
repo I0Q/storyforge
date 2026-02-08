@@ -211,7 +211,7 @@ function doDelete(){{
   
   fetch('/api/library/story/' + encodeURIComponent(window.__STORY_ID), {{method:'DELETE'}})
     .then(function(r){{ return r.json().catch(function(){{return {{ok:false}};}}); }})
-    .then(function(j){{ if (j.ok){{ window.location.href='/?tab=library'; }} else {{  }} }})
+    .then(function(j){{ if (j.ok){{ window.location.href='/#tab-library'; }} else {{  }} }})
     .catch(function(_e){{  }});
 }}
 
@@ -322,7 +322,7 @@ if ($('mdCode')) {{
                 "    </div>",
                 "  </div>",
                 "  <div class='row'>",
-                "    <a href='/?tab=library'><button class='secondary' type='button'>Back</button></a>",
+                "    <a href='/#tab-library'><button class='secondary' type='button'>Back</button></a>",
                 "    <button class='danger' type='button' onclick=\"doDelete()\">Delete</button>",
                 "  </div>",
                 "</div>",

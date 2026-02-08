@@ -108,7 +108,7 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='muted'>Create, edit, and delete text-only source stories.</div>
   </div>
   <div class='row'>
-    <a href='/?tab=library'><button class='secondary'>Back</button></a>
+    <a href='/#tab-library'><button class='secondary'>Back</button></a>
     <a href='/library/new'><button>New story</button></a>
   </div>
 </div>
@@ -141,7 +141,7 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='muted'>Create a new text-only story (Markdown + characters).</div>
   </div>
   <div class='row'>
-    <a href='/?tab=library'><button class='secondary'>Back</button></a>
+    <a href='/#tab-library'><button class='secondary'>Back</button></a>
   </div>
 </div>
 
@@ -213,7 +213,7 @@ def register_library_pages(app: FastAPI) -> None:
             finally:
                 conn.close()
 
-            return RedirectResponse(url='/?tab=library', status_code=302)
+            return RedirectResponse(url='/#tab-library', status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library/new?err={str(e)}", status_code=302)
 
@@ -240,7 +240,7 @@ def register_library_pages(app: FastAPI) -> None:
     <h1>{meta.get('title') or story_id}</h1>
   </div>
   <div class='row'>
-    <a href='/?tab=library'><button class='secondary'>Back</button></a>
+    <a href='/#tab-library'><button class='secondary'>Back</button></a>
     <form method='post' action='/library/story/{story_id}/delete' onsubmit="return confirm('Delete this story?');">
       <button class='danger' type='submit'>Delete</button>
     </form>
@@ -327,7 +327,7 @@ def register_library_pages(app: FastAPI) -> None:
                 upsert_story_db(conn, sid, title or sid, tags_l, story_md or "", chars)
             finally:
                 conn.close()
-            return RedirectResponse(url='/?tab=library', status_code=302)
+            return RedirectResponse(url='/#tab-library', status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library/story/{story_id}?err={str(e)}", status_code=302)
 
@@ -341,7 +341,7 @@ def register_library_pages(app: FastAPI) -> None:
                 delete_story_db(conn, sid)
             finally:
                 conn.close()
-            return RedirectResponse(url='/?tab=library', status_code=302)
+            return RedirectResponse(url='/#tab-library', status_code=302)
         except Exception as e:
             return RedirectResponse(url=f"/library?err={str(e)}", status_code=302)
 
