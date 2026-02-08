@@ -2022,8 +2022,7 @@ def todo_page(request: Request, response: Response):
       </div>
       <div class="right">
         <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-        <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
-        
+                
       </div>
     </div>
   </div>
@@ -2037,6 +2036,7 @@ def todo_page(request: Request, response: Response):
         <span class="slider"></span>
       </label>
       <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
+      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
     </div>
   </div>
 
