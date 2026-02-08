@@ -277,10 +277,10 @@ def index(response: Response):
       <div class='muted'>Cloud control plane (App Platform) + Tinybox compute via VPC gateway.</div>
     </div>
     <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
-    <div class='row'>
+    <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
         <div id='topMenu' class='menu'>
           <a href='/logout'>Logout</a>
         </div>
@@ -303,10 +303,10 @@ def index(response: Response):
           <div style='font-weight:950;'>Recent jobs</div>
           <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
-        <div class='row'>
+        <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
         <div id='topMenu' class='menu'>
           <a href='/logout'>Logout</a>
         </div>
@@ -327,10 +327,10 @@ def index(response: Response):
           <div style='font-weight:950;'>Story Library</div>
           <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
         </div>
-        <div class='row'>
+        <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
         <div id='topMenu' class='menu'>
           <a href='/logout'>Logout</a>
         </div>
@@ -348,10 +348,10 @@ def index(response: Response):
           <div id='libTitle' style='font-weight:950;'>Story</div>
           <div id='libDesc' class='muted'></div>
         </div>
-        <div class='row'>
+        <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
         <div id='topMenu' class='menu'>
           <a href='/logout'>Logout</a>
         </div>
@@ -1306,10 +1306,10 @@ try{
           <div class='sheetTitle'>System monitor</div>
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
-        <div class='row'>
+        <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
         <div id='topMenu' class='menu'>
           <a href='/logout'>Logout</a>
         </div>
@@ -1390,10 +1390,10 @@ def voices_new_page(response: Response):
       <h1>Generate / New Voice</h1>
       <div class='muted'>Test a voice sample before saving it to the roster.</div>
     </div>
-    <div class='row'>
+    <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
-        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='Menu'>☰</button>
+        <button class='menuBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>☰</button>
         <div id='topMenu' class='menu'>
           <a href='/logout'>Logout</a>
         </div>
