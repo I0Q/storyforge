@@ -312,7 +312,7 @@ def index(response: Response):
   <div class='top'>
     <div>
       <div class='brandRow'><h1>StoryForge</h1><div id='pageName' class='pageName'>Jobs</div></div>
-      <div class='muted'>Cloud control plane (App Platform) + Tinybox compute via VPC gateway.</div>
+      
     </div>
     <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
     <div class='row' style='justify-content:flex-end;'>
