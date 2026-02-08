@@ -310,8 +310,23 @@ function stopMetricsStream(){
 }
 
 
+function loadMonitorPref(){
+  try{
+    const v = localStorage.getItem('sf_monitor_enabled');
+    if (v === null) return true;
+    return v === '1';
+  }catch(e){
+    return true;
+  }
+}
+
+function saveMonitorPref(on){
+  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
+}
+
 function setMonitorEnabled(on){
   monitorEnabled = !!on;
+  saveMonitorPref(monitorEnabled);
   const dock = document.getElementById('monitorDock');
   const backdrop = document.getElementById('monitorBackdrop');
   const sheet = document.getElementById('monitorSheet');
@@ -483,7 +498,7 @@ async function tts(){
 
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
-setMonitorEnabled(true);
+setMonitorEnabled(loadMonitorPref());
 loadHistory();
 </script>
 
