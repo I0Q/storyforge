@@ -316,7 +316,7 @@ def index(response: Response):
         <button class='secondary' onclick='loadVoices()'>Reload voices</button>
       </div>
 
-      <div id='voicesList' style='margin-top:10px' class='muted'>—</div>
+      <div id='voicesList' style='margin-top:10px' class='muted'>Loading…</div>
 
       <div style='font-weight:950;margin-top:12px;'>Add voice</div>
       <div class='kvs' style='margin-top:8px'>
@@ -442,7 +442,9 @@ function showTab(name, opts){
   // lazy-load tab content
   try{
     if (name==='history') loadHistory();
+loadVoices();
     else if (name==='library') loadLibrary();
+    else if (name==='voices') loadVoices();
   }catch(_e){}
 }
 
@@ -914,7 +916,8 @@ function copyStory(){
 
 function refreshAll(){
   // best-effort refresh without allSettled for older Safari
-  try{ var p = loadHistory(); if (p && p.catch) p.catch(function(_e){}); }catch(_e){}
+  try{ var p = loadHistory();
+loadVoices(); if (p && p.catch) p.catch(function(_e){}); }catch(_e){}
 }
 
 function setBar(elId, pct){
@@ -1106,6 +1109,7 @@ refreshAll();
 setMonitorEnabled(loadMonitorPref());
 setDebugUiEnabled(loadDebugPref());
 loadHistory();
+loadVoices();
 
 try{
   if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: ok';
