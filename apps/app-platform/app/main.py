@@ -259,8 +259,7 @@ function renderProc(m){
       right
     ].join(' '));
   }
-  el.textContent = lines.join('
-');
+  el.textContent = lines.join('\\n');
 }
   // Expect list of {pid,name,cpu_pct,ram_mb,gpu_mem_mb}
   el.innerHTML = procs.slice(0,12).map(p=>{
