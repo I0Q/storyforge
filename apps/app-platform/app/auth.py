@@ -6,7 +6,7 @@ import os
 import time
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
 
 PASSPHRASE_SHA256 = (os.environ.get("PASSPHRASE_SHA256") or "").strip().lower()
 SESSION_TTL_SEC = 24 * 60 * 60
@@ -90,6 +90,14 @@ def register_passphrase_auth(app: FastAPI) -> None:
 
         if _is_session_authed(request):
             return await call_next(request)
+
+        # For API calls, always return JSON so the frontend can handle it.
+        if request.url.path.startswith('/api/'):
+            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
+        # For the main UI routes, always redirect to login when not authed.
+        if request.method == 'GET':
+            return RedirectResponse(url="/login", status_code=302)
 
         accept = (request.headers.get("accept") or "").lower()
         wants_html = ("text/html" in accept) or (accept == "")
