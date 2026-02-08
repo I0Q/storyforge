@@ -96,14 +96,16 @@ def register_library_pages(app: FastAPI) -> None:
         err_html = f"<div class='err'>{err}</div>" if err else ""
 
         body = f"""
-<div class='top'>
-  <div>
-    <h1>Story Library</h1>
-    <div class='muted'>Create, edit, and delete text-only source stories.</div>
-  </div>
-  <div class='row'>
-    <a href='/#tab-library'><button class='secondary'>Back</button></a>
-    <a href='/library/new'><button>New story</button></a>
+<div class='navBar'>
+  <div class='top'>
+    <div>
+      <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Library</div></div>
+      <div class='muted'>Story list</div>
+    </div>
+    <div class='row' style='justify-content:flex-end'>
+      <a href='/#tab-library'><button class='secondary'>Back</button></a>
+      <a href='/library/new'><button>New story</button></a>
+    </div>
   </div>
 </div>
 
@@ -129,13 +131,15 @@ def register_library_pages(app: FastAPI) -> None:
         err_html = f"<div class='err'>{err}</div>" if err else ""
         chars_default = """characters:\n  - id: narrator\n    name: Narrator\n    type: narrator\n    description: \"Warm, calm storyteller.\"\n    aliases: []\n"""
         body = f"""
-<div class='top'>
-  <div>
-    <h1>New story</h1>
-    <div class='muted'>Create a new text-only story (Markdown + characters).</div>
-  </div>
-  <div class='row'>
-    <a href='/#tab-library'><button class='secondary'>Back</button></a>
+<div class='navBar'>
+  <div class='top'>
+    <div>
+      <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>New story</div></div>
+      <div class='muted'>Create a new text-only story</div>
+    </div>
+    <div class='row' style='justify-content:flex-end'>
+      <a href='/#tab-library'><button class='secondary'>Back</button></a>
+    </div>
   </div>
 </div>
 
