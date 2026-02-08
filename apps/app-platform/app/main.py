@@ -151,7 +151,6 @@ def index(response: Response):
       </div>
     </div>
   </div>
-  </div>
 
 <script>
 function showTab(name){
@@ -221,8 +220,8 @@ async function loadHistory(){
         <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>segments</div><div>${job.total_segments||0}</div>
-        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
-        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
+        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
+        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)">Copy</button>`:''}</div>
       </div>
     </div>`;
   }).join('');
