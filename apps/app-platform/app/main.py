@@ -1569,7 +1569,7 @@ function recomputeCounts(){
       // Update header text: replace trailing (x/y)
       try{
         var txt = h.textContent || '';
-        txt = txt.replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, '');
+        try{ txt = txt.replace(new RegExp('\\s*\\(\\d+\\s*\\/\\s*\\d+\\)\\s*$', 'g'), ''); }catch(e){}
         h.textContent = txt + ' (' + String(done) + '/' + String(total) + ')';
       }catch(e){}
     }
@@ -1618,6 +1618,7 @@ function toggleTodo(id, checked){
     xhr.open('POST', url, true);
     xhr.withCredentials = true;
     xhr.setRequestHeader('Content-Type','application/json');
+    try{ recomputeCounts(); }catch(e){}
     xhr.onreadystatechange = function(){
       if (xhr.readyState===4){
         if (xhr.status!==200){
@@ -1757,7 +1758,7 @@ def todo_page(request: Request, response: Response):
     </div>
   </div>
   <div class="row" style="justify-content:space-between;margin:12px 0">
-    <div class="muted"></div>
+    <div class="muted" style="flex:1"></div>
     <div class="row" style="justify-content:flex-end;">
       <div class="muted" style="font-weight:950">Archived</div>
       <label class="switch" style="transform:scale(0.95)">
@@ -1796,6 +1797,7 @@ function toggleTodo(id, checked){
     xhr.open('POST', url, true);
     xhr.withCredentials = true;
     xhr.setRequestHeader('Content-Type','application/json');
+    try{ recomputeCounts(); }catch(e){}
     xhr.onreadystatechange = function(){
       if (xhr.readyState===4){
         if (xhr.status!==200){
