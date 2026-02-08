@@ -76,6 +76,22 @@ def list_stories() -> list[dict[str, Any]]:
     return out
 
 
+def list_stories_debug() -> dict[str, Any]:
+    root = _stories_dir()
+    children = []
+    try:
+        if root.exists():
+            children = [p.name for p in root.iterdir() if p.is_dir()][:50]
+    except Exception as e:
+        children = [f"error: {type(e).__name__}: {e}"]
+
+    return {
+        "stories_dir": str(root),
+        "exists": root.exists(),
+        "children": children,
+    }
+
+
 def get_story(story_id: str) -> dict[str, Any]:
     if not _safe_id(story_id):
         raise FileNotFoundError("invalid story id")

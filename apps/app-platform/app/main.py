@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from .auth import register_passphrase_auth
 from .db import db_connect, db_init, db_list_jobs
-from .library import list_stories, get_story
+from .library import list_stories, list_stories_debug, get_story
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi import Response
 
@@ -774,11 +774,17 @@ def api_metrics_stream():
 
 
 @app.get('/api/library/stories')
-def api_library_stories():
+def api_library_stories(debug: int = 0):
     try:
-        return {'ok': True, 'stories': list_stories()}
+        resp = {'ok': True, 'stories': list_stories()}
+        if debug:
+            resp['debug'] = list_stories_debug()
+        return resp
     except Exception as e:
-        return {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
+        resp = {'ok': False, 'error': f'library_failed: {type(e).__name__}: {e}'}
+        if debug:
+            resp['debug'] = list_stories_debug()
+        return resp
 
 
 @app.get('/api/library/story/{story_id}')
