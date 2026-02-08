@@ -833,7 +833,7 @@ function loadVoices(){
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
         + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='playVoiceEl(this)'>Play</button>"
-        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick="goVoiceEdit(this)">Edit</button>"
+        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='goVoiceEdit(this)'>Edit</button>"
         + "</div>"
         + "</div>";
     }).join('');
