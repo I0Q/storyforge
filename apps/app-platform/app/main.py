@@ -488,8 +488,7 @@ async function openStory(id){
     const ty = c.type || '';
     const desc = c.description || '';
     return `- ${nm}${ty?` (${ty})`:''}${desc?`: ${desc}`:''}`;
-  }).join('
-') || '(none)';
+  }).join('\\n') || '(none)';
 
   document.getElementById('libChars').textContent = chars;
   document.getElementById('libStory').textContent = currentStory.story_md || '';
@@ -508,7 +507,7 @@ function copyStory(){
 }
 
 
-async async function refreshAll(){
+async function refreshAll(){
   await Promise.allSettled([loadHistory()]);
 }
 
