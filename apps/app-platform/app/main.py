@@ -1404,13 +1404,13 @@ def todo_page(response: Response):
 
     for cat in order:
         its = groups.get(cat, [])
-        open_n = 0
+        done_n = 0
         for it in its:
             st = (it.get('status') or 'open').lower()
-            if st == 'open':
-                open_n += 1
+            if st != 'open':
+                done_n += 1
         total_n = len(its)
-        rows.append(f"<h2>{esc(cat)} <span class='count'>({open_n}/{total_n})</span></h2>")
+        rows.append(f"<h2>{esc(cat)} <span class='count'>({done_n}/{total_n})</span></h2>")
         for it in its:
             st = (it.get('status') or 'open').lower()
             box = '☐' if st == 'open' else '☑'
