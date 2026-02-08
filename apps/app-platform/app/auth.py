@@ -81,6 +81,39 @@ def _login_html(err: str = "") -> str:
 
 
 def register_passphrase_auth(app: FastAPI) -> None:
+    # Automation/session bootstrap endpoint (token-gated).
+    # Purpose: allow OpenClaw/browser automation to obtain a valid sf_sid cookie without typing the passphrase.
+    # Guard: TODO_API_TOKEN header (same token used for assistant-driven todo writes).
+    @app.post('/api/session')
+    def api_issue_session(request: Request):
+        if not _enabled():
+            return JSONResponse({"ok": False, "error": "auth_disabled"}, status_code=503)
+
+        token = (os.environ.get('TODO_API_TOKEN') or '').strip()
+        got = (request.headers.get('x-sf-todo-token') or '').strip()
+        if not got:
+            auth = (request.headers.get('authorization') or '').strip()
+            if auth.lower().startswith('bearer '):
+                got = auth[7:].strip()
+
+        if not token or not got or not hmac.compare_digest(got, token):
+            return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
+
+        ts = int(time.time())
+        sid = _sign_session(ts)
+        resp = JSONResponse({"ok": True})
+        resp.headers["Cache-Control"] = "no-store"
+        resp.set_cookie(
+            key="sf_sid",
+            value=sid,
+            max_age=SESSION_TTL_SEC,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/",
+        )
+        return resp
+
     @app.middleware("http")
     async def _gate(request: Request, call_next):
         # Fail-open until configured so we don't lock ourselves out.
