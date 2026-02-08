@@ -238,7 +238,7 @@ def index(response: Response):
       <h1>StoryForge</h1>
       <div class='muted'>Cloud control plane (App Platform) + Tinybox compute via VPC gateway.</div>
     </div>
-    <div id='boot' class='boot muted'><strong>Build</strong>: __BUILD__ • JS: booting…</div>
+    <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
     <div class='row'>
             
     </div>
@@ -353,11 +353,11 @@ def index(response: Response):
 window.__SF_BUILD = '__BUILD__';
 window.__SF_BOOT_TS = Date.now();
 window.addEventListener('error', (ev)=>{
-  const b=document.getElementById('boot');
+  const b=document.getElementById('bootText') || document.getElementById('boot');
   if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS error: ${ev.message || ev.type}`;
 });
 window.addEventListener('unhandledrejection', (ev)=>{
-  const b=document.getElementById('boot');
+  const b=document.getElementById('bootText') || document.getElementById('boot');
   if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS promise error`;
 });
 </script>
@@ -522,6 +522,17 @@ function copyToClipboard(text){
     ta.remove();
   }
 }
+
+function copyBoot(){
+  try{
+    var t = (document.getElementById('bootText') || document.getElementById('boot'));
+    var txt = t ? (t.textContent || '') : '';
+    if (!txt) return;
+    if (typeof copyToClipboard==='function') copyToClipboard(txt);
+    try{ toastSet('Copied build/JS', 'ok', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+  }catch(e){}
+}
+
 
 function fmtTs(ts){
   if (!ts) return '—';
@@ -758,6 +769,8 @@ function loadVoices(){
         + "</div>"
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
+        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='playVoiceEl(this)'>Play</button>"
+        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='genSampleEl(this)'>Gen sample</button>"
         + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='renameVoiceEl(this)'>Rename</button>"
         + (en ? ("<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='disableVoiceEl(this)'>Disable</button>") : "")
         + "</div>"
@@ -794,6 +807,39 @@ function createVoice(){
     .catch(function(e){ alert(String(e)); });
 }
 
+
+
+function playVoiceEl(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    var id = decodeURIComponent(idEnc||'');
+    if (!id) return;
+    return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id) + '/sample', {method:'POST'})
+      .then(function(j){
+        if (j && j.ok && j.sample_url){
+          try{ window.location.href = j.sample_url; }catch(e){}
+          return loadVoices();
+        }
+        alert((j && j.error) ? j.error : 'Play failed');
+      }).catch(function(e){ alert(String(e)); });
+  }catch(e){}
+}
+
+function genSampleEl(btn){
+  try{
+    var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
+    var id = decodeURIComponent(idEnc||'');
+    if (!id) return;
+    return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id) + '/sample', {method:'POST'})
+      .then(function(j){
+        if (j && j.ok){
+          try{ toastSet('Sample generated', 'ok', 2000); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+          return loadVoices();
+        }
+        alert((j && j.error) ? j.error : 'Generate failed');
+      }).catch(function(e){ alert(String(e)); });
+  }catch(e){}
+}
 
 function renameVoiceEl(btn){
   try{
@@ -1167,6 +1213,104 @@ try{
 
     return html.replace("__BUILD__", str(build)).replace("__VOICE_SERVERS__", voice_servers_html)
 
+@app.get('/voices/new', response_class=HTMLResponse)
+def voices_new_page(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return '''<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge - New Voice</title>
+  <style>
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
+    a{color:var(--accent);text-decoration:none}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);font-size:12px;}
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+    input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
+    .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
+    .kvs div.k{color:var(--muted)}
+    audio{width:100%;margin-top:10px;}
+    .hide{display:none}
+    .err{color:var(--bad);font-weight:950;margin-top:10px;}
+  </style>
+</head>
+<body>
+  <div class='top'>
+    <div>
+      <h1>Generate / New Voice</h1>
+      <div class='muted'>Test a voice sample before saving it to the roster.</div>
+    </div>
+    <div class='row'>
+      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+    </div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Voice config</div>
+    <div class='kvs'>
+      <div class='k'>id</div><div><input id='id' placeholder='mira' /></div>
+      <div class='k'>name</div><div><input id='name' placeholder='Mira' /></div>
+      <div class='k'>engine</div><div><input id='engine' placeholder='xtts' /></div>
+      <div class='k'>voice_ref</div><div><input id='voice_ref' placeholder='speaker_12 / provider id' /></div>
+      <div class='k'>sample text</div><div><textarea id='text' placeholder='Hello…'></textarea></div>
+    </div>
+
+    <div class='row' style='margin-top:10px;'>
+      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
+      <button type='button' onclick='saveVoice()'>Save voice</button>
+    </div>
+
+    <div id='out' class='muted' style='margin-top:10px;'>—</div>
+    <audio id='audio' controls class='hide'></audio>
+  </div>
+
+<script>
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function jsonFetch(url, opts){
+  opts = opts || {};
+  opts.credentials = 'include';
+  return fetch(url, opts).then(function(r){
+    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
+    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+  });
+}
+function val(id){ var el=document.getElementById(id); return el?el.value:''; }
+
+function testSample(){
+  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('text') || ('Hello. This is ' + (val('name')||val('id')||'a voice') + '.'), upload:true};
+  var out=document.getElementById('out'); if(out) out.textContent='Generating…';
+  return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(j){
+      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
+      if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
+      if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
+      var a=document.getElementById('audio');
+      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+
+function saveVoice(){
+  var payload={id: val('id'), display_name: val('name'), engine: val('engine'), voice_ref: val('voice_ref'), sample_text: val('text')};
+  var out=document.getElementById('out'); if(out) out.textContent='Saving…';
+  return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(j){
+      if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">'+esc(j && j.error ? j.error : 'save failed')+'</div>'; return; }
+      if(out) out.textContent='Saved.';
+      window.location.href='/#tab-voices';
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+</script>
+</body>
+</html>'''
+
+
 
 @app.get('/api/ping')
 def api_ping():
@@ -1306,6 +1450,49 @@ def api_voices_delete(voice_id: str):
     except Exception as e:
         return {'ok': False, 'error': f'delete_failed: {type(e).__name__}: {e}'}
 
+
+
+
+@app.post('/api/voices/{voice_id}/sample')
+def api_voice_sample(voice_id: str):
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            v = get_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+
+        engine = str(v.get('engine') or '')
+        voice_ref = str(v.get('voice_ref') or '')
+        text = str(v.get('sample_text') or '').strip() or f"Hello. This is {v.get('display_name') or voice_id}."
+
+        payload = {'engine': engine, 'voice': voice_ref, 'text': text, 'upload': True}
+        r = requests.post(GATEWAY_BASE + '/v1/tts', json=payload, headers=_h(), timeout=120)
+        r.raise_for_status()
+        j = r.json()
+        sample_url = str(j.get('url') or j.get('sample_url') or '')
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            upsert_voice_db(
+                conn,
+                voice_id,
+                engine,
+                voice_ref,
+                str(v.get('display_name') or voice_id),
+                bool(v.get('enabled', True)),
+                text,
+                sample_url,
+            )
+        finally:
+            conn.close()
+
+        return {'ok': True, 'sample_url': sample_url}
+    except Exception as e:
+        return {'ok': False, 'error': f'sample_failed: {type(e).__name__}: {e}'}
 
 @app.get('/api/library/stories')
 def api_library_stories():
