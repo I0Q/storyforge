@@ -180,7 +180,7 @@ def index(response: Response):
 
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
-    .boot{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
+    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
     body.debugOff #boot{display:none}
     .boot strong{color:var(--text);}
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
@@ -314,7 +314,6 @@ def index(response: Response):
       <div class='brandRow'><h1>StoryForge</h1><div id='pageName' class='pageName'>Jobs</div></div>
       
     </div>
-    <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
     <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
@@ -347,6 +346,8 @@ def index(response: Response):
   </div>
 
   </div>
+
+  <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
@@ -1166,13 +1167,16 @@ function fmtPct(x){
 }
 
 function openMonitor(){
+  try{ window.__sfScrollY = window.scrollY || 0; }catch(e){}
   if (!monitorEnabled) return;
   try{ bindMonitorClose(); }catch(e){}
   var b=document.getElementById('monitorBackdrop');
   var sh=document.getElementById('monitorSheet');
   if (b){ b.classList.remove('hide'); b.style.display='block'; }
   if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+  try{ document.documentElement.classList.add('noScroll'); }catch(e){}
   try{ document.body.classList.add('noScroll'); }catch(e){}
+  try{ document.body.style.position='fixed'; document.body.style.top = '-' + String(window.__sfScrollY||0) + 'px'; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }catch(e){}
   try{ document.body.classList.add('sheetOpen'); }catch(e){}
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
   startMetricsStream();
@@ -1184,7 +1188,10 @@ function closeMonitor(){
   var sh=document.getElementById('monitorSheet');
   if (b){ b.classList.add('hide'); b.style.display='none'; }
   if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
+  try{ document.documentElement.classList.remove('noScroll'); }catch(e){}
   try{ document.body.classList.remove('noScroll'); }catch(e){}
+  try{ document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width=''; }catch(e){}
+  try{ window.scrollTo(0, window.__sfScrollY||0); }catch(e){}
   try{ document.body.classList.remove('sheetOpen'); }catch(e){}
 }
 
