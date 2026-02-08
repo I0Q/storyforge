@@ -46,6 +46,7 @@ def index(response: Response):
   <title>StoryForge</title>
   <style>
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
+    body.noScroll{overflow:hidden;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px 18px 86px 18px;max-width:920px;margin:0 auto;}
     a{color:var(--accent);text-decoration:none}
     code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
@@ -62,6 +63,7 @@ def index(response: Response):
     input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);}
     textarea{min-height:90px;}
     pre{background:#070b16;color:#d7e1ff;padding:12px;border-radius:12px;overflow:auto;border:1px solid var(--line)}
+    .term{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.25;white-space:pre;}
     .job{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}
     .job .title{font-weight:950;font-size:14px;}
     .pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--line);color:var(--muted)}
@@ -78,9 +80,9 @@ def index(response: Response):
     .dockStats{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
 
     /* bottom sheet */
-    .sheetBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;}
+    .sheetBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;touch-action:none;}
     .sheet{position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
-    .sheetInner{padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    .sheetInner{padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .sheetHandle{width:44px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);margin:6px auto 10px auto;}
     .sheetTitle{font-weight:950;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -131,10 +133,6 @@ def index(response: Response):
         </div>
       </div>
       <div id='jobs'>Loading…</div>
-      <div style='height:10px'></div>
-      <div style='font-weight:950;'>Processes</div>
-      <div class='muted'>Live from Tinybox compute node (top CPU/RAM/GPU).</div>
-      <div id='proc' class='muted' style='margin-top:8px'>Loading…</div>
     </div>
   </div>
 
@@ -145,22 +143,8 @@ def index(response: Response):
       <div class='row' style='margin-top:10px;'>
         <button id='monToggle' class='secondary' onclick='toggleMonitor()'>Disable monitor</button>
       </div>
-      <div style='height:14px'></div>
-      <div style='font-weight:950;margin-bottom:6px;'>TTS (gateway passthrough)</div>
-      <div class='muted'>This will work once Tinybox <code>/v1/tts</code> is implemented.</div>
-      <div style='margin-top:10px;'>
-        <label>Engine</label>
-        <input id='engine' value='tortoise'/>
-        <label style='display:block;margin-top:8px;'>Voice ID / Ref</label>
-        <input id='voice' value='emma'/>
-        <label style='display:block;margin-top:8px;'>Text</label>
-        <textarea id='text'>Hello from StoryForge cloud.</textarea>
-        <div class='row' style='margin-top:10px;'>
-          <button onclick='tts()'>Call /v1/tts</button>
-        </div>
-        <pre id='ttsout' style='margin-top:10px;'></pre>
-      </div>
     </div>
+  </div>
   </div>
 
 <script>
@@ -232,14 +216,51 @@ function renderMetrics(m){
 
 
 function renderProc(m){
-  const el = document.getElementById('proc');
+  const el = document.getElementById('monProc');
   if (!el) return;
   const b = m?.body || m || {};
   const procs = b.processes || b.procs || null;
   if (!procs || !Array.isArray(procs) || procs.length===0){
-    el.innerHTML = '<div class="muted">No process list available yet.</div>';
+    el.textContent = 'No process list available.';
     return;
   }
+
+  // terminal-like table
+  const rows = procs.slice(0, 18).map(p => ({
+    pid: String(p.pid ?? ''),
+    cpu: (p.cpu_pct!=null) ? Number(p.cpu_pct).toFixed(1) : '',
+    mem: (p.mem_pct!=null) ? Number(p.mem_pct).toFixed(1) : '',
+    gmem: (p.gpu_mem_mb!=null) ? Number(p.gpu_mem_mb).toFixed(0) : '',
+    et: String(p.elapsed ?? ''),
+    cmd: String(p.command ?? p.name ?? ''),
+    args: String(p.args ?? '')
+  }));
+
+  const pad = (s, n) => (s.length >= n ? s.slice(0,n) : s + ' '.repeat(n - s.length));
+  const header = [
+    pad('PID', 7),
+    pad('%CPU', 6),
+    pad('%MEM', 6),
+    pad('GPU', 5),
+    pad('ELAPSED', 9),
+    'COMMAND'
+  ].join(' ');
+
+  const lines = [header, '-'.repeat(header.length)];
+  for (const r of rows){
+    const right = (r.args && r.args !== r.cmd) ? (r.cmd + ' ' + r.args) : r.cmd;
+    lines.push([
+      pad(r.pid,7),
+      pad(r.cpu,6),
+      pad(r.mem,6),
+      pad(r.gmem,5),
+      pad(r.et,9),
+      right
+    ].join(' '));
+  }
+  el.textContent = lines.join('
+');
+}
   // Expect list of {pid,name,cpu_pct,ram_mb,gpu_mem_mb}
   el.innerHTML = procs.slice(0,12).map(p=>{
     const pid = p.pid ?? '—';
@@ -300,6 +321,7 @@ function setMonitorEnabled(on){
     if (dock) dock.classList.add('hide');
     if (backdrop) backdrop.classList.add('hide');
     if (sheet) sheet.classList.add('hide');
+    document.body.classList.remove('noScroll');
     if (btn){ btn.textContent = 'Enable monitor'; btn.classList.remove('secondary'); }
     return;
   }
@@ -339,6 +361,7 @@ function openMonitor(){
   if (!monitorEnabled) return;
   document.getElementById('monitorBackdrop')?.classList.remove('hide');
   document.getElementById('monitorSheet')?.classList.remove('hide');
+  document.body.classList.add('noScroll');
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
   startMetricsStream();
   // render last metrics immediately if we have them
@@ -348,6 +371,7 @@ function openMonitor(){
 function closeMonitor(){
   document.getElementById('monitorBackdrop')?.classList.add('hide');
   document.getElementById('monitorSheet')?.classList.add('hide');
+  document.body.classList.remove('noScroll');
 }
 
 function renderGpus(b){
@@ -496,6 +520,10 @@ loadHistory();
           <div class='bar' id='barRam'><div></div></div>
         </div>
       </div>
+
+      <div style='font-weight:950;margin-top:12px;'>Processes</div>
+      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
+      <pre id='monProc' class='term' style='margin-top:8px;'>Loading…</pre>
 
       <div style='font-weight:950;margin-top:12px;'>GPUs</div>
       <div id='monGpus' class='grid2' style='margin-top:8px;'></div
