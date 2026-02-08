@@ -1450,18 +1450,41 @@ def voices_edit_page(voice_id: str, response: Response):
   </style>
 </head>
 <body>
-  <div class='nav'>
-    <div class='left'>
-      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+  <div class='navBar'>
+    <div class='top'>
       <div>
         <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
+      <div class='row' style='justify-content:flex-end;'>
+        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+        <div class='menuWrap'>
+          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
+            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+            </svg>
+          </button>
+          <div id='topMenu' class='menuCard'>
+            <div class='uTop'>
+              <div class='uAvatar'>
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+                </svg>
+              </div>
+              <div>
+                <div class='uName'>User</div>
+                <div class='uSub'>Admin</div>
+              </div>
+            </div>
+            <div class='uActions'>
+              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class='row'>
-      <a href='/logout'><button class='secondary' type='button'>Logout</button></a>
-    </div>
-  </div>
   </div>
 
   <div class='card'>
