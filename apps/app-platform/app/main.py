@@ -721,8 +721,8 @@ function loadVoices(){
         + "</div>"
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
-        + "<button class='secondary' data-vid=\"" + encodeURIComponent(v.id) + "\" onclick=\"renameVoiceEl(this)\">Rename</button>"
-        + (en ? ("<button class='secondary' data-vid=\"" + encodeURIComponent(v.id) + "\" onclick=\"disableVoiceEl(this)\">Disable</button>") : "")
+        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='renameVoiceEl(this)'>Rename</button>"
+        + (en ? ("<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='disableVoiceEl(this)'>Disable</button>") : "")
         + "</div>"
         + "</div>";
     }).join('');
