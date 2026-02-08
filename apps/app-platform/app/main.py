@@ -442,7 +442,6 @@ function showTab(name, opts){
   // lazy-load tab content
   try{
     if (name==='history') loadHistory();
-loadVoices();
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
   }catch(_e){}
