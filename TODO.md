@@ -13,6 +13,7 @@
 - [ ] Ensure monitor toggle uses iOS-style switch + correct labels
 
 ## Navigation / UI polish
+- [ ] Add copy button for build number + JavaScript error code (boot banner)
 - [ ] Fix styling of the Debug UI option in the Settings tab (consistent card layout)
 - [x] History tab renamed to Jobs
 - [x] Advanced tab renamed to Settings

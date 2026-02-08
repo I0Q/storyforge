@@ -1416,7 +1416,7 @@ def todo_page(response: Response):
             box = '☐' if st == 'open' else '☑'
             rows.append(f"<div>{box} {esc(it.get('text') or '')}</div>")
 
-    body_html = "\\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
+    body_html = "\n".join(rows) if rows else "<div class='muted'>No TODO items yet.</div>"
 
     return '''<!doctype html>
 <html>

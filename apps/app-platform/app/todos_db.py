@@ -63,10 +63,9 @@ def bootstrap_todos_from_markdown(conn, md_text: str) -> int:
         return 0
 
     cur = conn.cursor()
-    cur.execute('SELECT COUNT(1) FROM sf_todos')
-    n = int(cur.fetchone()[0] or 0)
-    if n > 0:
-        return 0
+    # Build a set of existing (category,text,status) so we can import missing lines
+    cur.execute('SELECT category,text,status FROM sf_todos')
+    existing = set((r[0] or '', r[1] or '', (r[2] or 'open')) for r in cur.fetchall())
 
     cat = ''
     inserted = 0
@@ -86,7 +85,11 @@ def bootstrap_todos_from_markdown(conn, md_text: str) -> int:
             text = line[6:]
 
         if status and text and text.strip():
+            key = (cat or '', text.strip(), status)
+            if key in existing:
+                continue
             add_todo_db(conn, text=text.strip(), status=status, category=cat)
+            existing.add(key)
             inserted += 1
 
     return inserted
