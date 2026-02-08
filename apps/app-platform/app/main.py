@@ -240,24 +240,33 @@ function copyIconSvg(){
 }
 
 function copyFromAttr(el){
-  const v = el?.getAttribute?.('data-copy') || '';
+  var v = ''; try{ v = (el && el.getAttribute) ? (el.getAttribute('data-copy') || '') : ''; }catch(e){}
   if (v) copyToClipboard(v);
 }
 
-async function fetchJsonAuthed(url, opts){
-  const r = await fetch(url, opts);
-  if (r.status === 401){
-    // Not logged in (or cookie expired). Bounce to login.
-    window.location.href = '/login';
-    throw new Error('unauthorized');
-  }
-  return await r.json();
+function fetchJsonAuthed(url, opts){
+  return fetch(url, opts).then(function(r){
+    if (r.status === 401){
+      window.location.href = '/login';
+      throw new Error('unauthorized');
+    }
+    return r.json();
+  });
 }
 
 
-async function copyToClipboard(text){
+
+function copyToClipboard(text){
   try{
-    await navigator.clipboard.writeText(text);
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text).catch(function(_e){
+        const ta=document.createElement('textarea');
+        ta.value=text; document.body.appendChild(ta);
+        ta.select();
+        try{document.execCommand('copy');}catch(__e){}
+        ta.remove();
+      });
+    }
   }catch(e){
     const ta=document.createElement('textarea');
     ta.value=text; document.body.appendChild(ta);
@@ -277,25 +286,20 @@ function fmtTs(ts){
   }
 }
 
-async function loadHistory(){
+function loadHistory(){
   const el=document.getElementById('jobs');
   el.textContent='Loading…';
-  let j;
-  try{
-    j = await fetchJsonAuthed('/api/history?limit=60');
-  }catch(e){
-    el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
-    return;
-  }
-  if (!j.ok){
-    el.innerHTML=`<div class='muted'>Error: ${j.error||'unknown'}</div>`;
-    return;
-  }
-  if (!j.jobs.length){
-    el.innerHTML="<div class='muted'>No jobs yet.</div>";
-    return;
-  }
-  el.innerHTML=j.jobs.map(job=>{
+  return fetchJsonAuthed('/api/history?limit=60').then(function(j){
+    if (!j.ok){
+      el.innerHTML=`<div class='muted'>Error: ${j.error||'unknown'}</div>`;
+      return;
+    }
+    if (!j.jobs.length){
+      el.innerHTML="<div class='muted'>No jobs yet.</div>";
+      return;
+    }
+
+      el.innerHTML=j.jobs.map(job=>{
     return `<div class='job'>
       <div class='row' style='justify-content:space-between;'>
         <div class='title'>${job.title||job.id}</div>
@@ -310,7 +314,10 @@ async function loadHistory(){
         <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
     </div>`;
-  }).join('');
+    }).join('');
+  }).catch(function(e){
+    el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
+  });
 }
 
 let metricsES = null;
@@ -443,21 +450,20 @@ function toggleMonitor(){
 
 
 
-async function loadLibrary(){
+function loadLibrary(){
   const el=document.getElementById('lib');
   el.textContent='Loading…';
   document.getElementById('libDetailCard').style.display='none';
 
-  const j=await fetchJsonAuthed('/api/library/stories');
+  return fetchJsonAuthed('/api/library/stories').then(function(j){
   if (!j.ok){ el.innerHTML = `<div class='muted'>Error loading library</div>`; return; }
 
-  const stories = j.stories || [];
-  if (!stories.length){
-    el.innerHTML = `<div class='muted'>No stories yet. Add folders under <code>stories/</code>.</div>`;
-    return;
-  }
 
-  el.innerHTML = stories.map(st => {
+    var stories = j.stories || [];
+    if (!j.ok){ el.innerHTML = `<div class='muted'>Error loading library</div>`; return; }
+    if (!stories.length){ el.innerHTML = `<div class='muted'>No stories yet. Add folders under <code>stories/</code>.</div>`; return; }
+
+      el.innerHTML = stories.map(st => {
     const tags = Array.isArray(st.tags) ? st.tags.join(', ') : '';
     return `<div class='job' style='cursor:pointer' onclick='openStory(${JSON.stringify(st.id)})'>
       <div class='row' style='justify-content:space-between;'>
@@ -467,16 +473,19 @@ async function loadLibrary(){
       <div class='muted' style='margin-top:6px'>${st.description || ''}</div>
       ${tags ? `<div class='muted' style='margin-top:6px'>Tags: ${tags}</div>` : ''}
     </div>`;
-  }).join('');
+    }).join('');
+  }).catch(function(e){
+    el.innerHTML = `<div class='muted'>Error loading library</div>`;
+  });
 }
 
 let currentStory = null;
 
-async function openStory(id){
-  const j=await fetchJsonAuthed('/api/library/story/' + encodeURIComponent(id));
-  if (!j.ok){ alert('Error loading story'); return; }
-  currentStory = j.story;
-  const meta = currentStory.meta || {};
+function openStory(id){
+  return fetchJsonAuthed('/api/library/story/' + encodeURIComponent(id)).then(function(j){
+    if (!j.ok){ alert('Error loading story'); return; }
+    currentStory = j.story;
+    const meta = currentStory.meta || {};
 
   document.getElementById('libTitle').textContent = meta.title || currentStory.id;
   document.getElementById('libDesc').textContent = meta.description || '';
@@ -492,6 +501,7 @@ async function openStory(id){
   document.getElementById('libStory').textContent = currentStory.story_md || '';
 
   document.getElementById('libDetailCard').style.display='block';
+  }).catch(function(e){ alert('Error loading story'); });
 }
 
 function closeStory(){
@@ -500,13 +510,14 @@ function closeStory(){
 }
 
 function copyStory(){
-  const txt = currentStory?.story_md || '';
+  const txt = (currentStory && currentStory.story_md) ? currentStory.story_md : ''; 
   if (txt) copyToClipboard(txt);
 }
 
 
-async function refreshAll(){
-  await Promise.allSettled([loadHistory()]);
+function refreshAll(){
+  // best-effort refresh without allSettled for older Safari
+  try{ var p = loadHistory(); if (p && p.catch) p.catch(function(_e){}); }catch(_e){}
 }
 
 function setBar(elId, pct){
