@@ -8,8 +8,19 @@ import yaml
 
 
 def _repo_root() -> Path:
-    # apps/app-platform/app/library.py -> repo root is 4 levels up
-    return Path(__file__).resolve().parents[4]
+    p = Path(__file__).resolve()
+    # In App Platform, the working tree layout can differ. Walk upward and
+    # find the repo root by locating a `stories/` folder (preferred) or `.git/`.
+    for parent in [p.parent, *p.parents]:
+        try:
+            if (parent / "stories").exists():
+                return parent
+            if (parent / ".git").exists():
+                return parent
+        except Exception:
+            pass
+    # Fallback to a reasonable default.
+    return p.parents[3]
 
 
 def _stories_dir() -> Path:
