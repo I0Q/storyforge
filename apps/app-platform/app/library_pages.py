@@ -150,6 +150,28 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='k'>Title</div>
     <input name='title' placeholder='Maris and the Lighthouse' required />
 
+    <script>
+    (function(){{
+      function slugify(x){{
+        x = String(x||'').toLowerCase();
+        x = x.replace(/[^a-z0-9]+/g,'-');
+        x = x.replace(/^-+|-+$/g,'');
+        x = x.slice(0,64);
+        return x || 'story';
+      }}
+      var idEl = document.getElementsByName('id')[0];
+      var titleEl = document.getElementsByName('title')[0];
+      if (!idEl || !titleEl) return;
+      var touched = false;
+      idEl.addEventListener('input', function(){{ touched = true; }});
+      titleEl.addEventListener('input', function(){{
+        if (touched) return;
+        idEl.value = slugify(titleEl.value);
+      }});
+    }})();
+    </script>
+
+
     <div class='k'>Tags (comma-separated)</div>
     <input name='tags' placeholder='bedtime, calm' />
 
