@@ -872,7 +872,7 @@ def api_library_story_update(story_id: str, payload: dict[str, Any]):
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
-@app.delete('/api/library/story/{story_id}')@app.delete('/api/library/story/{story_id}')
+@app.delete('/api/library/story/{story_id}')
 def api_library_story_delete(story_id: str):
     try:
         story_id = validate_story_id(story_id)
