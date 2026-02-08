@@ -1745,36 +1745,36 @@ def todo_page(request: Request, response: Response):
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>StoryForge - TODO</title>
   <style>
-    :root{{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}}
-    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}}
-    a{{color:var(--accent);text-decoration:none}}
-    .top{{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}}
-    h1{{font-size:20px;margin:0;}}
-    .muted{{color:var(--muted);font-size:12px;}}
-    .err{{color:var(--bad);font-weight:950;margin:10px 0;}}
-    .bar{{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}}
-    .right{{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}}
-    button{{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}}
-    button.secondary{{background:transparent;color:var(--text);}}
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
+    a{color:var(--accent);text-decoration:none}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);font-size:12px;}
+    .err{color:var(--bad);font-weight:950;margin:10px 0;}
+    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}
+    .right{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
 
     /* iOS-like switch */
-    .switch{{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}}
-    .switch input{{display:none;}}
-    .slider{{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}}
-    .slider:before{{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}}
-    .switch input:checked + .slider{{background:#1f6feb;border-color:rgba(31,111,235,.35);}}
-    .switch input:checked + .slider:before{{transform:translateX(22px);}}
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
 
-    .card{{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}}
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
 
-    .catHead{{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}}
-    .catTitle{{font-weight:950;font-size:16px;}}
-    .catCount{{color:var(--muted);font-weight:800;font-size:12px;}}
+    .catHead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}
+    .catTitle{font-weight:950;font-size:16px;}
+    .catCount{color:var(--muted);font-weight:800;font-size:12px;}
 
-    .todoItem{{display:flex;gap:10px;align-items:flex-start;margin:10px 0;}}
-    .todoItem input{{margin-top:3px;transform:scale(1.15);}}
-    .todoText{{line-height:1.25;}}
-    .todoPlain{{margin:8px 0;color:var(--muted);}}
+    .todoItem{display:flex;gap:10px;align-items:flex-start;margin:10px 0;}
+    .todoItem input{margin-top:3px;transform:scale(1.15);}
+    .todoText{line-height:1.25;}
+    .todoPlain{margin:8px 0;color:var(--muted);}
   </style>
 </head>
 <body>
