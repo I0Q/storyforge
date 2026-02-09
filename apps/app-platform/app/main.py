@@ -1604,8 +1604,6 @@ def todo_page(request: Request, response: Response):
     if not show_arch:
         items = [it for it in items if not it.get('archived')]
 
-    def esc(x: str) -> str:
-        return pyhtml.escape(str(x or ''))
 
     # Group by category
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1668,269 +1666,205 @@ def todo_page(request: Request, response: Response):
 
     arch_checked = 'checked' if show_arch else ''
 
-    html = '''<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>StoryForge - TODO</title>
-  <style>
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
-    a{color:var(--accent);text-decoration:none}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
+    
+    todo_css = """
     .err{color:var(--bad);font-weight:950;margin:10px 0;}
     .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}
     .right{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
-
-    /* iOS-like switch */
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
     .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
     .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
     .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
     .switch input:checked + .slider:before{transform:translateX(22px);}
-
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-
     .catHead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}
     .catTitle{font-weight:950;font-size:16px;}
     .catCount{color:var(--muted);font-weight:800;font-size:12px;}
-
     .todoItem{display:block;margin:10px 0;}
-    /* swipe-delete (implemented as horizontal scroll) */
     .todoSwipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .todoSwipe::-webkit-scrollbar{display:none;}
     .todoSwipeInner{display:flex;min-width:100%;}
     .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
     .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
-    .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
     .todoHiBtn{border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:var(--muted);font-weight:950;border-radius:999px;padding:6px 10px;font-size:12px;line-height:1;cursor:pointer;}
     .todoHiBtn:active{transform:translateY(1px);}
-    .todoItem.hi{ }
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
     .todoItem input{margin-top:3px;transform:scale(1.15);}
     .todoText{line-height:1.25;}
     .todoPlain{margin:8px 0;color:var(--muted);}
-  </style>
-</head>
-<body>
-  <div class="navBar">
-    <div class="top">
-      <div>
-        <div class="brandRow"><h1>StoryForge</h1><div class="pageName">TODO</div></div>
-        <div class="muted">Internal tracker (check/uncheck requires login).</div>
-      </div>
-      <div class="right">
-        <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-                
-      </div>
-    </div>
-  </div>
+    """
 
-  <div class="bar">
-    <div class="muted"></div>
-    <div class="right">
-      <div class="muted" style="font-weight:950">Archived</div>
-      <label class="switch" aria-label="Toggle archived">
-        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
-        <span class="slider"></span>
-      </label>
-      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
-      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
-    </div>
-  </div>
+    todo_js = """
+    function toggleArchived(on){
+      try{ window.location.href = on ? '/todo?arch=1' : '/todo'; }catch(e){}
+    }
 
-  <div class="card">__BODY_HTML__</div>
+    function updateCatCount(cat){
+      try{
+        var head = document.querySelector(".catHead[data-cat='"+cat+"']");
+        if (!head) return;
+        var items = document.querySelectorAll(".todoItem[data-cat='"+cat+"'] input[type=checkbox]");
+        var done = 0; var total = items.length;
+        for (var i=0;i<items.length;i++){ if (items[i].checked) done++; }
+        var d = head.querySelector('span.done');
+        var t = head.querySelector('span.total');
+        if (d) d.textContent = String(done);
+        if (t) t.textContent = String(total);
+      }catch(e){}
+    }
 
-<script>
-function toggleArchived(on){
-  try{ window.location.href = on ? '/todo?arch=1' : '/todo'; }catch(e){}
-}
+    function onTodoToggle(cb){
+      try{
+        var id = cb.getAttribute('data-id');
+        var wrap = cb.closest ? cb.closest('.todoItem') : null;
+        var cat = wrap ? (wrap.getAttribute('data-cat') || '') : '';
+        if (cat) updateCatCount(cat);
 
-function updateCatCount(cat){
-  try{
-    var head = document.querySelector(".catHead[data-cat='"+cat+"']");
-    if (!head) return;
-    var items = document.querySelectorAll(".todoItem[data-cat='"+cat+"'] input[type=checkbox]");
-    var done = 0; var total = items.length;
-    for (var i=0;i<items.length;i++){ if (items[i].checked) done++; }
-    var d = head.querySelector('span.done');
-    var t = head.querySelector('span.total');
-    if (d) d.textContent = String(done);
-    if (t) t.textContent = String(total);
-  }catch(e){}
-}
-
-function onTodoToggle(cb){
-  try{
-    var id = cb.getAttribute('data-id');
-    var wrap = cb.closest ? cb.closest('.todoItem') : null;
-    var cat = wrap ? (wrap.getAttribute('data-cat') || '') : '';
-    if (cat) updateCatCount(cat);
-
-    var checked = !!cb.checked;
-    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status!==200){
-          // revert
-          try{ cb.checked = !checked; }catch(e){}
-          if (cat) updateCatCount(cat);
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-
-function toggleHighlight(id){
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-              if (el){
-                if (j.highlighted) el.classList.add('hi');
-                else el.classList.remove('hi');
-              }
-              return;
+        var checked = !!cb.checked;
+        var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type','application/json');
+        xhr.onreadystatechange = function(){
+          if (xhr.readyState===4){
+            if (xhr.status!==200){
+              // revert
+              try{ cb.checked = !checked; }catch(e){}
+              if (cat) updateCatCount(cat);
             }
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
+          }
+        };
+        xhr.send('{}');
+      }catch(e){}
+    }
 
-function deleteTodo(id){
-  if (!confirm('Delete this todo?')) return;
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
+    function toggleHighlight(id){
+      try{
+        var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type','application/json');
+        xhr.onreadystatechange = function(){
+          if (xhr.readyState===4){
+            if (xhr.status===200){
               try{
-                var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-                if (el && el.parentNode) el.parentNode.removeChild(el);
+                var j = JSON.parse(xhr.responseText||'{}');
+                if (j && j.ok){
+                  var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+                  if (el){
+                    if (j.highlighted) el.classList.add('hi');
+                    else el.classList.remove('hi');
+                  }
+                  return;
+                }
               }catch(e){}
-              try{ recomputeCounts(); }catch(e){}
-              return;
             }
-          }catch(e){}
-        }
-        alert('Delete failed');
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Delete failed'); }
-}
+          }
+        };
+        xhr.send('{}');
+      }catch(e){}
+    }
+
+    function deleteTodo(id){
+      if (!confirm('Delete this todo?')) return;
+      try{
+        var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type','application/json');
+        xhr.onreadystatechange = function(){
+          if (xhr.readyState===4){
+            if (xhr.status===200){
+              try{
+                var j = JSON.parse(xhr.responseText||'{}');
+                if (j && j.ok){
+                  try{
+                    var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+                    if (el && el.parentNode) el.parentNode.removeChild(el);
+                  }catch(e){}
+                  try{ recomputeCounts(); }catch(e){}
+                  return;
+                }
+              }catch(e){}
+            }
+            alert('Delete failed');
+          }
+        };
+        xhr.send('{}');
+      }catch(e){ alert('Delete failed'); }
+    }
 
 
-function clearHighlights(){
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/clear_highlights_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var els=document.querySelectorAll('.todoItem.hi');
-            for (var i=0;i<els.length;i++){ els[i].classList.remove('hi'); }
-          }catch(e){}
-        } else {
-          alert('Clear highlights failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Clear highlights failed'); }
-}
+    function clearHighlights(){
+      try{
+        var xhr=new XMLHttpRequest();
+        xhr.open('POST','/api/todos/clear_highlights_auth',true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type','application/json');
+        xhr.onreadystatechange=function(){
+          if (xhr.readyState===4){
+            if (xhr.status===200){
+              try{
+                var els=document.querySelectorAll('.todoItem.hi');
+                for (var i=0;i<els.length;i++){ els[i].classList.remove('hi'); }
+              }catch(e){}
+            } else {
+              alert('Clear highlights failed');
+            }
+          }
+        };
+        xhr.send('{}');
+      }catch(e){ alert('Clear highlights failed'); }
+    }
 
-function archiveDone(){
-  if (!confirm('Archive all completed items?')) return;
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/archive_done_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{ location.reload(); }catch(e){}
-        } else {
-          alert('Archive failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-</script>
-</body>
-</html>'''
+    function archiveDone(){
+      if (!confirm('Archive all completed items?')) return;
+      try{
+        var xhr=new XMLHttpRequest();
+        xhr.open('POST','/api/todos/archive_done_auth',true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Content-Type','application/json');
+        xhr.onreadystatechange=function(){
+          if (xhr.readyState===4){
+            if (xhr.status===200){
+              try{ location.reload(); }catch(e){}
+            } else {
+              alert('Archive failed');
+            }
+          }
+        };
+        xhr.send('{}');
+      }catch(e){}
+    }
+    """
 
-    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
-    return html
+    body_wrapper = (
+        "<style>\n" + todo_css + "\n</style>\n"
+        + "<div class='bar'><div class='muted'></div><div class='right'>"
+        + "<div class='muted' style='font-weight:950'>Archived</div>"
+        + "<label class='switch' aria-label='Toggle archived'>"
+        + "<input id='archToggle' type='checkbox' " + ("checked " if show_arch else "") + "onchange=\"toggleArchived(this.checked)\" />"
+        + "<span class='slider'></span></label>"
+        + "<button class='secondary' type='button' onclick=\"archiveDone()\">Archive done</button>"
+        + "<button class='secondary' type='button' onclick=\"clearHighlights()\">Clear highlights</button>"
+        + "</div></div>"
+        + "<div class='card'>" + body_html + "</div>"
+        + "<script>\n" + todo_js + "\n</script>"
+    )
 
-
-
+    return ui_page(
+        title='StoryForge - TODO',
+        page_name='TODO',
+        subtitle='Internal tracker (check/uncheck requires login).',
+        back_href='/#tab-jobs',
+        include_user_menu=True,
+        body_html=body_wrapper,
+    )
 @app.post('/api/todos')
 def api_todos_add(request: Request, payload: dict = Body(default={})): 
     err = _todo_api_check(request)
