@@ -101,7 +101,7 @@ def nav_html(page_name: str, subtitle: Optional[str] = None, back_href: Optional
 """
 
 
-def page(title: str, page_name: str, body_html: str, subtitle: Optional[str] = None, back_href: Optional[str] = None, include_user_menu: bool = False) -> str:
+def page(title: str, page_name: str, body_html: str, subtitle: Optional[str] = None, back_href: Optional[str] = None) -> str:
     return f"""<!doctype html>
 <html>
 <head>
@@ -113,7 +113,7 @@ def page(title: str, page_name: str, body_html: str, subtitle: Optional[str] = N
   </style>
 </head>
 <body>
-{nav_html(page_name=page_name, subtitle=subtitle, back_href=back_href, include_user_menu=include_user_menu)}
+{nav_html(page_name=page_name, subtitle=subtitle, back_href=back_href)}
 {body_html}
 </body>
 </html>"""
