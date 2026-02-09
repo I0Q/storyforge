@@ -225,7 +225,7 @@ def _h() -> dict[str, str]:
 
 
 def _get(path: str) -> dict[str, Any]:
-    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=8)
+    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=20)
     r.raise_for_status()
     try:
         return r.json()
