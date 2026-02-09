@@ -61,9 +61,11 @@ def test_ui_smoke(width: int, height: int):
         assert page.locator("text=Archive done").first.is_visible()
         snap("todo")
 
-        # Interaction: toggle first checkbox twice (idempotent)
-        cbs = page.locator("input[type=checkbox]")
+        # Interaction: toggle first *todo item* checkbox twice (idempotent).
+        # (Avoid the Archived toggle switch checkbox which is hidden on some layouts.)
+        cbs = page.locator("input[type=checkbox][data-id]")
         if cbs.count() > 0:
+            cbs.nth(0).scroll_into_view_if_needed()
             cbs.nth(0).click()
             page.wait_for_timeout(250)
             cbs.nth(0).click()
