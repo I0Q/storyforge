@@ -138,16 +138,21 @@ def test_ui_smoke(width: int, height: int):
         # ---- /library/story/.../view ----
         goto(CRITICAL_URLS['library_story_view'])
         page.wait_for_timeout(250)
-        assert page.locator("text=Show code").first.is_visible()
+        sc = page.get_by_text("Show code").first
+        try:
+            sc.wait_for(state="visible", timeout=15_000)
+        except Exception:
+            snap("library_story_view_missing_show_code")
+            raise
+
         snap("library_story_view")
 
         # Interaction: toggle Show code twice.
         # On some layouts this control can be partially offscreen; scroll + force click.
-        sc = page.get_by_text("Show code").first
-        sc.scroll_into_view_if_needed()
+        sc.scroll_into_view_if_needed(timeout=60_000)
         sc.click(timeout=60_000, force=True)
         page.wait_for_timeout(300)
-        sc.scroll_into_view_if_needed()
+        sc.scroll_into_view_if_needed(timeout=60_000)
         sc.click(timeout=60_000, force=True)
         page.wait_for_timeout(300)
 
