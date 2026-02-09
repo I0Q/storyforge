@@ -2137,6 +2137,34 @@ function onTodoToggle(cb){
   }catch(e){}
 }
 
+function toggleHighlight(id){
+  try{
+    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{
+            var j = JSON.parse(xhr.responseText||'{}');
+            if (j && j.ok){
+              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+              if (el){
+                if (j.highlighted) el.classList.add('hi');
+                else el.classList.remove('hi');
+              }
+              return;
+            }
+          }catch(e){}
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){}
+}
+
 function archiveDone(){
   if (!confirm('Archive all completed items?')) return;
   try{
