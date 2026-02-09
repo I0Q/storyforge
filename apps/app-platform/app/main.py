@@ -13,7 +13,6 @@ from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 
 from .auth import register_passphrase_auth
 from .ui_shared import page as ui_page
-from .ui_shared import esc
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
 from .db import db_connect, db_init, db_list_jobs
@@ -1507,21 +1506,116 @@ def api_voices_train(payload: dict = Body(default={})):
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    v = get_voice_db(db_connect(), voice_id)
-    if not v:
-        return ui_page(title='StoryForge - Edit voice', page_name='Edit voice', subtitle='Not found', back_href='/#tab-voices', body_html="<div class='card'><div class='err'>voice_not_found</div></div>", include_user_menu=True)
-    vid = v.get('id') or voice_id
-    dn = v.get('display_name') or ''
-    body_html = "<div class='card'><div class='muted' style='margin-bottom:10px'>Basic fields.</div>\n    <div class='muted'>Display name</div>\n    <input id='display_name' value='__DN__' />\n\n    <div class='row' style='margin-top:12px'>\n      <button type='button' onclick='save()'>Save</button>\n    </div>\n\n    <div id='out' class='muted' style='margin-top:10px'>\u2014</div>\n  </div>\n\n<script>\nfunction save(){\n  var out=document.getElementById('out'); if(out) out.textContent='Saving\u2026';\n  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};\n  fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})\n    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })\n    .then(function(j){\n      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }\n      if(out) out.innerHTML='<div class=\"err\">'+String((j&&j.error)||'save failed')+'</div>';\n    }).catch(function(e){ if(out) out.innerHTML='<div class=\"err\">'+String(e)+'</div>'; });\n}\ntry{ initArchivedToggle(); }catch(e){}\ntry{ recomputeCounts(); }catch(e){}\ntry{ applyHighlights(); }catch(e){}\n</script>"
-    body_html = body_html.replace('__VID__', esc(vid)).replace('__DN__', esc(dn)).replace('__VID_RAW__', esc(voice_id))
-    return ui_page(
-        title='StoryForge - Edit voice',
-        page_name='Edit voice',
-        subtitle=str(vid),
-        back_href='/#tab-voices',
-        include_user_menu=True,
-        body_html=body_html,
-    )
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            v = get_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+    except Exception as e:
+        return HTMLResponse('<pre>failed: ' + pyhtml.escape(str(e)) + '</pre>', status_code=500)
+
+    def esc(x: str) -> str:
+        return pyhtml.escape(str(x or ''))
+
+    vid = esc(voice_id)
+    dn = esc(v.get('display_name') or '')
+
+    html = """<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge - Edit Voice</title>
+  <style>
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    a{color:#4aa3ff;text-decoration:none}
+    .nav{display:flex;justify-content:space-between;align-items:center;gap:12px;}
+    .left{display:flex;gap:10px;align-items:center;}
+    h1{font-size:18px;margin:0;}
+    .muted{color:#a8b3d8;font-size:12px;}
+    .card{border:1px solid #24305e;border-radius:16px;padding:12px;margin:12px 0;background:#0f1733;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    input{width:100%;padding:10px;border:1px solid #24305e;border-radius:12px;background:#0b1020;color:#e7edff;font-size:16px;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid #24305e;background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:#e7edff;}
+    .err{color:#ff4d4d;font-weight:950;margin-top:10px;}
+  </style>
+</head>
+<body>
+  <div class='navBar'>
+    <div class='top'>
+      <div>
+        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Edit voice</div></div>
+        <div class='muted'><code>__VID__</code></div>
+      </div>
+      <div class='row' style='justify-content:flex-end;'>
+        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+        <div class='menuWrap'>
+          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
+            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+            </svg>
+          </button>
+          <div id='topMenu' class='menuCard'>
+            <div class='uTop'>
+              <div class='uAvatar'>
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+                </svg>
+              </div>
+              <div>
+                <div class='uName'>User</div>
+                <div class='uSub'>Admin</div>
+              </div>
+            </div>
+            <div class='uActions'>
+              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class='card'>
+    <div class='muted' style='margin-bottom:10px'>Basic fields.</div>
+    <div class='muted'>Display name</div>
+    <input id='display_name' value='__DN__' />
+
+    <div class='row' style='margin-top:12px'>
+      <button type='button' onclick='save()'>Save</button>
+    </div>
+
+    <div id='out' class='muted' style='margin-top:10px'>—</div>
+  </div>
+
+<script>
+function save(){
+  var out=document.getElementById('out'); if(out) out.textContent='Saving…';
+  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};
+  fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
+    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+    .then(function(j){
+      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }
+      if(out) out.innerHTML='<div class="err">'+String((j&&j.error)||'save failed')+'</div>';
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+String(e)+'</div>'; });
+}
+try{ initArchivedToggle(); }catch(e){}
+try{ recomputeCounts(); }catch(e){}
+try{ applyHighlights(); }catch(e){}
+</script>
+</body>
+</html>"""
+
+    html = html.replace('__VID__', vid).replace('__DN__', dn).replace('__VID_RAW__', voice_id)
+    return html
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
