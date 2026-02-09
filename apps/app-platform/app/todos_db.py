@@ -138,3 +138,11 @@ def toggle_todo_highlight_db(conn, todo_id: int) -> bool:
     )
     conn.commit()
     return new_val
+
+
+def clear_todo_highlights_db(conn) -> int:
+    cur = conn.cursor()
+    cur.execute("UPDATE sf_todos SET highlighted=FALSE, updated_at=%s WHERE highlighted=TRUE", (_now(),))
+    n = cur.rowcount or 0
+    conn.commit()
+    return int(n)

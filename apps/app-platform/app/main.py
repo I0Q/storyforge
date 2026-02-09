@@ -2195,6 +2195,29 @@ function deleteTodo(id){
   }catch(e){ alert('Delete failed'); }
 }
 
+
+function clearHighlights(){
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/todos/clear_highlights_auth',true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange=function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{
+            var els=document.querySelectorAll('.todoItem.hi');
+            for (var i=0;i<els.length;i++){ els[i].classList.remove('hi'); }
+          }catch(e){}
+        } else {
+          alert('Clear highlights failed');
+        }
+      }
+    };
+    xhr.send('{}');
+  }catch(e){ alert('Clear highlights failed'); }
+}
+
 function archiveDone(){
   if (!confirm('Archive all completed items?')) return;
   try{
@@ -2379,9 +2402,39 @@ def api_todos_unhighlight(todo_id: int, request: Request):
     finally:
         conn.close()
 
+@app.post('/api/todos/clear_highlights')
+def api_todos_clear_highlights(request: Request):
+    err = _todo_api_check(request)
+    if err == 'disabled':
+        raise HTTPException(status_code=503, detail='todo api disabled')
+    if err:
+        raise HTTPException(status_code=403, detail='forbidden')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import clear_todo_highlights_db
+        n = clear_todo_highlights_db(conn)
+        return {'ok': True, 'cleared': int(n)}
+    finally:
+        conn.close()
 
 
 
+
+
+
+
+@app.post('/api/todos/clear_highlights_auth')
+def api_todos_clear_highlights_auth():
+    conn = db_connect()
+    try:
+        db_init(conn)
+        from .todos_db import clear_todo_highlights_db
+        n = clear_todo_highlights_db(conn)
+        return {'ok': True, 'cleared': int(n)}
+    finally:
+        conn.close()
 @app.post('/api/todos/archive_done_auth')
 def api_todos_archive_done_auth():
     conn = db_connect()
