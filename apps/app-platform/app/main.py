@@ -9,7 +9,7 @@ import time
 import html as pyhtml
 
 import requests
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 
 from .auth import register_passphrase_auth
 from .library_pages import register_library_pages
@@ -1408,6 +1408,75 @@ try{
 
 
 
+
+
+@app.post('/api/upload/voice_clip')
+def api_upload_voice_clip(file: UploadFile = File(...)):
+    # Requires passphrase session auth (middleware).
+    try:
+        data = file.file.read()
+        if not data or len(data) < 16:
+            return {'ok': False, 'error': 'empty_file'}
+        if len(data) > 50 * 1024 * 1024:
+            return {'ok': False, 'error': 'file_too_large'}
+        from .spaces_upload import upload_bytes
+        _key, url = upload_bytes(
+            data,
+            key_prefix='voices/clips',
+            filename=file.filename or 'clip.wav',
+            content_type=file.content_type or 'application/octet-stream',
+        )
+        return {'ok': True, 'url': url}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get('/api/voice_provider/engines')
+def api_voice_provider_engines():
+    # Requires passphrase session auth (middleware).
+    # Best-effort ask Tinybox provider; fallback.
+    try:
+        r = requests.get(GATEWAY_BASE + '/v1/engines', timeout=4, headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None)
+        if r.status_code == 200:
+            j = r.json()
+            if isinstance(j, dict) and j.get('ok') and isinstance(j.get('engines'), list):
+                return {'ok': True, 'engines': j['engines']}
+    except Exception:
+        pass
+    return {'ok': True, 'engines': ['xtts', 'tortoise']}
+
+
+@app.get('/api/voice_provider/presets')
+def api_voice_provider_presets():
+    # Requires passphrase session auth (middleware).
+    try:
+        r = requests.get(GATEWAY_BASE + '/v1/voice-clips', timeout=4, headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None)
+        if r.status_code == 200:
+            j = r.json()
+            if isinstance(j, dict) and j.get('ok') and isinstance(j.get('clips'), list):
+                return {'ok': True, 'clips': j['clips']}
+    except Exception:
+        pass
+    return {'ok': True, 'clips': []}
+
+
+@app.post('/api/voices/train')
+def api_voices_train(payload: dict = Body(default={})):
+    # Requires passphrase session auth (middleware).
+    # Delegates to Tinybox provider if available.
+    try:
+        r = requests.post(
+            GATEWAY_BASE + '/v1/voices/train',
+            json=payload or {},
+            timeout=20,
+            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None,
+        )
+        try:
+            return r.json()
+        except Exception:
+            return {'ok': False, 'error': 'bad_json'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
