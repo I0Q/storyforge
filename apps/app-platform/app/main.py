@@ -12,6 +12,7 @@ import requests
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 
 from .auth import register_passphrase_auth
+from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
 from .db import db_connect, db_init, db_list_jobs
@@ -65,81 +66,10 @@ register_passphrase_auth(app)
 register_library_pages(app)
 register_library_viewer(app)
 
-def _todo_api_check(request: Request):
-    # Token-gated write API for the assistant only (no UI writes).
-    token = os.environ.get('TODO_API_TOKEN', '').strip()
-    if not token:
-        return 'disabled'
-    got = (request.headers.get('x-sf-todo-token') or '').strip()
-    if not got:
-        auth = (request.headers.get('authorization') or '').strip()
-        if auth.lower().startswith('bearer '):
-            got = auth[7:].strip()
-    if got != token:
-        return 'unauthorized'
-    return None
+# Incremental refactor: extract the dashboard (/) CSS verbatim into a constant.
+# This should not change rendered output.
+INDEX_BASE_CSS = base_css("""\
 
-
-
-def _h() -> dict[str, str]:
-    if not GATEWAY_TOKEN:
-        return {}
-    return {"Authorization": "Bearer " + GATEWAY_TOKEN}
-
-
-def _get(path: str) -> dict[str, Any]:
-    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=8)
-    r.raise_for_status()
-    return r.json()
-
-
-@app.get("/", response_class=HTMLResponse)
-def index(response: Response):
-    build = int(time.time())
-    # iOS Safari can be aggressive about caching; keep the UI fresh.
-    response.headers["Cache-Control"] = "no-store"
-
-    # Voice servers list (rendered server-side to avoid brittle JS)
-    vs_items: list[str] = []
-    for s in VOICE_SERVERS:
-        try:
-            nm_raw = str(s.get("name") or "server")
-            nm = pyhtml.escape(nm_raw)
-            base = pyhtml.escape(str(s.get("base") or ""))
-            kind = pyhtml.escape(str(s.get("kind") or ""))
-            meta = f" <span class='pill'>{kind}</span>" if kind else ""
-
-            # Tinybox-specific monitor toggle lives inline with the Tinybox server item.
-            mon_btn = ""
-            if nm_raw.lower() == "tinybox":
-                mon_btn = (
-                    "<div class='row' style='justify-content:space-between;margin-top:10px'>"
-                    "<div class='muted' style='font-weight:950'>System monitoring</div>"
-                    "<label class='switch'>"
-                    "<input id='monToggleChk' type='checkbox' onchange='toggleMonitor()' />"
-                    "<span class='slider'></span>"
-                    "</label>"
-                    "</div>"
-                )
-
-            vs_items.append(
-                "<div class='job'>"
-                f"<div class='title'>{nm}{meta}</div>"
-                f"<div class='muted' style='margin-top:6px'><code>{base}</code></div>"
-                f"{mon_btn}"
-                "</div>"
-            )
-        except Exception:
-            continue
-    voice_servers_html = "".join(vs_items) if vs_items else "<div class='muted'>No voice servers configured.</div>"
-
-    html = """<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge</title>
-  <style>
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
     body.noScroll{overflow:hidden;}
     html,body{overscroll-behavior-y:none;}
@@ -267,7 +197,84 @@ def index(response: Response):
     .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#4aa3ff,#26d07c);}
     .bar.warn > div{background:linear-gradient(90deg,#ffcc00,#ff7a00);}
     .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
-  </style>
+  
+""")
+
+def _todo_api_check(request: Request):
+    # Token-gated write API for the assistant only (no UI writes).
+    token = os.environ.get('TODO_API_TOKEN', '').strip()
+    if not token:
+        return 'disabled'
+    got = (request.headers.get('x-sf-todo-token') or '').strip()
+    if not got:
+        auth = (request.headers.get('authorization') or '').strip()
+        if auth.lower().startswith('bearer '):
+            got = auth[7:].strip()
+    if got != token:
+        return 'unauthorized'
+    return None
+
+
+
+def _h() -> dict[str, str]:
+    if not GATEWAY_TOKEN:
+        return {}
+    return {"Authorization": "Bearer " + GATEWAY_TOKEN}
+
+
+def _get(path: str) -> dict[str, Any]:
+    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=8)
+    r.raise_for_status()
+    return r.json()
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(response: Response):
+    build = int(time.time())
+    # iOS Safari can be aggressive about caching; keep the UI fresh.
+    response.headers["Cache-Control"] = "no-store"
+
+    # Voice servers list (rendered server-side to avoid brittle JS)
+    vs_items: list[str] = []
+    for s in VOICE_SERVERS:
+        try:
+            nm_raw = str(s.get("name") or "server")
+            nm = pyhtml.escape(nm_raw)
+            base = pyhtml.escape(str(s.get("base") or ""))
+            kind = pyhtml.escape(str(s.get("kind") or ""))
+            meta = f" <span class='pill'>{kind}</span>" if kind else ""
+
+            # Tinybox-specific monitor toggle lives inline with the Tinybox server item.
+            mon_btn = ""
+            if nm_raw.lower() == "tinybox":
+                mon_btn = (
+                    "<div class='row' style='justify-content:space-between;margin-top:10px'>"
+                    "<div class='muted' style='font-weight:950'>System monitoring</div>"
+                    "<label class='switch'>"
+                    "<input id='monToggleChk' type='checkbox' onchange='toggleMonitor()' />"
+                    "<span class='slider'></span>"
+                    "</label>"
+                    "</div>"
+                )
+
+            vs_items.append(
+                "<div class='job'>"
+                f"<div class='title'>{nm}{meta}</div>"
+                f"<div class='muted' style='margin-top:6px'><code>{base}</code></div>"
+                f"{mon_btn}"
+                "</div>"
+            )
+        except Exception:
+            continue
+    voice_servers_html = "".join(vs_items) if vs_items else "<div class='muted'>No voice servers configured.</div>"
+
+    html = """<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge</title>
+  <style>__INDEX_BASE_CSS__</style>
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
   // Emergency override: add ?mon=0 (or ?monitor=0 / ?monoff=1) to force monitor OFF even if the sheet is stuck.
@@ -1403,6 +1410,8 @@ try{
 
 </body>
 </html>"""
+    html = html.replace('__INDEX_BASE_CSS__', INDEX_BASE_CSS)
+
 
     return html.replace("__BUILD__", str(build)).replace("__VOICE_SERVERS__", voice_servers_html)
 
