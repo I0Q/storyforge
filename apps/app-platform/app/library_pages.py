@@ -18,14 +18,8 @@ from .library_db import (
 )
 
 
-def _html_page(title: str, body: str) -> str:
-    return f"""<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>{title}</title>
-  <style>
+# Extracted verbatim from _html_page() for safer incremental refactors.
+LIBRARY_BASE_CSS = """
     :root{{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}}
     html,body{{overscroll-behavior-y:none;}}
     *{{box-sizing:border-box;}}
@@ -59,7 +53,17 @@ def _html_page(title: str, body: str) -> str:
     .job{{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}}
     .pill{{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--line);color:var(--muted)}}
     .err{{color:var(--bad);font-weight:950;margin-top:10px;}}
-  </style>
+  
+"""
+
+def _html_page(title: str, body: str) -> str:
+    return f"""<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>{title}</title>
+  <style>{LIBRARY_BASE_CSS}</style>
 </head>
 <body>
 {body}
@@ -136,27 +140,6 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='row' style='justify-content:flex-end'>
       <a href='/#tab-library'><button class='secondary'>Back</button></a>
       <a href='/library/new'><button>New story</button></a>
-      <div class='menuWrap'>
-        <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
-          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-          </svg>
-        </button>
-        <div id='topMenu' class='menuCard'>
-          <div class='uTop'>
-            <div class='uAvatar'>
-              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-                <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-              </svg>
-            </div>
-            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
-          </div>
-          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
-        </div>
-      </div>
-
       <div class='menuWrap'>
         <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
           <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
