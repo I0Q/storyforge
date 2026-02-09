@@ -12,7 +12,6 @@ import requests
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 
 from .auth import register_passphrase_auth
-from .ui_shared import page as ui_page
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
 from .db import db_connect, db_init, db_list_jobs
@@ -1619,14 +1618,236 @@ try{ applyHighlights(); }catch(e){}
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    body_html = "  <div class='card'>\n    <div style='font-weight:950;margin-bottom:6px;'>Training</div>\n\n    <div class='k'>Voice name</div>\n    <input id='voiceName' placeholder='Luna' />\n\n    <div class='k'>Engine</div>\n    <select id='engineSel'></select>\n\n    <div class='k'>Voice clip</div>\n    <select id='clipMode'>\n      <option value='upload'>Upload</option>\n      <option value='preset'>Choose preset</option>\n      <option value='url'>Paste URL</option>\n    </select>\n\n    <div id='clipUploadRow' style='margin-top:8px'>\n      <input id='clipFile' type='file' accept='audio/*' />\n      <div class='muted' style='margin-top:6px'>Uploads to Spaces.</div>\n    </div>\n    <div id='clipPresetRow' class='hide' style='margin-top:8px'>\n      <select id='clipPreset'></select>\n      <div class='muted' style='margin-top:6px'>Presets come from Tinybox.</div>\n    </div>\n    <div id='clipUrlRow' class='hide' style='margin-top:8px'>\n      <input id='clipUrl' placeholder='https://\u2026/clip.wav' />\n    </div>\n\n    <div class='k'>Sample text</div>\n    <textarea id='sampleText' placeholder='Hello\u2026'>Hello. This is a test sample for a new voice.</textarea>\n\n    <div class='row' style='margin-top:12px'>\n      <button type='button' class='secondary' onclick='startTrain()'>Generate model</button>\n    </div>\n\n    <div id='out' class='muted' style='margin-top:10px'>\u2014</div>\n  </div>\n\n  <div class='card'>\n    <div style='font-weight:950;margin-bottom:6px;'>Save to roster</div>\n\n    <div class='k'>id</div>\n    <input id='id' placeholder='luna' />\n\n    <div class='k'>display name</div>\n    <input id='name' placeholder='Luna' />\n\n    <div class='k'>engine</div>\n    <input id='engine' placeholder='xtts' />\n\n    <div class='k'>voice_ref</div>\n    <input id='voice_ref' placeholder='provider voice ref' />\n\n    <div class='k'>sample text</div>\n    <textarea id='text' placeholder='Hello\u2026'>Hello. This is Luna.</textarea>\n\n    <div class='row' style='margin-top:12px'>\n      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>\n      <button type='button' onclick='saveVoice()'>Save voice</button>\n    </div>\n\n    <audio id='audio' controls class='hide'></audio>\n  </div>\n\n<script>\nfunction esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }\nfunction $(id){ return document.getElementById(id); }\nfunction jsonFetch(url, opts){\n  opts = opts || {};\n  opts.credentials = 'include';\n  return fetch(url, opts).then(function(r){\n    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }\n    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });\n  });\n}\n\nfunction setVis(){\n  var m=(($('clipMode')||{}).value||'upload');\n  var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');\n  if(u) u.classList.toggle('hide', m!=='upload');\n  if(p) p.classList.toggle('hide', m!=='preset');\n  if(r) r.classList.toggle('hide', m!=='url');\n}\n\nfunction loadEngines(){\n  return jsonFetch('/api/voice_provider/engines').then(function(j){\n    var sel=$('engineSel'); if(!sel) return;\n    sel.innerHTML='';\n    var arr=(j&&j.engines)||[];\n    if (!arr.length){ arr=['xtts','tortoise']; }\n    for(var i=0;i<arr.length;i++){\n      var o=document.createElement('option');\n      o.value=String(arr[i]);\n      o.textContent=String(arr[i]);\n      sel.appendChild(o);\n    }\n  });\n}\n\nfunction loadPresets(){\n  return jsonFetch('/api/voice_provider/presets').then(function(j){\n    var sel=$('clipPreset'); if(!sel) return;\n    sel.innerHTML='';\n    var arr=(j&&j.clips)||[];\n    for(var i=0;i<arr.length;i++){\n      var c=arr[i]||{};\n      var o=document.createElement('option');\n      o.value=String(c.url||c.path||'');\n      o.textContent=String(c.name||c.url||c.path||'');\n      sel.appendChild(o);\n    }\n  });\n}\n\nfunction uploadClip(){\n  var f = (($('clipFile')||{}).files||[])[0];\n  if(!f) return Promise.reject('no_file');\n  var fd=new FormData();\n  fd.append('file', f);\n  return fetch('/api/upload/voice_clip', {method:'POST', body: fd, credentials:'include'})\n    .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'bad_json'}; }); })\n    .then(function(j){ if(j&&j.ok&&j.url) return j.url; throw ((j&&j.error)||'upload_failed'); });\n}\n\nfunction getClipUrl(){\n  var m=(($('clipMode')||{}).value||'upload');\n  if(m==='url') return Promise.resolve(String((($('clipUrl')||{}).value||'')).trim());\n  if(m==='preset') return Promise.resolve(String((($('clipPreset')||{}).value||'')).trim());\n  return uploadClip();\n}\n\nfunction startTrain(){\n  var out=$('out'); if(out) out.textContent='Starting training\u2026';\n  var name=String((($('voiceName')||{}).value||'')).trim();\n  var engine=String((($('engineSel')||{}).value||'')).trim();\n  var sample=String((($('sampleText')||{}).value||'')).trim();\n  return getClipUrl().then(function(url){\n    var payload={name:name, engine:engine, clip_url:String(url||''), sample_text:sample};\n    return jsonFetch('/api/voices/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});\n  }).then(function(j){\n    if (!j || !j.ok){ if(out) out.innerHTML='<div class=\"err\">Train failed: '+esc((j&&j.error)||'unknown')+'</div>'; return; }\n    if(out) out.textContent='Training complete (placeholder). voice_ref set.';\n    // Fill save fields\n    if($('engine')) $('engine').value = String(j.engine||engine||'');\n    if($('voice_ref')) $('voice_ref').value = String(j.voice_ref||'');\n    if($('name') && name) $('name').value = name;\n    if($('text') && sample) $('text').value = sample;\n  }).catch(function(e){ if(out) out.innerHTML='<div class=\"err\">'+esc(String(e))+'</div>'; });\n}\n\nfunction val(id){ var el=$(id); return el?el.value:''; }\n\nfunction testSample(){\n  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('text') || ('Hello. This is ' + (val('name')||val('id')||'a voice') + '.'), upload:true};\n  var out=$('out'); if(out) out.textContent='Generating\u2026';\n  return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})\n    .then(function(j){\n      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';\n      if (!url){ if(out) out.innerHTML='<div class=\"err\">No URL returned</div>'; return; }\n      if(out) out.innerHTML = \"<div class='muted'>Sample: <code>\" + esc(url) + \"</code></div>\";\n      var a=$('audio');\n      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }\n    }).catch(function(e){ if(out) out.innerHTML='<div class=\"err\">'+esc(String(e))+'</div>'; });\n}\n\nfunction saveVoice(){\n  var payload={id: val('id'), display_name: val('name'), engine: val('engine'), voice_ref: val('voice_ref'), sample_text: val('text')};\n  var out=$('out'); if(out) out.textContent='Saving\u2026';\n  return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})\n    .then(function(j){\n      if (!j || !j.ok){ if(out) out.innerHTML='<div class=\"err\">'+esc(j && j.error ? j.error : 'save failed')+'</div>'; return; }\n      if(out) out.textContent='Saved.';\n      window.location.href='/#tab-voices';\n    }).catch(function(e){ if(out) out.innerHTML='<div class=\"err\">'+esc(String(e))+'</div>'; });\n}\n\ntry{ document.addEventListener('DOMContentLoaded', function(){\n  try{ loadEngines(); }catch(e){}\n  try{ loadPresets(); }catch(e){}\n  try{ setVis(); }catch(e){}\n  var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);\n}); }catch(e){}\n</script>"
-    return ui_page(
-        title='StoryForge - Generate voice',
-        page_name='Generate voice',
-        subtitle='Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.',
-        back_href='/#tab-voices',
-        body_html=body_html,
-    )
+    # Separate screen for generating/testing a voice before saving.
+    html = '''<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge - Generate voice</title>
+  <style>
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    a{color:var(--accent);text-decoration:none}
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);font-size:12px;}
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
+    textarea{min-height:90px;resize:none;}
+    .k{color:var(--muted);font-size:12px;margin-top:12px;}
+    audio{width:100%;margin-top:10px;}
+    .hide{display:none}
+    .err{color:var(--bad);font-weight:950;margin-top:10px;}
+  </style>
+</head>
+<body>
+  <div class='navBar'>
+    <div class='top'>
+      <div>
+        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Generate voice</div></div>
+        <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
+      </div>
+      <div class='row' style='justify-content:flex-end;'>
+        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Training</div>
+
+    <div class='k'>Voice name</div>
+    <input id='voiceName' placeholder='Luna' />
+
+    <div class='k'>Engine</div>
+    <select id='engineSel'></select>
+
+    <div class='k'>Voice clip</div>
+    <select id='clipMode'>
+      <option value='upload'>Upload</option>
+      <option value='preset'>Choose preset</option>
+      <option value='url'>Paste URL</option>
+    </select>
+
+    <div id='clipUploadRow' style='margin-top:8px'>
+      <input id='clipFile' type='file' accept='audio/*' />
+      <div class='muted' style='margin-top:6px'>Uploads to Spaces.</div>
+    </div>
+    <div id='clipPresetRow' class='hide' style='margin-top:8px'>
+      <select id='clipPreset'></select>
+      <div class='muted' style='margin-top:6px'>Presets come from Tinybox.</div>
+    </div>
+    <div id='clipUrlRow' class='hide' style='margin-top:8px'>
+      <input id='clipUrl' placeholder='https://…/clip.wav' />
+    </div>
+
+    <div class='k'>Sample text</div>
+    <textarea id='sampleText' placeholder='Hello…'>Hello. This is a test sample for a new voice.</textarea>
+
+    <div class='row' style='margin-top:12px'>
+      <button type='button' class='secondary' onclick='startTrain()'>Generate model</button>
+    </div>
+
+    <div id='out' class='muted' style='margin-top:10px'>—</div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Save to roster</div>
+
+    <div class='k'>id</div>
+    <input id='id' placeholder='luna' />
+
+    <div class='k'>display name</div>
+    <input id='name' placeholder='Luna' />
+
+    <div class='k'>engine</div>
+    <input id='engine' placeholder='xtts' />
+
+    <div class='k'>voice_ref</div>
+    <input id='voice_ref' placeholder='provider voice ref' />
+
+    <div class='k'>sample text</div>
+    <textarea id='text' placeholder='Hello…'>Hello. This is Luna.</textarea>
+
+    <div class='row' style='margin-top:12px'>
+      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
+      <button type='button' onclick='saveVoice()'>Save voice</button>
+    </div>
+
+    <audio id='audio' controls class='hide'></audio>
+  </div>
+
+<script>
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function $(id){ return document.getElementById(id); }
+function jsonFetch(url, opts){
+  opts = opts || {};
+  opts.credentials = 'include';
+  return fetch(url, opts).then(function(r){
+    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
+    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+  });
+}
+
+function setVis(){
+  var m=(($('clipMode')||{}).value||'upload');
+  var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
+  if(u) u.classList.toggle('hide', m!=='upload');
+  if(p) p.classList.toggle('hide', m!=='preset');
+  if(r) r.classList.toggle('hide', m!=='url');
+}
+
+function loadEngines(){
+  return jsonFetch('/api/voice_provider/engines').then(function(j){
+    var sel=$('engineSel'); if(!sel) return;
+    sel.innerHTML='';
+    var arr=(j&&j.engines)||[];
+    if (!arr.length){ arr=['xtts','tortoise']; }
+    for(var i=0;i<arr.length;i++){
+      var o=document.createElement('option');
+      o.value=String(arr[i]);
+      o.textContent=String(arr[i]);
+      sel.appendChild(o);
+    }
+  });
+}
+
+function loadPresets(){
+  return jsonFetch('/api/voice_provider/presets').then(function(j){
+    var sel=$('clipPreset'); if(!sel) return;
+    sel.innerHTML='';
+    var arr=(j&&j.clips)||[];
+    for(var i=0;i<arr.length;i++){
+      var c=arr[i]||{};
+      var o=document.createElement('option');
+      o.value=String(c.url||c.path||'');
+      o.textContent=String(c.name||c.url||c.path||'');
+      sel.appendChild(o);
+    }
+  });
+}
+
+function uploadClip(){
+  var f = (($('clipFile')||{}).files||[])[0];
+  if(!f) return Promise.reject('no_file');
+  var fd=new FormData();
+  fd.append('file', f);
+  return fetch('/api/upload/voice_clip', {method:'POST', body: fd, credentials:'include'})
+    .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'bad_json'}; }); })
+    .then(function(j){ if(j&&j.ok&&j.url) return j.url; throw ((j&&j.error)||'upload_failed'); });
+}
+
+function getClipUrl(){
+  var m=(($('clipMode')||{}).value||'upload');
+  if(m==='url') return Promise.resolve(String((($('clipUrl')||{}).value||'')).trim());
+  if(m==='preset') return Promise.resolve(String((($('clipPreset')||{}).value||'')).trim());
+  return uploadClip();
+}
+
+function startTrain(){
+  var out=$('out'); if(out) out.textContent='Starting training…';
+  var name=String((($('voiceName')||{}).value||'')).trim();
+  var engine=String((($('engineSel')||{}).value||'')).trim();
+  var sample=String((($('sampleText')||{}).value||'')).trim();
+  return getClipUrl().then(function(url){
+    var payload={name:name, engine:engine, clip_url:String(url||''), sample_text:sample};
+    return jsonFetch('/api/voices/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  }).then(function(j){
+    if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">Train failed: '+esc((j&&j.error)||'unknown')+'</div>'; return; }
+    if(out) out.textContent='Training complete (placeholder). voice_ref set.';
+    // Fill save fields
+    if($('engine')) $('engine').value = String(j.engine||engine||'');
+    if($('voice_ref')) $('voice_ref').value = String(j.voice_ref||'');
+    if($('name') && name) $('name').value = name;
+    if($('text') && sample) $('text').value = sample;
+  }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+
+function val(id){ var el=$(id); return el?el.value:''; }
+
+function testSample(){
+  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('text') || ('Hello. This is ' + (val('name')||val('id')||'a voice') + '.'), upload:true};
+  var out=$('out'); if(out) out.textContent='Generating…';
+  return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(j){
+      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
+      if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
+      if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
+      var a=$('audio');
+      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+
+function saveVoice(){
+  var payload={id: val('id'), display_name: val('name'), engine: val('engine'), voice_ref: val('voice_ref'), sample_text: val('text')};
+  var out=$('out'); if(out) out.textContent='Saving…';
+  return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(j){
+      if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">'+esc(j && j.error ? j.error : 'save failed')+'</div>'; return; }
+      if(out) out.textContent='Saved.';
+      window.location.href='/#tab-voices';
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){
+  try{ loadEngines(); }catch(e){}
+  try{ loadPresets(); }catch(e){}
+  try{ setVis(); }catch(e){}
+  var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
+}); }catch(e){}
+</script>
+</body>
+</html>'''
+    return html
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
