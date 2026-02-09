@@ -1507,64 +1507,21 @@ def api_voices_train(payload: dict = Body(default={})):
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    try:
-        conn = db_connect()
-        v = get_voice_db(conn, voice_id)
-        if not v:
-            return ui_page(
-                title='StoryForge - Edit voice',
-                page_name='Edit voice',
-                subtitle='Not found',
-                back_href='/#tab-voices',
-                include_user_menu=True,
-                body_html="<div class='card'><div class='err'>voice_not_found</div></div>",
-            )
-
-        vid = v.get('id') or voice_id
-        dn = v.get('display_name') or ''
-
-        body_html = """
-<div class='card'>
-  <div class='muted' style='margin-bottom:10px'>Basic fields.</div>
-  <div class='muted'>Display name</div>
-  <input id='display_name' value='__DN__' />
-
-  <div class='row' style='margin-top:12px'>
-    <button type='button' onclick='save()'>Save</button>
-  </div>
-
-  <div id='out' class='muted' style='margin-top:10px'>-</div>
-</div>
-
-<script>
-function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function save(){
-  var out=document.getElementById('out'); if(out) out.textContent='Saving...';
-  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};
-  fetch('/api/voices/__VID__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
-    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-    .then(function(j){
-      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }
-      if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'save failed')+'</div>';
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-}
-</script>
-"""
-        body_html = body_html.replace('__DN__', esc(dn)).replace('__VID__', esc(voice_id))
-
-        return ui_page(
-            title='StoryForge - Edit voice',
-            page_name='Edit voice',
-            subtitle=str(vid),
-            back_href='/#tab-voices',
-            include_user_menu=True,
-            body_html=body_html,
-        )
-    except Exception as e:
-        return HTMLResponse(
-            '<!doctype html><meta charset="utf-8"/><pre style="white-space:pre-wrap">voices_edit_error\n' + esc(str(e)) + '</pre>',
-            status_code=500,
-        )
+    v = get_voice_db(db_connect(), voice_id)
+    if not v:
+        return ui_page(title='StoryForge - Edit voice', page_name='Edit voice', subtitle='Not found', back_href='/#tab-voices', body_html="<div class='card'><div class='err'>voice_not_found</div></div>", include_user_menu=True)
+    vid = v.get('id') or voice_id
+    dn = v.get('display_name') or ''
+    body_html = "<div class='card'><div class='muted' style='margin-bottom:10px'>Basic fields.</div>\n    <div class='muted'>Display name</div>\n    <input id='display_name' value='__DN__' />\n\n    <div class='row' style='margin-top:12px'>\n      <button type='button' onclick='save()'>Save</button>\n    </div>\n\n    <div id='out' class='muted' style='margin-top:10px'>\u2014</div>\n  </div>\n\n<script>\nfunction save(){\n  var out=document.getElementById('out'); if(out) out.textContent='Saving\u2026';\n  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};\n  fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})\n    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })\n    .then(function(j){\n      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }\n      if(out) out.innerHTML='<div class=\"err\">'+String((j&&j.error)||'save failed')+'</div>';\n    }).catch(function(e){ if(out) out.innerHTML='<div class=\"err\">'+String(e)+'</div>'; });\n}\ntry{ initArchivedToggle(); }catch(e){}\ntry{ recomputeCounts(); }catch(e){}\ntry{ applyHighlights(); }catch(e){}\n</script>"
+    body_html = body_html.replace('__VID__', esc(vid)).replace('__DN__', esc(dn)).replace('__VID_RAW__', esc(voice_id))
+    return ui_page(
+        title='StoryForge - Edit voice',
+        page_name='Edit voice',
+        subtitle=str(vid),
+        back_href='/#tab-voices',
+        include_user_menu=True,
+        body_html=body_html,
+    )
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
