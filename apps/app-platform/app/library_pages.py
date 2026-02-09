@@ -356,7 +356,7 @@ def register_library_pages(app: FastAPI) -> None:
       .catch(function(_e){{ if (st) st.textContent='Autosave: error'; }});
   }}
 
-  [elTitle, elTags, elChars, elStory].forEach(function(el){{
+  [elTitle, elChars, elStory].forEach(function(el){{
     if (!el) return;
     el.addEventListener('input', schedule);
   }});
