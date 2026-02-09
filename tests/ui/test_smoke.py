@@ -133,10 +133,13 @@ def test_ui_smoke(width: int, height: int):
         snap("library_story_view")
 
         # Interaction: toggle Show code twice.
-        # (Not all implementations expose an accessible role=button name; use text lookup.)
-        page.locator("text=Show code").first.click()
+        # On some layouts this control can be partially offscreen; scroll + force click.
+        sc = page.get_by_text("Show code").first
+        sc.scroll_into_view_if_needed()
+        sc.click(timeout=60_000, force=True)
         page.wait_for_timeout(300)
-        page.locator("text=Show code").first.click()
+        sc.scroll_into_view_if_needed()
+        sc.click(timeout=60_000, force=True)
         page.wait_for_timeout(300)
 
         ctx.close()
