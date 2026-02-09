@@ -1521,6 +1521,10 @@ def voices_edit_page(voice_id: str, response: Response):
 
     vid = esc(voice_id)
     dn = esc(v.get('display_name') or '')
+    eng = esc(v.get('engine') or '')
+    vref = esc(v.get('voice_ref') or '')
+    stxt = esc(v.get('sample_text') or '')
+    enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
 
     html = """<!doctype html>
 <html>
@@ -1529,20 +1533,50 @@ def voices_edit_page(voice_id: str, response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge - Edit Voice</title>
   <style>
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
     html,body{overscroll-behavior-y:none;}
     *{box-sizing:border-box;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
-    a{color:#4aa3ff;text-decoration:none}
-    .nav{display:flex;justify-content:space-between;align-items:center;gap:12px;}
-    .left{display:flex;gap:10px;align-items:center;}
-    h1{font-size:18px;margin:0;}
-    .muted{color:#a8b3d8;font-size:12px;}
-    .card{border:1px solid #24305e;border-radius:16px;padding:12px;margin:12px 0;background:#0f1733;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    a{color:var(--accent);text-decoration:none}
+
+    /* header */
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);font-size:12px;}
+    .err{color:var(--bad);font-weight:950;margin-top:10px;}
+
+    /* user menu */
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
+    /* layout */
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    input{width:100%;padding:10px;border:1px solid #24305e;border-radius:12px;background:#0b1020;color:#e7edff;font-size:16px;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid #24305e;background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:#e7edff;}
-    .err{color:#ff4d4d;font-weight:950;margin-top:10px;}
+    input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
+    textarea{min-height:90px;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+    .hide{display:none;}
+
+    /* switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
   </style>
 </head>
 <body>
@@ -1584,36 +1618,89 @@ def voices_edit_page(voice_id: str, response: Response):
   </div>
 
   <div class='card'>
-    <div class='muted' style='margin-bottom:10px'>Basic fields.</div>
+    <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
+
     <div class='muted'>Display name</div>
     <input id='display_name' value='__DN__' />
 
+    <div class='muted' style='margin-top:12px'>Enabled</div>
+    <label class='switch'>
+      <input id='enabled' type='checkbox' __ENABLED__ />
+      <span class='slider'></span>
+    </label>
+    <div class='muted' style='margin-top:6px'>Show in curated list</div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Provider fields</div>
+
+    <div class='muted'>Engine</div>
+    <input id='engine' value='__ENG__' placeholder='xtts' />
+
+    <div class='muted' style='margin-top:12px'>voice_ref</div>
+    <input id='voice_ref' value='__VREF__' placeholder='speaker_03' />
+
+    <div class='muted' style='margin-top:12px'>Sample text</div>
+    <textarea id='sample_text' placeholder='Hello…'>__STXT__</textarea>
+
     <div class='row' style='margin-top:12px'>
+      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
       <button type='button' onclick='save()'>Save</button>
     </div>
 
     <div id='out' class='muted' style='margin-top:10px'>—</div>
+    <audio id='audio' controls class='hide'></audio>
   </div>
 
 <script>
+function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function $(id){ return document.getElementById(id); }
+function val(id){ var el=$(id); return el?String(el.value||''):''; }
+function chk(id){ var el=$(id); return !!(el && el.checked); }
+
 function save(){
-  var out=document.getElementById('out'); if(out) out.textContent='Saving…';
-  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};
+  var out=$('out'); if(out) out.textContent='Saving…';
+  var payload={
+    display_name: val('display_name'),
+    engine: val('engine'),
+    voice_ref: val('voice_ref'),
+    sample_text: val('sample_text'),
+    enabled: chk('enabled')
+  };
   fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
     .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
     .then(function(j){
       if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }
-      if(out) out.innerHTML='<div class="err">'+String((j&&j.error)||'save failed')+'</div>';
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+String(e)+'</div>'; });
+      if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'save failed')+'</div>';
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
 }
-try{ initArchivedToggle(); }catch(e){}
-try{ recomputeCounts(); }catch(e){}
-try{ applyHighlights(); }catch(e){}
+
+function testSample(){
+  var out=$('out'); if(out) out.textContent='Generating…';
+  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('sample_text') || ('Hello. This is ' + (val('display_name')||'a voice') + '.'), upload:true};
+  fetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
+    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+    .then(function(j){
+      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
+      if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
+      if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + escJs(url) + "</code></div>";
+      var a=$('audio');
+      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
+}
 </script>
 </body>
 </html>"""
 
-    html = html.replace('__VID__', vid).replace('__DN__', dn).replace('__VID_RAW__', voice_id)
+    html = (html
+        .replace('__VID__', vid)
+        .replace('__DN__', dn)
+        .replace('__ENG__', eng)
+        .replace('__VREF__', vref)
+        .replace('__STXT__', stxt)
+        .replace('__ENABLED__', enabled_checked)
+        .replace('__VID_RAW__', voice_id)
+    )
     return html
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
