@@ -15,6 +15,7 @@ CRITICAL_URLS = {
     "voices_new": "/voices/new",
     "voices_edit_luna": "/voices/luna/edit",
     "library_new": "/library/new",
+    "library_story_edit": "/library/story/maris-listening-lighthouse",
     "library_story_view": "/library/story/maris-listening-lighthouse/view",
 }
 
@@ -135,6 +136,30 @@ def test_ui_smoke(width: int, height: int):
         assert page.locator("text=New story").first.is_visible() or page.locator("text=Library").first.is_visible()
         snap("library_new")
 
+        # ---- /library/story/... (edit) ----
+        goto(CRITICAL_URLS['library_story_edit'])
+        page.wait_for_timeout(250)
+        assert page.locator("text=Autosave:").first.is_visible()
+        snap("library_story_edit")
+
+        # Interaction: type in title and wait for saved.
+        title = page.locator("input[name='title']").first
+        title.click()
+        title.fill("Maris, the Lighthouse")
+        title.type(" (autosave)")
+        try:
+            page.wait_for_function(
+                """() => {
+                    const el = document.getElementById('autosaveStatus');
+                    if (!el) return false;
+                    return (el.textContent||'').toLowerCase().includes('saved');
+                }""",
+                timeout=30_000,
+            )
+        except Exception:
+            snap("library_story_edit_autosave_timeout")
+            raise
+
         # ---- /library/story/.../view ----
         goto(CRITICAL_URLS['library_story_view'])
         page.wait_for_timeout(250)
@@ -146,9 +171,6 @@ def test_ui_smoke(width: int, height: int):
             raise
 
         snap("library_story_view")
-
-        # Interaction: Show code toggle click is currently flaky in headless runs
-        # (likely due to sticky header / re-render). Keep this as an existence check for now.
 
         ctx.close()
         browser.close()
