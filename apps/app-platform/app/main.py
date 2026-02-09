@@ -1942,6 +1942,7 @@ def todo_page(request: Request, response: Response):
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
                 + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
+                + ("<span class='workPill'>WORKING</span>" if bool(it.get('highlighted')) else "")
                 + "<span class='todoText'>" + txt + "</span>"
                 + "</label>"
                 + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\" ontouchend=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\">Delete</button></div>"
@@ -2024,9 +2025,11 @@ def todo_page(request: Request, response: Response):
     .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
     .todoHiBtn{border:1px solid rgba(255,255,255,0.14);background:transparent;color:var(--muted);font-weight:950;border-radius:999px;padding:4px 8px;font-size:12px;line-height:1;cursor:pointer;}
     .todoHiBtn:active{transform:translateY(1px);}
-    .todoItem.hi{background:rgba(74,163,255,0.08);border:1px solid rgba(74,163,255,0.25);border-radius:12px;padding:6px 8px;}
+    .todoItem.hi{background:rgba(74,163,255,0.14);border:1px solid rgba(74,163,255,0.45);border-radius:12px;padding:10px 10px;box-shadow:0 10px 30px rgba(0,0,0,0.25);}
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
+    .workPill{display:inline-block;margin-left:6px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:950;border:1px solid rgba(74,163,255,0.55);color:#bfe0ff;background:rgba(74,163,255,0.14);}
+    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.55);color:#d7ecff;}
     .todoItem input{margin-top:3px;transform:scale(1.15);}
     .todoText{line-height:1.25;}
     .todoPlain{margin:8px 0;color:var(--muted);}
