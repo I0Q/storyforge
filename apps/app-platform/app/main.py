@@ -1523,6 +1523,13 @@ def api_voices_train(payload: dict = Body(default={})):
             return {'ok': False, 'error': 'bad_json'}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
+@app.get('/voices', response_class=HTMLResponse)
+def voices_root(response: Response):
+    # Legacy route: keep compatibility with older links.
+    response.headers['Cache-Control'] = 'no-store'
+    return RedirectResponse(url='/#tab-voices', status_code=302)
+
+
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'

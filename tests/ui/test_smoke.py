@@ -12,6 +12,7 @@ TODO_TOKEN = (os.environ.get("SF_TODO_TOKEN") or "").strip()
 # Keep this list small and high-signal.
 CRITICAL_URLS = {
     "todo": "/todo",
+    "voices_root": "/voices",
     "voices_new": "/voices/new",
     "voices_edit_luna": "/voices/luna/edit",
     "library_new": "/library/new",
@@ -93,6 +94,13 @@ def test_ui_smoke(width: int, height: int):
             page.wait_for_timeout(250)
             cbs.nth(0).click()
             page.wait_for_timeout(250)
+
+        # ---- /voices (legacy root) ----
+        goto(CRITICAL_URLS['voices_root'])
+        page.wait_for_timeout(250)
+        # should redirect into the dashboard voices tab
+        assert "#tab-voices" in (page.url or "")
+        snap("voices_root")
 
         # ---- /voices/luna/edit ----
         goto(CRITICAL_URLS['voices_edit_luna'])
