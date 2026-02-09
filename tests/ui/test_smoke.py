@@ -133,9 +133,10 @@ def test_ui_smoke(width: int, height: int):
         snap("library_story_view")
 
         # Interaction: toggle Show code twice.
-        page.locator("role=button[name='Show code']").click()
+        # (Not all implementations expose an accessible role=button name; use text lookup.)
+        page.locator("text=Show code").first.click()
         page.wait_for_timeout(300)
-        page.locator("role=button[name='Show code']").click()
+        page.locator("text=Show code").first.click()
         page.wait_for_timeout(300)
 
         ctx.close()
