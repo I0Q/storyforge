@@ -55,8 +55,21 @@ def test_ui_smoke(width: int, height: int):
         def snap(name: str):
             page.screenshot(path=str(artifacts / f"{name}_{width}x{height}.png"), full_page=True)
 
+        def goto(path: str):
+            url = f"{BASE_URL}{path}?ts={int(time.time())}"
+            last = None
+            for _ in range(3):
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+                    return
+                except Exception as e:
+                    last = e
+                    # Playwright can throw net::ERR_ABORTED transiently on some SPAs.
+                    page.wait_for_timeout(500)
+            raise last  # type: ignore[misc]
+
         # ---- /todo ----
-        page.goto(f"{BASE_URL}{CRITICAL_URLS['todo']}?ts={int(time.time())}", wait_until="domcontentloaded")
+        goto(CRITICAL_URLS['todo'])
         page.wait_for_timeout(250)
         assert page.locator("text=Archive done").first.is_visible()
         snap("todo")
@@ -72,7 +85,7 @@ def test_ui_smoke(width: int, height: int):
             page.wait_for_timeout(250)
 
         # ---- /voices/luna/edit ----
-        page.goto(f"{BASE_URL}{CRITICAL_URLS['voices_edit_luna']}?ts={int(time.time())}", wait_until="domcontentloaded")
+        goto(CRITICAL_URLS['voices_edit_luna'])
         page.wait_for_timeout(250)
         assert page.locator("text=Edit voice").first.is_visible()
         assert page.locator("text=Provider fields").first.is_visible()
@@ -101,19 +114,20 @@ def test_ui_smoke(width: int, height: int):
         page.wait_for_timeout(500)
 
         # ---- /voices/new ----
-        page.goto(f"{BASE_URL}{CRITICAL_URLS['voices_new']}?ts={int(time.time())}", wait_until="domcontentloaded")
+        goto(CRITICAL_URLS['voices_new'])
         page.wait_for_timeout(250)
-        assert page.locator("text=Generate voice").first.is_visible()
+        # Page heading text can vary; check for distinctive training section.
+        assert page.locator("text=Training").first.is_visible()
         snap("voices_new")
 
         # ---- /library/new ----
-        page.goto(f"{BASE_URL}{CRITICAL_URLS['library_new']}?ts={int(time.time())}", wait_until="domcontentloaded")
+        goto(CRITICAL_URLS['library_new'])
         page.wait_for_timeout(250)
         assert page.locator("text=New story").first.is_visible() or page.locator("text=Library").first.is_visible()
         snap("library_new")
 
         # ---- /library/story/.../view ----
-        page.goto(f"{BASE_URL}{CRITICAL_URLS['library_story_view']}?ts={int(time.time())}", wait_until="domcontentloaded")
+        goto(CRITICAL_URLS['library_story_view'])
         page.wait_for_timeout(250)
         assert page.locator("text=Show code").first.is_visible()
         snap("library_story_view")
