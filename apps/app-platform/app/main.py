@@ -39,7 +39,7 @@ from .voices_db import (
     set_voice_enabled_db,
     delete_voice_db,
 )
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi import Response
 
 APP_NAME = "storyforge"
@@ -1504,6 +1504,12 @@ def api_voices_train(payload: dict = Body(default={})):
             return {'ok': False, 'error': 'bad_json'}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
+@app.get('/voices', include_in_schema=False)
+def voices_root_redirect():
+    # Convenience route: /voices should land on the dashboard Voices tab.
+    return RedirectResponse(url='/#tab-voices', status_code=302)
+
+
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -1522,25 +1528,64 @@ def voices_edit_page(voice_id: str, response: Response):
 
         vid = v.get('id') or voice_id
         dn = v.get('display_name') or ''
+        eng = v.get('engine') or ''
+        vref = v.get('voice_ref') or ''
+        stxt = v.get('sample_text') or ''
+        enabled = bool(v.get('enabled'))
+        checked = 'checked' if enabled else ''
 
         body_html = """
 <div class='card'>
-  <div class='muted' style='margin-bottom:10px'>Basic fields.</div>
-  <div class='muted'>Display name</div>
+  <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
+
+  <div class='k'>Display name</div>
   <input id='display_name' value='__DN__' />
 
+  <div class='k'>Enabled</div>
+  <label class='row' style='gap:12px;align-items:center'>
+    <label class='switch'>
+      <input id='enabled' type='checkbox' __ENABLED__ />
+      <span class='slider'></span>
+    </label>
+    <div class='muted'>Show in curated list</div>
+  </label>
+</div>
+
+<div class='card'>
+  <div style='font-weight:950;margin-bottom:6px;'>Provider fields</div>
+
+  <div class='k'>Engine</div>
+  <input id='engine' value='__ENG__' placeholder='xtts' />
+
+  <div class='k'>voice_ref</div>
+  <input id='voice_ref' value='__VREF__' placeholder='provider voice ref' />
+
+  <div class='k'>Sample text</div>
+  <textarea id='sample_text' placeholder='Hello…'>__STXT__</textarea>
+
   <div class='row' style='margin-top:12px'>
+    <button type='button' class='secondary' onclick='testSample()'>Test sample</button>
     <button type='button' onclick='save()'>Save</button>
   </div>
 
-  <div id='out' class='muted' style='margin-top:10px'>-</div>
+  <div id='out' class='muted' style='margin-top:10px'>—</div>
+  <audio id='audio' controls class='hide'></audio>
 </div>
 
 <script>
 function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function val(id){ var el=document.getElementById(id); return el?String(el.value||''):''; }
+function chk(id){ var el=document.getElementById(id); return !!(el && el.checked); }
+
 function save(){
-  var out=document.getElementById('out'); if(out) out.textContent='Saving...';
-  var payload={display_name: (document.getElementById('display_name')||{}).value || ''};
+  var out=document.getElementById('out'); if(out) out.textContent='Saving…';
+  var payload={
+    display_name: val('display_name'),
+    engine: val('engine'),
+    voice_ref: val('voice_ref'),
+    sample_text: val('sample_text'),
+    enabled: chk('enabled')
+  };
   fetch('/api/voices/__VID__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
     .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
     .then(function(j){
@@ -1548,9 +1593,31 @@ function save(){
       if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'save failed')+'</div>';
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
 }
+
+function testSample(){
+  var out=document.getElementById('out'); if(out) out.textContent='Generating…';
+  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('sample_text') || ('Hello. This is ' + (val('display_name')||'a voice') + '.'), upload:true};
+  fetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
+    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+    .then(function(j){
+      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
+      if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
+      if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + escJs(url) + "</code></div>";
+      var a=document.getElementById('audio');
+      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
+}
 </script>
 """
-        body_html = body_html.replace('__DN__', esc(dn)).replace('__VID__', esc(voice_id))
+        body_html = (
+            body_html
+            .replace('__DN__', esc(dn))
+            .replace('__ENG__', esc(eng))
+            .replace('__VREF__', esc(vref))
+            .replace('__STXT__', esc(stxt))
+            .replace('__VID__', esc(voice_id))
+            .replace('__ENABLED__', checked)
+        )
 
         return ui_page(
             title='StoryForge - Edit voice',
