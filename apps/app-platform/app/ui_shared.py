@@ -35,13 +35,56 @@ def base_css() -> str:
     """
 
 
-def nav_html(page_name: str, subtitle: Optional[str] = None, back_href: Optional[str] = None) -> str:
+def user_menu_html() -> str:
+    return """
+        <div class='menuWrap'>
+          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
+            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+            </svg>
+          </button>
+          <div id='topMenu' class='menuCard'>
+            <div class='uTop'>
+              <div class='uAvatar'>
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+                </svg>
+              </div>
+              <div>
+                <div class='uName'>User</div>
+                <div class='uSub'>Admin</div>
+              </div>
+            </div>
+            <div class='uActions'>
+              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
+            </div>
+          </div>
+        </div>
+
+<script>
+function toggleMenu(){
+  try{ var m=document.getElementById('topMenu'); if(!m) return; m.classList.toggle('show'); }catch(e){}
+}
+try{ document.addEventListener('click', function(ev){
+  try{ var m=document.getElementById('topMenu'); if(!m) return;
+    var b=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
+    if(!b && m.classList.contains('show')) m.classList.remove('show');
+  }catch(e){}
+}); }catch(e){}
+</script>
+"""
+
+
+def nav_html(page_name: str, subtitle: Optional[str] = None, back_href: Optional[str] = None, include_user_menu: bool = False) -> str:
     sub = f"<div class='muted'>{esc(subtitle)}</div>" if subtitle else ""
     back = (
         f"<a href='{esc(back_href)}'><button class='secondary' type='button'>Back</button></a>"
         if back_href
         else ""
     )
+    menu = user_menu_html() if include_user_menu else ''
     return f"""
   <div class='navBar'>
     <div class='top'>
@@ -51,6 +94,7 @@ def nav_html(page_name: str, subtitle: Optional[str] = None, back_href: Optional
       </div>
       <div class='row' style='justify-content:flex-end;'>
         {back}
+        {menu}
       </div>
     </div>
   </div>
