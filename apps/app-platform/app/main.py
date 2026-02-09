@@ -1460,6 +1460,31 @@ def api_voice_provider_presets():
     return {'ok': True, 'clips': []}
 
 
+
+
+@app.post('/api/voice_provider/preset_to_spaces')
+def api_preset_to_spaces(payload: dict = Body(default={})):
+    # payload: {path:"/abs/path/on/tinybox"}
+    try:
+        path = str((payload or {}).get('path') or '').strip()
+        if not path or not path.startswith('/'):
+            return {'ok': False, 'error': 'bad_path'}
+        # Fetch bytes from Tinybox (authenticated)
+        h = {'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None
+        r = requests.get(GATEWAY_BASE + '/v1/voice-clips/file', params={'path': path}, headers=h, timeout=12)
+        if r.status_code != 200:
+            return {'ok': False, 'error': 'fetch_failed', 'status': r.status_code}
+        data = r.content
+        if not data or len(data) < 16:
+            return {'ok': False, 'error': 'empty_file'}
+        # Upload to Spaces
+        from .spaces_upload import upload_bytes
+        fn = (path.rsplit('/', 1)[-1] or 'clip.wav')
+        ct = r.headers.get('content-type') or 'application/octet-stream'
+        _key, url = upload_bytes(data, key_prefix='voices/clips', filename=fn, content_type=ct)
+        return {'ok': True, 'url': url}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
 @app.post('/api/voices/train')
 def api_voices_train(payload: dict = Body(default={})):
     # Requires passphrase session auth (middleware).
