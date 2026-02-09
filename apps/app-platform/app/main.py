@@ -2163,6 +2163,37 @@ function toggleHighlight(id){
     };
     xhr.send('{}');
   }catch(e){}
+
+
+function deleteTodo(id){
+  if (!confirm('Delete this todo?')) return;
+  try{
+    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{
+            var j = JSON.parse(xhr.responseText||'{}');
+            if (j && j.ok){
+              try{
+                var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+                if (el && el.parentNode) el.parentNode.removeChild(el);
+              }catch(e){}
+              try{ recomputeCounts(); }catch(e){}
+              return;
+            }
+          }catch(e){}
+        }
+        alert('Delete failed');
+      }
+    };
+    xhr.send('{}');
+  }catch(e){ alert('Delete failed'); }
+}
 }
 
 function archiveDone(){
