@@ -2025,7 +2025,7 @@ def todo_page(request: Request, response: Response):
     .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
     .todoHiBtn{border:1px solid rgba(255,255,255,0.14);background:transparent;color:var(--muted);font-weight:950;border-radius:999px;padding:4px 8px;font-size:12px;line-height:1;cursor:pointer;}
     .todoHiBtn:active{transform:translateY(1px);}
-    .todoItem.hi{background:rgba(74,163,255,0.14);border:1px solid rgba(74,163,255,0.45);border-radius:12px;padding:10px 10px;box-shadow:0 10px 30px rgba(0,0,0,0.25);}
+    .todoItem.hi{ }
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .workPill{display:inline-block;margin-left:6px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:950;border:1px solid rgba(74,163,255,0.55);color:#bfe0ff;background:rgba(74,163,255,0.14);}
