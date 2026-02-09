@@ -227,7 +227,17 @@ def _h() -> dict[str, str]:
 def _get(path: str) -> dict[str, Any]:
     r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=8)
     r.raise_for_status()
-    return r.json()
+    try:
+        return r.json()
+    except Exception:
+        # Avoid opaque 500s when the upstream returns non-JSON.
+        # (Don't include any auth headers/tokens; only surface a tiny body snippet.)
+        txt = ""
+        try:
+            txt = (r.text or "")[:200]
+        except Exception:
+            txt = ""
+        raise HTTPException(status_code=502, detail={"error": "upstream_non_json", "status": int(r.status_code), "body": txt})
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -2508,7 +2518,12 @@ def api_ping():
 
 @app.get('/api/metrics')
 def api_metrics():
-    return _get('/v1/metrics')
+    try:
+        return _get('/v1/metrics')
+    except HTTPException as e:
+        return {"ok": False, "error": e.detail}
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
 
 
 @app.get('/api/metrics/stream')
