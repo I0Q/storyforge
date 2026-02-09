@@ -120,8 +120,8 @@ def delete_todo_db(conn, todo_id: int) -> bool:
 def set_todo_highlight_db(conn, todo_id: int, highlighted: bool) -> None:
     cur = conn.cursor()
     cur.execute(
-        "UPDATE sf_todos SET highlighted=%s, updated_at=NOW() WHERE id=%s",
-        (bool(highlighted), int(todo_id)),
+        "UPDATE sf_todos SET highlighted=%s, updated_at=%s WHERE id=%s",
+        (bool(highlighted), _now(), int(todo_id)),
     )
     conn.commit()
 
@@ -133,8 +133,8 @@ def toggle_todo_highlight_db(conn, todo_id: int) -> bool:
     cur_high = bool(row[0]) if row else False
     new_val = not cur_high
     cur.execute(
-        "UPDATE sf_todos SET highlighted=%s, updated_at=NOW() WHERE id=%s",
-        (new_val, int(todo_id)),
+        "UPDATE sf_todos SET highlighted=%s, updated_at=%s WHERE id=%s",
+        (new_val, _now(), int(todo_id)),
     )
     conn.commit()
     return new_val
