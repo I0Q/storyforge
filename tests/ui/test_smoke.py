@@ -50,6 +50,10 @@ def test_ui_smoke(width: int, height: int):
         )
         assert r.status in (200, 204), f"/api/session status={r.status} body={r.text()}"
 
+        # Ensure cookie actually landed in the browser context.
+        cookies = ctx.cookies()
+        assert any(c.get('name') == 'sf_sid' for c in cookies), f"sf_sid cookie missing; cookies={cookies}"
+
         page = ctx.new_page()
 
         def snap(name: str):
@@ -61,6 +65,11 @@ def test_ui_smoke(width: int, height: int):
             for _ in range(3):
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+                    page.wait_for_timeout(250)
+                    # If we got bounced to login, fail with a useful artifact.
+                    if "/login" in (page.url or ""):
+                        snap("redirected_to_login")
+                        raise AssertionError(f"redirected_to_login url={page.url}")
                     return
                 except Exception as e:
                     last = e
