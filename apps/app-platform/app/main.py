@@ -2163,7 +2163,7 @@ function toggleHighlight(id){
     };
     xhr.send('{}');
   }catch(e){}
-
+}
 
 function deleteTodo(id){
   if (!confirm('Delete this todo?')) return;
@@ -2193,7 +2193,6 @@ function deleteTodo(id){
     };
     xhr.send('{}');
   }catch(e){ alert('Delete failed'); }
-}
 }
 
 function archiveDone(){
