@@ -314,7 +314,7 @@ if ($('mdCode')) {{
                 "<div class='navBar'>",
                 "  <div class='navInner'>",
                 "    <div style='min-width:0'>",
-                "      <div class='brandRow'><h1 style='margin:0'>StoryForge</h1><div class='pageName'>Story</div></div>",
+                "      <div class='brandRow'><h1 style='margin:0'><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Story</div></div>",
                 f"      <div class='muted' style='margin-top:2px'><span id='titleText' style='cursor:pointer;font-weight:950'>{title_txt}</span></div>",
                 "      <div id='titleEdit' class='hide' style='margin-top:8px'>",
                 f"        <input id='titleInput' value='{title_txt}' />",

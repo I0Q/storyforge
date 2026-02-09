@@ -25,6 +25,8 @@ LIBRARY_BASE_CSS = """
     *{box-sizing:border-box;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
     a{color:var(--accent);text-decoration:none}
+    .brandLink{color:inherit;text-decoration:none;}
+    .brandLink:active{opacity:0.9;}
     code,pre,textarea{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
     .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
@@ -134,7 +136,7 @@ def register_library_pages(app: FastAPI) -> None:
 <div class='navBar'>
   <div class='top'>
     <div>
-      <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Library</div></div>
+      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Library</div></div>
       <div class='muted'>Story list</div>
     </div>
     <div class='row' style='justify-content:flex-end'>
@@ -189,7 +191,7 @@ def register_library_pages(app: FastAPI) -> None:
 <div class='navBar'>
   <div class='top'>
     <div>
-      <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>New story</div></div>
+      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>New story</div></div>
       <div class='muted'>Create a new text-only story</div>
     </div>
     <div class='row' style='justify-content:flex-end'>

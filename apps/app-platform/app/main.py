@@ -111,6 +111,8 @@ INDEX_BASE_CSS = base_css("""\
     .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
 
     h1{font-size:20px;margin:0;}
+    .brandLink{color:inherit;text-decoration:none;}
+    .brandLink:active{opacity:0.9;}
     .muted{color:var(--muted);font-size:12px;}
     .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
     body.debugOff #boot{display:none}
@@ -320,7 +322,7 @@ def index(response: Response):
   <div class='navBar'>
   <div class='top'>
     <div>
-      <div class='brandRow'><h1>StoryForge</h1><div id='pageName' class='pageName'>Jobs</div></div>
+      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
       
     </div>
     <div class='row' style='justify-content:flex-end;'>
@@ -1592,7 +1594,7 @@ def voices_edit_page(voice_id: str, response: Response):
   <div class='navBar'>
     <div class='top'>
       <div>
-        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Edit voice</div></div>
+        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
       <div class='row' style='justify-content:flex-end;'>
@@ -1749,7 +1751,7 @@ def voices_new_page(response: Response):
   <div class='navBar'>
     <div class='top'>
       <div>
-        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Generate voice</div></div>
+        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
         <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
       </div>
       <div class='row' style='justify-content:flex-end;'>
@@ -2120,7 +2122,7 @@ def todo_page(request: Request, response: Response):
   <div class="navBar">
     <div class="top">
       <div>
-        <div class="brandRow"><h1>StoryForge</h1><div class="pageName">TODO</div></div>
+        <div class="brandRow"><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class="pageName">TODO</div></div>
         <div class="muted">Internal tracker (check/uncheck requires login).</div>
       </div>
       <div class="right">
