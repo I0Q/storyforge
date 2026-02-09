@@ -1593,113 +1593,117 @@ try{ applyHighlights(); }catch(e){}
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
+    # Separate screen for generating/testing a voice before saving.
     html = '''<!doctype html>
 <html>
 <head>
   <meta charset='utf-8'/>
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge - New Voice</title>
+  <title>StoryForge - Generate voice</title>
   <style>
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
     a{color:var(--accent);text-decoration:none}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-    .todoItem{display:block;margin:6px 0;line-height:1.35;}
-    .todoItem input{transform:scale(1.1);margin-right:10px;}
-    .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
-
-    /* switch */
-    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
-    .switch input{display:none;}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
-    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
-    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
-    .switch input:checked + .slider:before{transform:translateX(22px);}
-    input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
-    .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
-    .kvs div.k{color:var(--muted)}
+    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
+    textarea{min-height:90px;resize:none;}
+    .k{color:var(--muted);font-size:12px;margin-top:12px;}
     audio{width:100%;margin-top:10px;}
     .hide{display:none}
-
-    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
-    .switch input{display:none;}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
-    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
-    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
-    .switch input:checked + .slider:before{transform:translateX(22px);}
     .err{color:var(--bad);font-weight:950;margin-top:10px;}
   </style>
 </head>
 <body>
   <div class='navBar'>
-  <div class='top'>
-    <div>
-      <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Generate voice</div></div>
-      <div class='muted'>Test a voice sample before saving it to the roster.</div>
+    <div class='top'>
+      <div>
+        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Generate voice</div></div>
+        <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
+      </div>
+      <div class='row' style='justify-content:flex-end;'>
+        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+      </div>
     </div>
-    <div class='row' style='justify-content:flex-end;'>
-      
-      
-      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-    </div>
-  </div>
   </div>
 
   <div class='card'>
-    <div style='font-weight:950;margin-bottom:6px;'>Voice config</div>
-    <div class='kvs'>
-      <div class='k'>id</div><div><input id='id' placeholder='mira' /></div>
-      <div class='k'>name</div><div><input id='name' placeholder='Mira' /></div>
-      <div class='k'>engine</div><div><input id='engine' placeholder='xtts' /></div>
-      <div class='k'>voice_ref</div><div><input id='voice_ref' placeholder='speaker_12 / provider id' /></div>
-      <div class='k'>sample text</div><div><textarea id='text' placeholder='Hello…'></textarea></div>
+    <div style='font-weight:950;margin-bottom:6px;'>Training</div>
+
+    <div class='k'>Voice name</div>
+    <input id='voiceName' placeholder='Luna' />
+
+    <div class='k'>Engine</div>
+    <select id='engineSel'></select>
+
+    <div class='k'>Voice clip</div>
+    <select id='clipMode'>
+      <option value='upload'>Upload</option>
+      <option value='preset'>Choose preset</option>
+      <option value='url'>Paste URL</option>
+    </select>
+
+    <div id='clipUploadRow' style='margin-top:8px'>
+      <input id='clipFile' type='file' accept='audio/*' />
+      <div class='muted' style='margin-top:6px'>Uploads to Spaces.</div>
+    </div>
+    <div id='clipPresetRow' class='hide' style='margin-top:8px'>
+      <select id='clipPreset'></select>
+      <div class='muted' style='margin-top:6px'>Presets come from Tinybox.</div>
+    </div>
+    <div id='clipUrlRow' class='hide' style='margin-top:8px'>
+      <input id='clipUrl' placeholder='https://…/clip.wav' />
     </div>
 
-    <div class='row' style='margin-top:10px;'>
+    <div class='k'>Sample text</div>
+    <textarea id='sampleText' placeholder='Hello…'>Hello. This is a test sample for a new voice.</textarea>
+
+    <div class='row' style='margin-top:12px'>
+      <button type='button' class='secondary' onclick='startTrain()'>Generate model</button>
+    </div>
+
+    <div id='out' class='muted' style='margin-top:10px'>—</div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Save to roster</div>
+
+    <div class='k'>id</div>
+    <input id='id' placeholder='luna' />
+
+    <div class='k'>display name</div>
+    <input id='name' placeholder='Luna' />
+
+    <div class='k'>engine</div>
+    <input id='engine' placeholder='xtts' />
+
+    <div class='k'>voice_ref</div>
+    <input id='voice_ref' placeholder='provider voice ref' />
+
+    <div class='k'>sample text</div>
+    <textarea id='text' placeholder='Hello…'>Hello. This is Luna.</textarea>
+
+    <div class='row' style='margin-top:12px'>
       <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
       <button type='button' onclick='saveVoice()'>Save voice</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px;'>—</div>
     <audio id='audio' controls class='hide'></audio>
   </div>
 
 <script>
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function $(id){ return document.getElementById(id); }
 function jsonFetch(url, opts){
   opts = opts || {};
   opts.credentials = 'include';
@@ -1708,24 +1712,99 @@ function jsonFetch(url, opts){
     return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
   });
 }
-function val(id){ var el=document.getElementById(id); return el?el.value:''; }
+
+function setVis(){
+  var m=(($('clipMode')||{}).value||'upload');
+  var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
+  if(u) u.classList.toggle('hide', m!=='upload');
+  if(p) p.classList.toggle('hide', m!=='preset');
+  if(r) r.classList.toggle('hide', m!=='url');
+}
+
+function loadEngines(){
+  return jsonFetch('/api/voice_provider/engines').then(function(j){
+    var sel=$('engineSel'); if(!sel) return;
+    sel.innerHTML='';
+    var arr=(j&&j.engines)||[];
+    if (!arr.length){ arr=['xtts','tortoise']; }
+    for(var i=0;i<arr.length;i++){
+      var o=document.createElement('option');
+      o.value=String(arr[i]);
+      o.textContent=String(arr[i]);
+      sel.appendChild(o);
+    }
+  });
+}
+
+function loadPresets(){
+  return jsonFetch('/api/voice_provider/presets').then(function(j){
+    var sel=$('clipPreset'); if(!sel) return;
+    sel.innerHTML='';
+    var arr=(j&&j.clips)||[];
+    for(var i=0;i<arr.length;i++){
+      var c=arr[i]||{};
+      var o=document.createElement('option');
+      o.value=String(c.url||c.path||'');
+      o.textContent=String(c.name||c.url||c.path||'');
+      sel.appendChild(o);
+    }
+  });
+}
+
+function uploadClip(){
+  var f = (($('clipFile')||{}).files||[])[0];
+  if(!f) return Promise.reject('no_file');
+  var fd=new FormData();
+  fd.append('file', f);
+  return fetch('/api/upload/voice_clip', {method:'POST', body: fd, credentials:'include'})
+    .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'bad_json'}; }); })
+    .then(function(j){ if(j&&j.ok&&j.url) return j.url; throw ((j&&j.error)||'upload_failed'); });
+}
+
+function getClipUrl(){
+  var m=(($('clipMode')||{}).value||'upload');
+  if(m==='url') return Promise.resolve(String((($('clipUrl')||{}).value||'')).trim());
+  if(m==='preset') return Promise.resolve(String((($('clipPreset')||{}).value||'')).trim());
+  return uploadClip();
+}
+
+function startTrain(){
+  var out=$('out'); if(out) out.textContent='Starting training…';
+  var name=String((($('voiceName')||{}).value||'')).trim();
+  var engine=String((($('engineSel')||{}).value||'')).trim();
+  var sample=String((($('sampleText')||{}).value||'')).trim();
+  return getClipUrl().then(function(url){
+    var payload={name:name, engine:engine, clip_url:String(url||''), sample_text:sample};
+    return jsonFetch('/api/voices/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  }).then(function(j){
+    if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">Train failed: '+esc((j&&j.error)||'unknown')+'</div>'; return; }
+    if(out) out.textContent='Training complete (placeholder). voice_ref set.';
+    // Fill save fields
+    if($('engine')) $('engine').value = String(j.engine||engine||'');
+    if($('voice_ref')) $('voice_ref').value = String(j.voice_ref||'');
+    if($('name') && name) $('name').value = name;
+    if($('text') && sample) $('text').value = sample;
+  }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+
+function val(id){ var el=$(id); return el?el.value:''; }
 
 function testSample(){
   var payload={engine: val('engine'), voice: val('voice_ref'), text: val('text') || ('Hello. This is ' + (val('name')||val('id')||'a voice') + '.'), upload:true};
-  var out=document.getElementById('out'); if(out) out.textContent='Generating…';
+  var out=$('out'); if(out) out.textContent='Generating…';
   return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
     .then(function(j){
       var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
       if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
       if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
-      var a=document.getElementById('audio');
+      var a=$('audio');
       if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
 
 function saveVoice(){
   var payload={id: val('id'), display_name: val('name'), engine: val('engine'), voice_ref: val('voice_ref'), sample_text: val('text')};
-  var out=document.getElementById('out'); if(out) out.textContent='Saving…';
+  var out=$('out'); if(out) out.textContent='Saving…';
   return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
     .then(function(j){
       if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">'+esc(j && j.error ? j.error : 'save failed')+'</div>'; return; }
@@ -1733,233 +1812,17 @@ function saveVoice(){
       window.location.href='/#tab-voices';
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
-</script>
-<script>
 
-
-function recomputeCounts(){
-  try{
-    var heads = document.querySelectorAll('h2');
-    for (var i=0;i<heads.length;i++){
-      var h = heads[i];
-      var done = 0;
-      var total = 0;
-      var el = h.nextElementSibling;
-      while (el && el.tagName && el.tagName.toLowerCase() !== 'h2'){
-        var cb = el.querySelector ? el.querySelector('input[type=checkbox]') : null;
-        if (cb){
-          total += 1;
-          if (cb.checked) done += 1;
-        }
-        el = el.nextElementSibling;
-      }
-      // Update header text: replace trailing (x/y)
-      try{
-        var txt = h.textContent || '';
-        try{ txt = txt.replace(new RegExp('\\s*\\(\\d+\\s*\\/\\s*\\d+\\)\\s*$', 'g'), ''); }catch(e){}
-        h.textContent = txt + ' (' + String(done) + '/' + String(total) + ')';
-      }catch(e){}
-    }
-  }catch(e){}
-}
-
-function initArchivedToggle(){
-  try{
-    var t = document.getElementById('archToggle');
-    if (!t) return;
-    var q = window.location.search || '';
-    var on = (q.indexOf('arch=1')>=0) || (q.indexOf('archived=1')>=0);
-    t.checked = !!on;
-  }catch(e){}
-}
-
-
-function _hiKey(){ return 'sf_todo_hi'; }
-function loadHighlights(){
-  try{
-    var raw = localStorage.getItem(_hiKey()) || '';
-    var parts = raw.split(',');
-    var out = {};
-    for (var i=0;i<parts.length;i++){
-      var t = String(parts[i]||'').trim();
-      if (!t) continue;
-      out[t] = true;
-    }
-    return out;
-  }catch(e){ return {}; }
-}
-function saveHighlights(m){
-  try{
-    var ids=[];
-    for (var k in m){ if (m.hasOwnProperty(k) && m[k]) ids.push(k); }
-    localStorage.setItem(_hiKey(), ids.join(','));
-  }catch(e){}
-}
-function applyHighlights(){
-  try{
-    var m = loadHighlights();
-    var els = document.querySelectorAll('.todoItem[data-id]');
-    for (var i=0;i<els.length;i++){
-      var id = String(els[i].getAttribute('data-id')||'');
-      if (m[id]) els[i].classList.add('hi');
-      else els[i].classList.remove('hi');
-    }
-  }catch(e){}
-}
-function toggleHighlight(id){
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-              if (el){
-                if (j.highlighted) el.classList.add('hi');
-                else el.classList.remove('hi');
-              }
-              return;
-            }
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-function clearHighlights(){
-  try{ localStorage.removeItem(_hiKey()); }catch(e){}
-  applyHighlights();
-}
-function toggleArchived(on){
-  try{
-    window.location.href = on ? '/todo?arch=1' : '/todo';
-  }catch(e){}
-}
-
-
-function deleteTodo(id){
-  if (!confirm('Delete this todo?')) return;
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-            if (el && el.parentNode) el.parentNode.removeChild(el);
-          }catch(e){}
-          try{ recomputeCounts(); }catch(e){}
-        } else {
-          alert('Delete failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Delete failed'); }
-}
-
-
-function toggleHighlight(id){
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-              if (el){
-                if (j.highlighted) el.classList.add('hi');
-                else el.classList.remove('hi');
-              }
-              return;
-            }
-          }catch(e){}
-        }
-        alert('Highlight toggle failed');
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Highlight toggle failed'); }
-}
-function archiveDone(){
-  if (!confirm('Archive all completed items?')) return;
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/archive_done_auth',true);
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{ location.reload(); }catch(e){}
-        } else {
-          alert('Archive failed');
-        }
-      }
-    };
-    xhr.send('{}');
-    try{ recomputeCounts(); }catch(e){}
-  }catch(e){}
-}
-
-function toggleTodo(id, checked){
-  try{
-    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    try{ recomputeCounts(); }catch(e){}
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status!==200){
-          // revert checkbox on failure
-          try{
-            var el = document.querySelector('input[data-id="'+id+'"]');
-            if (el) el.checked = !checked;
-            try{ recomputeCounts(); }catch(e){}
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
-    try{ recomputeCounts(); }catch(e){}
-  }catch(e){}
-}
-try{ initArchivedToggle(); }catch(e){}
-try{ recomputeCounts(); }catch(e){}
+try{ document.addEventListener('DOMContentLoaded', function(){
+  try{ loadEngines(); }catch(e){}
+  try{ loadPresets(); }catch(e){}
+  try{ setVis(); }catch(e){}
+  var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
+}); }catch(e){}
 </script>
 </body>
 </html>'''
-
-    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
     return html
-
-
-
-
-
-
-
-
-
-
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
