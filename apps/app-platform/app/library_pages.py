@@ -27,7 +27,9 @@ def _html_page(title: str, body: str) -> str:
   <title>{title}</title>
   <style>
     :root{{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}}
-    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}}
+    html,body{{overscroll-behavior-y:none;}}
+    *{{box-sizing:border-box;}}
+    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}}
     a{{color:var(--accent);text-decoration:none}}
     code,pre,textarea{{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}}
     .navBar{{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}}
@@ -51,8 +53,8 @@ def _html_page(title: str, body: str) -> str:
     button{{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}}
     button.secondary{{background:transparent;color:var(--text);}}
     button.danger{{background:transparent;border-color:rgba(255,77,77,.35);color:var(--bad);}}
-    input,textarea{{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);}}
-    textarea{{min-height:130px;}}
+    input,textarea{{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}}
+    textarea{{min-height:130px;resize:none;}}
     .k{{color:var(--muted);font-size:12px;margin-top:10px;}}
     .job{{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}}
     .pill{{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--line);color:var(--muted)}}
