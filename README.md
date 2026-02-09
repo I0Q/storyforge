@@ -29,3 +29,9 @@ A small FastAPI UI for DigitalOcean App Platform lives at:
 - `apps/app-platform/`
 
 It talks to the droplet gateway over VPC.
+
+## Related repos
+
+- Tinybox compute provider API: https://github.com/I0Q/tinybox-compute-node
+- Tinybox compute gateway (droplet proxy): https://github.com/I0Q/tinybox-compute-node-gateway
+- StoryForge infrastructure/specs: https://github.com/I0Q/storyforge-infra
