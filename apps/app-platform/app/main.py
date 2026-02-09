@@ -1942,7 +1942,6 @@ def todo_page(request: Request, response: Response):
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
                 + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
-                + ("<span class='workPill'>WORKING</span>" if bool(it.get('highlighted')) else "")
                 + "<span class='todoText'>" + txt + "</span>"
                 + "</label>"
                 + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\" ontouchend=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\">Delete</button></div>"
@@ -2028,7 +2027,6 @@ def todo_page(request: Request, response: Response):
     .todoItem.hi{ }
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
-    .workPill{display:inline-block;margin-left:6px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:950;border:1px solid rgba(74,163,255,0.55);color:#bfe0ff;background:rgba(74,163,255,0.14);}
     .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.55);color:#d7ecff;}
     .todoItem input{margin-top:3px;transform:scale(1.15);}
     .todoText{line-height:1.25;}
