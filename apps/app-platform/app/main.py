@@ -1799,6 +1799,36 @@ function deleteTodo(id){
     xhr.send('{}');
   }catch(e){ alert('Delete failed'); }
 }
+
+
+function toggleHighlight(id){
+  try{
+    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState===4){
+        if (xhr.status===200){
+          try{
+            var j = JSON.parse(xhr.responseText||'{}');
+            if (j && j.ok){
+              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
+              if (el){
+                if (j.highlighted) el.classList.add('hi');
+                else el.classList.remove('hi');
+              }
+              return;
+            }
+          }catch(e){}
+        }
+        alert('Highlight toggle failed');
+      }
+    };
+    xhr.send('{}');
+  }catch(e){ alert('Highlight toggle failed'); }
+}
 function archiveDone(){
   if (!confirm('Archive all completed items?')) return;
   try{
@@ -2022,12 +2052,12 @@ def todo_page(request: Request, response: Response):
     .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
     .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
     .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
-    .todoHiBtn{border:1px solid rgba(255,255,255,0.14);background:transparent;color:var(--muted);font-weight:950;border-radius:999px;padding:4px 8px;font-size:12px;line-height:1;cursor:pointer;}
+    .todoHiBtn{border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:var(--muted);font-weight:950;border-radius:999px;padding:6px 10px;font-size:12px;line-height:1;cursor:pointer;}
     .todoHiBtn:active{transform:translateY(1px);}
     .todoItem.hi{ }
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
-    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.55);color:#d7ecff;}
+    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
     .todoItem input{margin-top:3px;transform:scale(1.15);}
     .todoText{line-height:1.25;}
     .todoPlain{margin:8px 0;color:var(--muted);}
