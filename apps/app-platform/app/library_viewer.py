@@ -17,7 +17,7 @@ VIEWER_EXTRA_CSS = """
 .rowBetweenCenter{justify-content:space-between;align-items:center;}
 .fw950{font-weight:950;}
 
-.navInner{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+/* navInner removed (use .top from base header CSS) */
 .navTitleWrap{min-width:0;}
 .navBrand h1{margin:0;}
 .storySub{margin:8px 0 10px 0;font-size:14px;}
@@ -350,7 +350,7 @@ if ($('mdCode')) {{
         body = "\n".join(
             [
                 "<div class='navBar'>",
-                "  <div class='navInner'>",
+                "  <div class='top'>",
                 "    <div class='navTitleWrap'>",
                 "      <div class='brandRow navBrand'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Story</div></div>",
                 "",  # subtitle moved below header
