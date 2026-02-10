@@ -19,7 +19,7 @@ VIEWER_EXTRA_CSS = """
 
 .navTitleWrap{min-width:0;}
 .navBrand h1{margin:0;}
-.storySub{margin:8px 0 10px 0;}
+.storySub{margin:8px 0 10px 0;font-size:14px;}
 .storyTitleText{cursor:pointer;}
 .titleEdit{margin-top:8px;}
 
