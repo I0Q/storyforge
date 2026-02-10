@@ -337,8 +337,8 @@ def _h() -> dict[str, str]:
     return {"Authorization": "Bearer " + GATEWAY_TOKEN}
 
 
-def _get(path: str) -> dict[str, Any]:
-    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=20)
+def _get(path: str, timeout_s: float = 20.0) -> dict[str, Any]:
+    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=float(timeout_s))
     r.raise_for_status()
     try:
         return r.json()
@@ -2533,7 +2533,8 @@ def api_ping():
 @app.get('/api/metrics')
 def api_metrics():
     try:
-        return _get('/v1/metrics')
+        # Keep this endpoint snappy; it is polled by the UI.
+        return _get('/v1/metrics', timeout_s=4.0)
     except HTTPException as e:
         return {"ok": False, "error": e.detail}
     except Exception as e:
@@ -2546,13 +2547,13 @@ def api_metrics_stream():
         # Keep-alive + periodic samples. EventSource will auto-reconnect.
         while True:
             try:
-                m = _get('/v1/metrics')
+                m = _get('/v1/metrics', timeout_s=4.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception as e:
                 # Don't leak secrets; just emit a small error payload.
                 yield f"data: {json.dumps({'ok': False, 'error': type(e).__name__})}\n\n"
-            time.sleep(1.0)
+            time.sleep(2.0)
 
     headers = {
         'Cache-Control': 'no-store',
