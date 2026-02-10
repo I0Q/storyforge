@@ -1,0 +1,52 @@
+name: ui-smoke
+
+on:
+  push:
+    branches: ["ui-refactor"]
+  pull_request:
+    branches: ["ui-refactor"]
+  workflow_dispatch: {}
+
+jobs:
+  ui-smoke:
+    runs-on: ubuntu-latest
+    # Secrets are not available on PRs from forks.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Run UI smoke
+        env:
+          SF_TODO_TOKEN: ${{ secrets.SF_TODO_TOKEN }}
+          SF_BASE_URL: ${{ vars.SF_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SF_TODO_TOKEN:-}" ]; then
+            echo "SF_TODO_TOKEN secret not set; skipping UI smoke."
+            exit 0
+          fi
+          if [ -z "${SF_BASE_URL:-}" ]; then
+            export SF_BASE_URL="https://storyforge.i0q.com"
+          fi
+          ./tools/ui_smoke.sh
+
+      - name: Upload UI artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui_artifacts
+          path: ui_artifacts/
+          if-no-files-found: ignore
