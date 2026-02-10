@@ -202,6 +202,68 @@ INDEX_BASE_CSS = base_css("""\
   
 """)
 
+# Shared CSS for Voices pages (edit + generate). Keep content verbatim.
+VOICES_BASE_CSS = base_css("""\
+
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    a{color:var(--accent);text-decoration:none}
+
+    /* header */
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);font-size:12px;}
+    .err{color:var(--bad);font-weight:950;margin-top:10px;}
+
+    /* layout */
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
+    textarea{min-height:90px;}
+    .hide{display:none;}
+
+""")
+
+VOICE_EDIT_EXTRA_CSS = base_css("""\
+
+    /* user menu */
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
+    /* switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
+
+""")
+
+VOICE_NEW_EXTRA_CSS = base_css("""\
+
+    textarea{resize:none;}
+    .k{color:var(--muted);font-size:12px;margin-top:12px;}
+    audio{width:100%;margin-top:10px;}
+
+""")
+
 def _todo_api_check(request: Request):
     # Token-gated write API for the assistant only (no UI writes).
     token = os.environ.get('TODO_API_TOKEN', '').strip()
@@ -1560,52 +1622,7 @@ def voices_edit_page(voice_id: str, response: Response):
   <meta charset='utf-8'/>
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge - Edit Voice</title>
-  <style>
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    html,body{overscroll-behavior-y:none;}
-    *{box-sizing:border-box;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
-    a{color:var(--accent);text-decoration:none}
-
-    /* header */
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
-    .err{color:var(--bad);font-weight:950;margin-top:10px;}
-
-    /* user menu */
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    /* layout */
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
-    textarea{min-height:90px;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
-    .hide{display:none;}
-
-    /* switch */
-    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
-    .switch input{display:none;}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
-    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
-    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
-    .switch input:checked + .slider:before{transform:translateX(22px);}
-  </style>
+  <style>__VOICES_BASE_CSS____VOICE_EDIT_EXTRA_CSS__</style>
 </head>
 <body>
   <div class='navBar'>
@@ -1729,6 +1746,10 @@ function testSample(){
         .replace('__ENABLED__', enabled_checked)
         .replace('__VID_RAW__', voice_id)
     )
+    html = (html
+        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
+        .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
+    )
     return html
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
@@ -1740,29 +1761,7 @@ def voices_new_page(response: Response):
   <meta charset='utf-8'/>
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge - Generate voice</title>
-  <style>
-    html,body{overscroll-behavior-y:none;}
-    *{box-sizing:border-box;}
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
-    a{color:var(--accent);text-decoration:none}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
-    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
-    textarea{min-height:90px;resize:none;}
-    .k{color:var(--muted);font-size:12px;margin-top:12px;}
-    audio{width:100%;margin-top:10px;}
-    .hide{display:none}
-    .err{color:var(--bad);font-weight:950;margin-top:10px;}
-  </style>
+  <style>__VOICES_BASE_CSS____VOICE_NEW_EXTRA_CSS__</style>
 </head>
 <body>
   <div class='navBar'>
@@ -1962,6 +1961,10 @@ try{ document.addEventListener('DOMContentLoaded', function(){
 </script>
 </body>
 </html>'''
+    html = (html
+        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
+        .replace('__VOICE_NEW_EXTRA_CSS__', VOICE_NEW_EXTRA_CSS)
+    )
     return html
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(request: Request, response: Response):
