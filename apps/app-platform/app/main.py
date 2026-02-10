@@ -112,6 +112,7 @@ INDEX_BASE_CSS = base_css("""\
     .todoItem input{transform:scale(1.1);margin-right:10px;}
     .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .rowEnd{justify-content:flex-end;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
 
@@ -222,6 +223,7 @@ VOICES_BASE_CSS = (
     /* layout */
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .rowEnd{justify-content:flex-end;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
     input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
@@ -455,7 +457,7 @@ def index(response: Response):
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
 
     </div>
-    <div class='row' style='justify-content:flex-end;'>
+    <div class='row rowEnd'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
         <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
@@ -773,6 +775,7 @@ function toggleMenu(){
   if (m.classList.contains('show')) m.classList.remove('show');
   else m.classList.add('show');
 }
+function toggleUserMenu(){ return toggleMenu(); }
 
 document.addEventListener('click', function(ev){
   try{
@@ -1689,7 +1692,7 @@ def voices_edit_page(voice_id: str, response: Response):
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
-      <div class='row' style='justify-content:flex-end;'>
+      <div class='row rowEnd'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
         <div class='menuWrap'>
           <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
@@ -1828,7 +1831,7 @@ def voices_new_page(response: Response):
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
         <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
       </div>
-      <div class='row' style='justify-content:flex-end;'>
+      <div class='row rowEnd'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
       </div>
     </div>
@@ -2157,6 +2160,26 @@ def todo_page(request: Request, response: Response):
       </div>
       <div class="right">
         <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
+        <div class='menuWrap'>
+          <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
+            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+            </svg>
+          </button>
+          <div id='topMenu' class='menuCard'>
+            <div class='uTop'>
+              <div class='uAvatar'>
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+                </svg>
+              </div>
+              <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
+            </div>
+            <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
+          </div>
+        </div>
 
       </div>
     </div>
