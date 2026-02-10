@@ -46,6 +46,12 @@ LIBRARY_BASE_CSS = """
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .rowBetween{justify-content:space-between;}
+    .rowEnd{justify-content:flex-end;}
+    .mt8{margin-top:8px;}
+    .mt10{margin-top:10px;}
+    .mt12{margin-top:12px;}
+    .fw950{font-weight:950;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
     button.danger{background:transparent;border-color:rgba(255,77,77,.35);color:var(--bad);}
@@ -116,10 +122,10 @@ def register_library_pages(app: FastAPI) -> None:
         items = "".join(
             [
                 f"<div class='job'>"
-                f"<div class='row' style='justify-content:space-between;'>"
-                f"<div style='font-weight:950'>{s['title']}</div>"
+                f"<div class='row rowBetween'>"
+                f"<div class='fw950'>{s['title']}</div>"
                 f"</div>"  # end header row
-                f"<div class='row' style='margin-top:10px'>"
+                f"<div class='row mt10'>"
                 f"<a href='/library/story/{s['id']}/view'><button class='secondary'>View</button></a> "
                 f"<a href='/library/story/{s['id']}'><button class='secondary'>Edit</button></a>"
                 f"</div>"  # end button row
@@ -139,12 +145,12 @@ def register_library_pages(app: FastAPI) -> None:
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Library</div></div>
       <div class='muted'>Story list</div>
     </div>
-    <div class='row' style='justify-content:flex-end'>
+    <div class='row rowEnd'>
       <a href='/#tab-library'><button class='secondary'>Back</button></a>
       <a href='/library/new'><button>New story</button></a>
       <div class='menuWrap'>
         <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
-          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
             <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
             <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
           </svg>
@@ -152,7 +158,7 @@ def register_library_pages(app: FastAPI) -> None:
         <div id='topMenu' class='menuCard'>
           <div class='uTop'>
             <div class='uAvatar'>
-              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
                 <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
                 <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
               </svg>
@@ -167,9 +173,9 @@ def register_library_pages(app: FastAPI) -> None:
 </div>
 
 <div class='card'>
-  <div class='row' style='justify-content:space-between;'>
+  <div class='row rowBetween'>
     <div>
-      <div style='font-weight:950'>Stories</div>
+      <div class='fw950'>Stories</div>
       <div class='muted'>Stored in managed Postgres.</div>
     </div>
     <form method='post' action='/library/import'>
@@ -194,11 +200,11 @@ def register_library_pages(app: FastAPI) -> None:
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>New story</div></div>
       <div class='muted'>Create a new text-only story</div>
     </div>
-    <div class='row' style='justify-content:flex-end'>
+    <div class='row rowEnd'>
       <a href='/#tab-library'><button class='secondary'>Back</button></a>
       <div class='menuWrap'>
         <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
-          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
             <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
             <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
           </svg>
@@ -206,7 +212,7 @@ def register_library_pages(app: FastAPI) -> None:
         <div id='topMenu' class='menuCard'>
           <div class='uTop'>
             <div class='uAvatar'>
-              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
+              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
                 <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
                 <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
               </svg>
@@ -259,7 +265,7 @@ def register_library_pages(app: FastAPI) -> None:
 
     {err_html}
 
-    <div class='row' style='margin-top:12px;'>
+    <div class='row mt12'>
       <button type='submit'>Create</button>
     </div>
   </form>
@@ -330,7 +336,7 @@ def register_library_pages(app: FastAPI) -> None:
     <div class='k'>Story (Markdown)</div>
     <textarea name='story_md' id='story_md'>{s.get('story_md') or ''}</textarea>
 
-    <div class='muted' id='autosaveStatus' style='margin-top:8px'>Autosave: idle</div>
+    <div class='muted mt8' id='autosaveStatus'>Autosave: idle</div>
 
     <script>
 (function(){{
@@ -367,7 +373,7 @@ def register_library_pages(app: FastAPI) -> None:
 
     {err_html}
 
-    <div class='row' style='margin-top:12px;'>
+    <div class='row mt12'>
       <button type='submit'>Save</button>
     </div>
   </form>
