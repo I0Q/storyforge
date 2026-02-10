@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import html
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi import Response
 
@@ -56,7 +56,10 @@ def register_library_viewer(app: FastAPI) -> None:
         conn = db_connect()
         try:
             db_init(conn)
-            st = get_story_db(conn, story_id)
+            try:
+                st = get_story_db(conn, story_id)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="story_not_found")
         finally:
             conn.close()
 
