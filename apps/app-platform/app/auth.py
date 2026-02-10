@@ -11,6 +11,19 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResp
 PASSPHRASE_SHA256 = (os.environ.get("PASSPHRASE_SHA256") or "").strip().lower()
 SESSION_TTL_SEC = 24 * 60 * 60
 
+LOGIN_CSS = """
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:520px;margin:0 auto;overflow-x:hidden;}
+    .card{border:1px solid #24305e;border-radius:16px;padding:14px;background:#0f1733;margin-top:18px;}
+    label{display:block;color:#a8b3d8;font-size:12px;margin:0 0 6px;}
+    input{width:100%;padding:12px;border:1px solid #24305e;border-radius:12px;background:#0b1020;color:#e7edff;font-size:16px;}
+    button{margin-top:12px;width:100%;padding:12px;border-radius:12px;border:1px solid #24305e;background:#163a74;color:#fff;font-weight:950;}
+    .err{margin-top:10px;color:#ff4d4d;font-weight:800;}
+    .muted{color:#a8b3d8;font-size:12px;margin-top:10px;}
+    h2{margin:0;}
+"""
+
 
 def _enabled() -> bool:
     return bool(PASSPHRASE_SHA256) and len(PASSPHRASE_SHA256) == 64
@@ -56,19 +69,9 @@ def _login_html(err: str = "") -> str:
         "<meta charset='utf-8'/>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'/>"
         "<title>StoryForge - Login</title>"
-        "<style>"
-        "html,body{overscroll-behavior-y:none;}"
-        "*{box-sizing:border-box;}"
-        "body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#e7edff;padding:18px;max-width:520px;margin:0 auto;overflow-x:hidden;}"
-        ".card{border:1px solid #24305e;border-radius:16px;padding:14px;background:#0f1733;margin-top:18px;}"
-        "label{display:block;color:#a8b3d8;font-size:12px;margin:0 0 6px;}"
-        "input{width:100%;padding:12px;border:1px solid #24305e;border-radius:12px;background:#0b1020;color:#e7edff;font-size:16px;}"
-        "button{margin-top:12px;width:100%;padding:12px;border-radius:12px;border:1px solid #24305e;background:#163a74;color:#fff;font-weight:950;}"
-        ".err{margin-top:10px;color:#ff4d4d;font-weight:800;}"
-        ".muted{color:#a8b3d8;font-size:12px;margin-top:10px;}"
-        "</style>"
+        f"<style>{LOGIN_CSS}</style>"
         "</head><body>"
-        "<h2 style='margin:0'>StoryForge</h2>"
+        "<h2>StoryForge</h2>"
         "<div class='muted'>Enter passphrase to continue.</div>"
         "<div class='card'>"
         "<form method='post' action='/login'>"
