@@ -20,7 +20,7 @@ VIEWER_EXTRA_CSS = """
 .navTitleWrap{min-width:0;}
 .navBrand h1{margin:0;}
 .storyTitleLine{margin-top:2px;}
-.storyTitleText{cursor:pointer;font-weight:950;}
+.storyTitleText{cursor:pointer;}
 .titleEdit{margin-top:8px;}
 
 .mdRender{margin-top:10px;line-height:1.6}
