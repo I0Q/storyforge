@@ -180,5 +180,19 @@ def test_ui_smoke(width: int, height: int):
 
         snap("library_story_view")
 
+        # Interaction: toggle Show code -> Render and ensure textarea appears.
+        try:
+            sc.click()
+            page.wait_for_timeout(250)
+            assert page.locator("#mdCode").first.is_visible()
+            snap("library_story_view_code")
+            page.get_by_text("Render").first.click()
+            page.wait_for_timeout(250)
+            assert page.locator("#mdRender").first.is_visible()
+            snap("library_story_view_render")
+        except Exception:
+            snap("library_story_view_toggle_failed")
+            raise
+
         ctx.close()
         browser.close()
