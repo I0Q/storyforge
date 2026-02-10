@@ -10,6 +10,20 @@ from fastapi import Response
 from .db import db_connect, db_init
 from .library_db import get_story_db
 
+VIEWER_EXTRA_CSS = """
+.hide{display:none}
+.vTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px 0;}
+.vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}
+.vTab.active{background:#163a74;}
+.vPane.hide{display:none;}
+.charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}
+.charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
+.charCard .cname{font-weight:950}
+.charCard .cbody{min-width:0}
+#titleInput,#mdCode{font-size:16px;line-height:1.35}
+textarea{font-size:16px}
+"""
+
 def _swatch(key: str) -> str:
     h = hashlib.sha256((key or "").encode("utf-8")).hexdigest()
     return "#" + h[:6]
@@ -371,19 +385,7 @@ if ($('mdCode')) {{
                 "  </div>",
                 "</div>",
                 "",
-                "<style>",
-                ".hide{display:none}",
-                ".vTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px 0;}",
-                ".vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}",
-                ".vTab.active{background:#163a74;}",
-                ".vPane.hide{display:none;}",
-                ".charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}",
-                ".charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}",
-                ".charCard .cname{font-weight:950}",
-                ".charCard .cbody{min-width:0}",
-                "#titleInput,#mdCode{font-size:16px;line-height:1.35}",
-                "textarea{font-size:16px}",
-                "</style>",
+                f"<style>{VIEWER_EXTRA_CSS}</style>",
                 js,
             ]
         )
