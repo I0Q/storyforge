@@ -257,21 +257,7 @@ TODO_BASE_CSS = base_css("""\
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
     a{color:var(--accent);text-decoration:none}
     .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
     .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     .menuWrap{position:relative;display:inline-block;}
