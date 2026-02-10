@@ -6,6 +6,7 @@ from typing import Any
 
 import json
 import time
+from datetime import datetime
 import html as pyhtml
 
 import requests
@@ -100,7 +101,7 @@ INDEX_BASE_CSS = base_css("""\
     .brandLink{color:inherit;text-decoration:none;}
     .brandLink:active{opacity:0.9;}
     .muted{color:var(--muted);font-size:12px;}
-    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
+    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);}
     body.debugOff #boot{display:none}
     .boot strong{color:var(--text);}
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
@@ -185,7 +186,7 @@ INDEX_BASE_CSS = base_css("""\
     .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#4aa3ff,#26d07c);}
     .bar.warn > div{background:linear-gradient(90deg,#ffcc00,#ff7a00);}
     .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
-  
+
 """)
 
 # Shared CSS for Voices pages (edit + generate). Keep content verbatim.
@@ -320,8 +321,10 @@ TODO_BASE_CSS = base_css("""\
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
-    .todoItem input{margin-top:3px;transform:scale(1.15);}
+    .todoItem input{margin-top:3px;transform:scale(1.15);} 
+    .todoTextWrap{min-width:0;}
     .todoText{line-height:1.25;}
+    .todoMeta{color:var(--muted);font-size:12px;margin-top:4px;}
     .todoPlain{margin:8px 0;color:var(--muted);}
 
 """)
@@ -457,7 +460,7 @@ def index(response: Response):
   <div class='top'>
     <div>
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
-      
+
     </div>
     <div class='row' style='justify-content:flex-end;'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
@@ -486,7 +489,7 @@ def index(response: Response):
           </div>
         </div>
       </div>
-            
+
     </div>
   </div>
 
@@ -509,16 +512,16 @@ def index(response: Response):
           <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
-          
+
+
+
         </div>
       </div>
       <div id='jobs'>Loading…</div>
     </div>
   </div>
 
-  
+
 
   <div id='pane-library' class='hide'>
     <div class='card'>
@@ -528,10 +531,10 @@ def index(response: Response):
           <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
+
+
           <a href='/library/new'><button class='secondary'>New story</button></a>
-          
+
         </div>
       </div>
       <div id='lib' class='muted'>Tap Reload to load stories.</div>
@@ -544,17 +547,17 @@ def index(response: Response):
           <div id='libDesc' class='muted'></div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
+
+
           <button class='secondary' onclick='closeStory()'>Close</button>
         </div>
       </div>
 
       <div style='font-weight:950;margin-top:12px;'>Characters</div>
-      <pre id='libChars' class='term' style='margin-top:8px;'>—</pre>
+      <pre id='libChars' class='term' style='margin-top:8px;'>-</pre>
 
       <div style='font-weight:950;margin-top:12px;'>Narrative (Markdown)</div>
-      <pre id='libStory' class='term' style='margin-top:8px;white-space:pre-wrap;'>—</pre>
+      <pre id='libStory' class='term' style='margin-top:8px;white-space:pre-wrap;'>-</pre>
 
       <div class='row' style='margin-top:12px;'>
         <button class='secondary' onclick='copyStory()'>Copy story text</button>
@@ -799,7 +802,7 @@ function copyBoot(){
 
 
 function fmtTs(ts){
-  if (!ts) return '—';
+  if (!ts) return '-';
   try{
     const d=new Date(ts*1000);
     return d.toLocaleString();
@@ -832,8 +835,8 @@ function loadHistory(){
         <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>segments</div><div>${job.total_segments||0}</div>
-        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
-        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
     </div></a>`;
     }).join('');
@@ -1261,7 +1264,7 @@ function openStory(id){
     const meta = currentStory.meta || {};
 
   document.getElementById('libTitle').textContent = meta.title || currentStory.id;
-  
+
   const chars = (currentStory.characters || []).map(c => {
     const nm = c.name || c.id || '';
     const ty = c.type || '';
@@ -1282,7 +1285,7 @@ function closeStory(){
 }
 
 function copyStory(){
-  const txt = (currentStory && currentStory.story_md) ? currentStory.story_md : ''; 
+  const txt = (currentStory && currentStory.story_md) ? currentStory.story_md : '';
   if (txt) copyToClipboard(txt);
 }
 
@@ -1305,7 +1308,7 @@ function setBar(elId, pct){
 }
 
 function fmtPct(x){
-  if (x==null) return '—';
+  if (x==null) return '-';
   return (Number(x).toFixed(1)) + '%';
 }
 
@@ -1393,7 +1396,7 @@ function renderGpus(b){
 
       <div class='gpuRow' style='margin-top:10px'>
         <div class='k'>VRAM</div>
-        <div class='v'>${vt ? `${(vu/1024).toFixed(1)} / ${(vt/1024).toFixed(1)} GB` : '—'}</div>
+        <div class='v'>${vt ? `${(vu/1024).toFixed(1)} / ${(vt/1024).toFixed(1)} GB` : '-'}</div>
       </div>
       <div class='bar small' id='barVram${idx}'><div></div></div>
     </div>`;
@@ -1414,10 +1417,10 @@ function updateDockFromMetrics(m){
   const el = document.getElementById('dockStats');
   if (!el) return;
   const b = m?.body || m || {};
-  const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '—';
+  const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
   const rt = Number(b.ram_total_mb||0); const ru = Number(b.ram_used_mb||0);
   const rp = rt ? (ru/rt*100) : 0;
-  const ram = rt ? rp.toFixed(1)+'%' : '—';
+  const ram = rt ? rp.toFixed(1)+'%' : '-';
   const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
   let maxGpu = null;
   if (gpus.length){
@@ -1427,7 +1430,7 @@ function updateDockFromMetrics(m){
       if (u > maxGpu) maxGpu = u;
     }
   }
-  const gpu = (maxGpu==null) ? '—' : maxGpu.toFixed(1)+'%';
+  const gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
   el.textContent = `CPU ${cpu} • RAM ${ram} • GPU ${gpu}`;
 }
 
@@ -1442,11 +1445,11 @@ function updateMonitorFromMetrics(m){
   const rt = Number(b.ram_total_mb || 0);
   const ru = Number(b.ram_used_mb || 0);
   const rp = rt ? (ru/rt*100) : 0;
-  document.getElementById('monRam').textContent = rt ? `${ru.toFixed(0)} / ${rt.toFixed(0)} MB (${rp.toFixed(1)}%)` : '—';
+  document.getElementById('monRam').textContent = rt ? `${ru.toFixed(0)} / ${rt.toFixed(0)} MB (${rp.toFixed(1)}%)` : '-';
   setBar('barRam', rp);
   renderGpus(b);
 
-  const ts = b.ts ? fmtTs(b.ts) : '—';
+  const ts = b.ts ? fmtTs(b.ts) : '-';
   document.getElementById('monSub').textContent = `Tinybox time: ${ts}`;
     updateDockFromMetrics(m);
 }
@@ -1496,7 +1499,7 @@ try{
 </script>
 
 
-  
+
 
   <div id='monitorDock' class='dock' onclick='openMonitor()'>
     <div class='dockInner'>
@@ -1515,8 +1518,8 @@ try{
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
+
+
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
@@ -1524,12 +1527,12 @@ try{
       <div class='grid2' style='margin-top:10px;'>
         <div class='meter'>
           <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>—</div>
+          <div class='v' id='monCpu'>-</div>
           <div class='bar' id='barCpu'><div></div></div>
         </div>
         <div class='meter'>
           <div class='k'>RAM</div>
-          <div class='v' id='monRam'>—</div>
+          <div class='v' id='monRam'>-</div>
           <div class='bar' id='barRam'><div></div></div>
         </div>
       </div>
@@ -1542,7 +1545,7 @@ try{
       <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
     </div>
 
-      
+
 
 </body>
 </html>"""
@@ -1755,7 +1758,7 @@ def voices_edit_page(voice_id: str, response: Response):
       <button type='button' onclick='save()'>Save</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px'>—</div>
+    <div id='out' class='muted' style='margin-top:10px'>-</div>
     <audio id='audio' controls class='hide'></audio>
   </div>
 
@@ -1873,7 +1876,7 @@ def voices_new_page(response: Response):
       <button type='button' class='secondary' onclick='startTrain()'>Generate model</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px'>—</div>
+    <div id='out' class='muted' style='margin-top:10px'>-</div>
   </div>
 
   <div class='card'>
@@ -2059,6 +2062,19 @@ def todo_page(request: Request, response: Response):
     def esc(x: str) -> str:
         return pyhtml.escape(str(x or ''))
 
+    def fmt_ts(ts: Any) -> str:
+        try:
+            v = int(ts)
+        except Exception:
+            return ''
+        if v <= 0:
+            return ''
+        try:
+            # Server-local time. (Good enough for internal TODO display.)
+            return datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M')
+        except Exception:
+            return ''
+
     # Group by category
     groups: dict[str, list[dict[str, Any]]] = {}
     order: list[str] = []
@@ -2096,6 +2112,14 @@ def todo_page(request: Request, response: Response):
             txt = esc(it.get('text') or '')
             checked = 'checked' if st != 'open' else ''
             hi_cls = ' hi' if bool(it.get('highlighted')) else ''
+            created_s = fmt_ts(it.get('created_at'))
+            updated_s = fmt_ts(it.get('updated_at'))
+            meta_parts = []
+            if created_s:
+                meta_parts.append('created ' + esc(created_s))
+            if updated_s and updated_s != created_s:
+                meta_parts.append('updated ' + esc(updated_s))
+            meta_html = "<div class='todoMeta'>" + " • ".join(meta_parts) + "</div>" if meta_parts else ""
             # If id is missing, render as plain text
             if tid is None:
                 box = '☑' if checked else '☐'
@@ -2109,7 +2133,10 @@ def todo_page(request: Request, response: Response):
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
                 + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
-                + "<span class='todoText'>" + txt + "</span>"
+                + "<div class='todoTextWrap'>"
+                + "<div class='todoText'>" + txt + "</div>"
+                + meta_html
+                + "</div>"
                 + "</label>"
                 + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\" ontouchend=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\">Delete</button></div>"
                 + "</div></div>"
@@ -2137,7 +2164,7 @@ def todo_page(request: Request, response: Response):
       </div>
       <div class="right">
         <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-                
+
       </div>
     </div>
   </div>
@@ -2313,7 +2340,7 @@ function archiveDone(){
 
 
 @app.post('/api/todos')
-def api_todos_add(request: Request, payload: dict = Body(default={})): 
+def api_todos_add(request: Request, payload: dict = Body(default={})):
     err = _todo_api_check(request)
     if err == 'disabled':
         raise HTTPException(status_code=503, detail='todo api disabled')
