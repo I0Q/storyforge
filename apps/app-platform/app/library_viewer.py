@@ -13,6 +13,15 @@ from .library_db import get_story_db
 VIEWER_EXTRA_CSS = """
 .hide{display:none}
 .rowBetween{justify-content:space-between;}
+.rowEnd{justify-content:flex-end;}
+.rowBetweenCenter{justify-content:space-between;align-items:center;}
+.fw950{font-weight:950;}
+
+.navTitleWrap{min-width:0;}
+.navBrand h1{margin:0;}
+.storyTitleLine{margin-top:2px;}
+.storyTitleText{cursor:pointer;font-weight:950;}
+.titleEdit{margin-top:8px;}
 
 .mdRender{margin-top:10px;line-height:1.6}
 .mdCode{width:100%;min-height:260px;margin-top:10px;white-space:pre-wrap;line-height:1.4}
@@ -21,10 +30,16 @@ VIEWER_EXTRA_CSS = """
 .vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}
 .vTab.active{background:#163a74;}
 .vPane.hide{display:none;}
+
+.charsWrap{margin-top:10px;}
+.pill.ml6{margin-left:6px;}
+.desc.mt4{margin-top:4px;}
+
 .charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}
 .charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
 .charCard .cname{font-weight:950}
 .charCard .cbody{min-width:0}
+
 #titleInput,#mdCode{font-size:16px;line-height:1.35}
 textarea{font-size:16px}
 """
@@ -78,12 +93,12 @@ def register_library_viewer(app: FastAPI) -> None:
             color = _swatch(cid)
 
             pill = (
-                f" <span class='pill' style='margin-left:6px'>{html.escape(ty)}</span>"
+                f" <span class='pill ml6'>{html.escape(ty)}</span>"
                 if ty
                 else ""
             )
             desc_html = (
-                f"<div class='muted' style='margin-top:4px'>{html.escape(desc)}</div>"
+                f"<div class='muted desc mt4'>{html.escape(desc)}</div>"
                 if desc
                 else ""
             )
@@ -97,7 +112,7 @@ def register_library_viewer(app: FastAPI) -> None:
             )
 
         chars_html = (
-            "<div style='margin-top:10px'>" + "".join(char_cards) + "</div>"
+            "<div class='charsWrap'>" + "".join(char_cards) + "</div>"
             if char_cards
             else "<div class='muted'>—</div>"
         )
@@ -335,22 +350,22 @@ if ($('mdCode')) {{
             [
                 "<div class='navBar'>",
                 "  <div class='navInner'>",
-                "    <div style='min-width:0'>",
-                "      <div class='brandRow'><h1 style='margin:0'><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Story</div></div>",
-                f"      <div class='muted' style='margin-top:2px'><span id='titleText' style='cursor:pointer;font-weight:950'>{title_txt}</span></div>",
-                "      <div id='titleEdit' class='hide' style='margin-top:8px'>",
+                "    <div class='navTitleWrap'>",
+                "      <div class='brandRow navBrand'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Story</div></div>",
+                f"      <div class='muted storyTitleLine'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
+                "      <div id='titleEdit' class='hide titleEdit'>",
                 f"        <input id='titleInput' value='{title_txt}' />",
                 "      </div>",
                 "    </div>",
-                "    <div class='row' style='justify-content:flex-end'>",
+                "    <div class='row rowEnd'>",
                 "      <a href='/#tab-library'><button class='secondary' type='button'>Back</button></a>",
                 "      <div class='menuWrap'>",
                 "        <button class='userBtn' type='button' onclick=\"toggleUserMenu()\" aria-label='User menu'>",
-                "          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg>",
+                "          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg>",
                 "        </button>",
                 "        <div id='topMenu' class='menuCard'>",
                 "          <div class='uTop'>",
-                "            <div class='uAvatar'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg></div>",
+                "            <div class='uAvatar'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg></div>",
                 "            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>",
                 "          </div>",
                 "          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>",
@@ -368,7 +383,7 @@ if ($('mdCode')) {{
                 "<div id='vp-story' class='vPane'>",
                 "  <div class='card'>",
                 "    <div class='row rowBetween'>",
-                "      <div style='font-weight:950'>Story</div>",
+                "      <div class='fw950'>Story</div>",
                 "      <button class='secondary' onclick=\"toggleMd()\" type='button' id='mdBtn'>Show code</button>",
                 "    </div>",
                 f"    <div id='mdRender' class='mdRender'>{rendered}</div>",
@@ -378,15 +393,15 @@ if ($('mdCode')) {{
                 "",
                 "<div id='vp-chars' class='vPane hide'>",
                 "  <div class='card'>",
-                "    <div style='font-weight:950'>Characters</div>",
+                "    <div class='fw950'>Characters</div>",
                 f"    {chars_html}",
                 "  </div>",
                 "</div>",
                 "",
                 "<div class='card'>",
-                "  <div class='row' style='justify-content:space-between;align-items:center'>",
+                "  <div class='row rowBetweenCenter'>",
                 "    <div>",
-                "      <div style='font-weight:950'>Danger zone</div>",
+                "      <div class='fw950'>Danger zone</div>",
                 "      <div class='muted'>Delete cannot be undone.</div>",
                 "    </div>",
                 "    <button class='danger' type='button' onclick=\"doDelete()\">Delete story</button>",
