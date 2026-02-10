@@ -12,6 +12,11 @@ from .library_db import get_story_db
 
 VIEWER_EXTRA_CSS = """
 .hide{display:none}
+.rowBetween{justify-content:space-between;}
+
+.mdRender{margin-top:10px;line-height:1.6}
+.mdCode{width:100%;min-height:260px;margin-top:10px;white-space:pre-wrap;line-height:1.4}
+
 .vTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px 0;}
 .vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}
 .vTab.active{background:#163a74;}
@@ -359,12 +364,12 @@ if ($('mdCode')) {{
                 "",
                 "<div id='vp-story' class='vPane'>",
                 "  <div class='card'>",
-                "    <div class='row' style='justify-content:space-between;'>",
+                "    <div class='row rowBetween'>",
                 "      <div style='font-weight:950'>Story</div>",
                 "      <button class='secondary' onclick=\"toggleMd()\" type='button' id='mdBtn'>Show code</button>",
                 "    </div>",
-                f"    <div id='mdRender' style='margin-top:10px;line-height:1.6'>{rendered}</div>",
-                f"    <textarea id='mdCode' class='term hide' style='width:100%;min-height:260px;margin-top:10px;white-space:pre-wrap;line-height:1.4'>{story_md_esc}</textarea>",
+                f"    <div id='mdRender' class='mdRender'>{rendered}</div>",
+                f"    <textarea id='mdCode' class='term mdCode hide'>{story_md_esc}</textarea>",
                 "  </div>",
                 "</div>",
                 "",
