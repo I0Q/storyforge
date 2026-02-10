@@ -190,12 +190,9 @@ INDEX_BASE_CSS = base_css("""\
 """)
 
 # Shared CSS for Voices pages (edit + generate). Keep content verbatim.
-VOICES_BASE_CSS = base_css("""\
+COMMON_VARS_HEADER_CSS = base_css("""\
 
-    html,body{overscroll-behavior-y:none;}
-    *{box-sizing:border-box;}
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
     a{color:var(--accent);text-decoration:none}
 
     /* header */
@@ -206,6 +203,20 @@ VOICES_BASE_CSS = base_css("""\
 
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
+
+""")
+
+VOICES_BASE_CSS = (
+    base_css("""\
+
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+
+""")
+    + COMMON_VARS_HEADER_CSS
+    + base_css("""\
+
     .err{color:var(--bad);font-weight:950;margin-top:10px;}
 
     /* layout */
@@ -218,6 +229,7 @@ VOICES_BASE_CSS = base_css("""\
     .hide{display:none;}
 
 """)
+)
 
 VOICE_EDIT_EXTRA_CSS = base_css("""\
 
@@ -251,15 +263,11 @@ VOICE_NEW_EXTRA_CSS = base_css("""\
 
 """)
 
-TODO_BASE_CSS = base_css("""\
+TODO_BASE_CSS = (
+    COMMON_VARS_HEADER_CSS
+    + base_css("""\
 
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
-    a{color:var(--accent);text-decoration:none}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     .menuWrap{position:relative;display:inline-block;}
     .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
     .userBtn:hover{background:rgba(255,255,255,0.06);}
@@ -271,8 +279,6 @@ TODO_BASE_CSS = base_css("""\
     .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
     .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
 
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
     .err{color:var(--bad);font-weight:950;margin:10px 0;}
     .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}
     .right{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}
@@ -314,6 +320,7 @@ TODO_BASE_CSS = base_css("""\
     .todoPlain{margin:8px 0;color:var(--muted);}
 
 """)
+)
 
 def _todo_api_check(request: Request):
     # Token-gated write API for the assistant only (no UI writes).
