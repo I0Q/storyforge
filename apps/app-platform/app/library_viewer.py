@@ -19,7 +19,7 @@ VIEWER_EXTRA_CSS = """
 
 .navTitleWrap{min-width:0;}
 .navBrand h1{margin:0;}
-.storyTitleLine{margin-top:2px;}
+.storySub{margin:8px 0 10px 0;}
 .storyTitleText{cursor:pointer;}
 .titleEdit{margin-top:8px;}
 
@@ -352,10 +352,8 @@ if ($('mdCode')) {{
                 "  <div class='navInner'>",
                 "    <div class='navTitleWrap'>",
                 "      <div class='brandRow navBrand'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Story</div></div>",
-                f"      <div class='muted storyTitleLine'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
-                "      <div id='titleEdit' class='hide titleEdit'>",
-                f"        <input id='titleInput' value='{title_txt}' />",
-                "      </div>",
+                "",  # subtitle moved below header
+
                 "    </div>",
                 "    <div class='row rowEnd'>",
                 "      <a href='/#tab-library'><button class='secondary' type='button'>Back</button></a>",
@@ -373,6 +371,11 @@ if ($('mdCode')) {{
                 "      </div>",
                 "    </div>",
                 "  </div>",
+                "</div>",
+                "",
+                f"<div class='muted storySub'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
+                "<div id='titleEdit' class='hide titleEdit'>",
+                f"  <input id='titleInput' value='{title_txt}' />",
                 "</div>",
                 "",
                 "<div class='vTabs'>",
