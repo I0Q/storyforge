@@ -29,7 +29,7 @@ LIBRARY_BASE_CSS = """
     .brandLink:active{opacity:0.9;}
     code,pre,textarea{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
     .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+    .top{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:10px;align-items:start;}
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     .menuWrap{position:relative;display:inline-block;}
