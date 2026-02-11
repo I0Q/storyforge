@@ -210,6 +210,7 @@ COMMON_VARS_HEADER_CSS = base_css("""\
 
     /* layout helpers */
     .rowBetween{justify-content:space-between;}
+    .headActions{justify-content:flex-end;align-items:center;flex-wrap:nowrap;}
 
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
@@ -1707,7 +1708,7 @@ def voices_edit_page(voice_id: str, response: Response):
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
-      <div class='row rowBetween'>
+      <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
         <div class='menuWrap'>
           <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
@@ -1846,7 +1847,7 @@ def voices_new_page(response: Response):
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
         <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
       </div>
-      <div class='row rowBetween'>
+      <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
         <div class='menuWrap'>
           <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
