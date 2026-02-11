@@ -13,7 +13,7 @@ from .library_db import get_story_db
 VIEWER_EXTRA_CSS = """
 .hide{display:none}
 .rowBetween{justify-content:space-between;}
-.rowEnd{justify-content:flex-end;}
+.rowEnd{justify-content:flex-end;margin-left:auto;}
 .rowBetweenCenter{justify-content:space-between;align-items:center;}
 .fw950{font-weight:950;}
 

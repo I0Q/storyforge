@@ -47,7 +47,7 @@ LIBRARY_BASE_CSS = """
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
     .rowBetween{justify-content:space-between;}
-    .rowEnd{justify-content:flex-end;}
+    .rowEnd{justify-content:flex-end;margin-left:auto;}
     .mt8{margin-top:8px;}
     .mt10{margin-top:10px;}
     .mt12{margin-top:12px;}

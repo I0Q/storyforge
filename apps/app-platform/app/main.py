@@ -112,7 +112,7 @@ INDEX_BASE_CSS = base_css("""\
     .todoItem input{transform:scale(1.1);margin-right:10px;}
     .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .rowEnd{justify-content:flex-end;}
+    .rowEnd{justify-content:flex-end;margin-left:auto;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
 
@@ -223,7 +223,7 @@ VOICES_BASE_CSS = (
     /* layout */
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .rowEnd{justify-content:flex-end;}
+    .rowEnd{justify-content:flex-end;margin-left:auto;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
     input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
