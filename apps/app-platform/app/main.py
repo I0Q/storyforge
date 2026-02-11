@@ -100,6 +100,7 @@ INDEX_BASE_CSS = base_css("""\
     @media (max-width:520px){
       .top .rowEnd{margin-left:0;width:100%;justify-content:flex-start;}
       .top .right{margin-left:0;width:100%;justify-content:flex-start;}
+      .top .rowBetween{width:100%;}
     }
 
     h1{font-size:20px;margin:0;}
@@ -207,12 +208,16 @@ COMMON_VARS_HEADER_CSS = base_css("""\
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
 
+    /* layout helpers */
+    .rowBetween{justify-content:space-between;}
+
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
 
     @media (max-width:520px){
       .top .rowEnd{margin-left:0;width:100%;justify-content:flex-start;}
       .top .right{margin-left:0;width:100%;justify-content:flex-start;}
+      .top .rowBetween{width:100%;}
     }
 
 """)
@@ -1702,7 +1707,7 @@ def voices_edit_page(voice_id: str, response: Response):
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
-      <div class='row rowEnd'>
+      <div class='row rowBetween'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
         <div class='menuWrap'>
           <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
@@ -1841,7 +1846,7 @@ def voices_new_page(response: Response):
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
         <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
       </div>
-      <div class='row rowEnd'>
+      <div class='row rowBetween'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
         <div class='menuWrap'>
           <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
