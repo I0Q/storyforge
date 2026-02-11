@@ -627,14 +627,9 @@ def index(response: Response):
 
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
-      <div class='muted'>Hide/show the build + JS error banner, and copy build/error details for debugging.</div>
-
-      <div id='dbgInfo' class='term' style='margin-top:10px;white-space:pre-wrap;'>Build: __BUILD__
-JS: (none)</div>
-
+      <div class='muted'>Hide/show the build + JS error banner.</div>
       <div class='row' style='margin-top:10px;'>
         <button id='dbgToggle' class='secondary' onclick='toggleDebugUi()'>Disable debug</button>
-        <button class='secondary' onclick='copyDebugInfo()'>Copy build + error</button>
       </div>
     </div>
 
@@ -883,17 +878,18 @@ function copyBoot(){
     var txt = t ? (t.textContent || '') : '';
     if (!txt) return;
     if (typeof copyToClipboard==='function') copyToClipboard(txt);
-    try{ toastSet('Copied build/JS', 'ok', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+    try{ toastSet('Copied', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
   }catch(e){}
 }
 
 function copyDebugInfo(){
+  // Kept for backwards compatibility (older HTML may still call it).
   try{
     var b = (window.__SF_BUILD || '').trim();
     var e = (window.__SF_LAST_ERR || '').trim();
-    var txt = `Build: ${b || '?'}\nJS: ${e || '(none)'}`;
+    var txt = 'Build: ' + (b || '?') + '\nJS: ' + (e || '(none)');
     if (typeof copyToClipboard==='function') copyToClipboard(txt);
-    try{ toastSet('Copied build + error', 'ok', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
+    try{ toastSet('Copied', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
   }catch(_e){}
 }
 
