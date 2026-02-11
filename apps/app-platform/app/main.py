@@ -812,7 +812,15 @@ function copyIconSvg(){
 
 function copyFromAttr(el){
   var v = ''; try{ v = (el && el.getAttribute) ? (el.getAttribute('data-copy') || '') : ''; }catch(e){}
-  if (v) copyToClipboard(v);
+  if (!v) return;
+  try{
+    var p = copyToClipboard(v);
+    // Show toast immediately (even if clipboard API is blocked, this still confirms the tap).
+    try{ toastSet('Copied', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+    return p;
+  }catch(e){
+    try{ toastSet('Copy failed', 'err', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
+  }
 }
 
 function fetchJsonAuthed(url, opts){
