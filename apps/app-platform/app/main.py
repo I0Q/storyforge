@@ -1568,8 +1568,8 @@ try{
 }catch(e){}
 
 try{
-  var __bootEl = document.getElementById('boot');
-  if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
+  var __bootText = __sfEnsureBootBanner();
+  if (__bootText) __bootText.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
 }catch(_e){}
 
 var initTab = getTabFromHash() || getQueryParam('tab');
@@ -1583,7 +1583,8 @@ loadHistory();
 loadVoices();
 
 try{
-  if (__bootEl) __bootEl.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: ok';
+  var __bootText2 = __sfEnsureBootBanner();
+  if (__bootText2) __bootText2.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: ok';
 }catch(_e){}
 </script>
 
