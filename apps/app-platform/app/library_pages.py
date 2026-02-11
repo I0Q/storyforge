@@ -35,8 +35,13 @@ LIBRARY_BASE_CSS = """
     .menuWrap{position:relative;display:inline-block;}
     .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
     .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;max-width:calc(100vw - 36px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
     .menuCard.show{display:block;}
+
+    /* Mobile: render the user menu as a bottom sheet so it doesn't distort the header */
+    @media (max-width:520px){
+      .menuCard{position:fixed;left:14px;right:14px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));min-width:0;max-width:none;}
+    }
     .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
     .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
     .menuCard .uName{font-weight:950;}
