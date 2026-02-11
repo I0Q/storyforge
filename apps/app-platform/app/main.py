@@ -1885,7 +1885,9 @@ function testSample(){
   fetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
     .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
     .then(function(j){
-      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
+      var body = (j && j.body) ? j.body : j;
+      if (body && body.ok === false){ if(out) out.innerHTML='<div class="err">'+escJs(body.error||'tts_failed')+'</div>'; return; }
+      var url = (body && (body.url || body.sample_url)) ? (body.url || body.sample_url) : '';
       if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
       if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + escJs(url) + "</code></div>";
       var a=$('audio');
@@ -2151,7 +2153,9 @@ function testSample(){
   var out=$('out'); if(out) out.textContent='Generating…';
   return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
     .then(function(j){
-      var url = (j && (j.url || j.sample_url)) ? (j.url || j.sample_url) : '';
+      var body = (j && j.body) ? j.body : j;
+      if (body && body.ok === false){ if(out) out.innerHTML='<div class="err">'+esc(body.error||'tts_failed')+'</div>'; return; }
+      var url = (body && (body.url || body.sample_url)) ? (body.url || body.sample_url) : '';
       if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
       if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
       var a=$('audio');
