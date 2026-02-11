@@ -3003,9 +3003,35 @@ def api_history(limit: int = 60):
 
 @app.post('/api/tts')
 def api_tts(payload: dict[str, Any]):
-    r = requests.post(GATEWAY_BASE + '/v1/tts', json=payload, headers=_h(), timeout=120)
+    """Text-to-speech helper.
+
+    - Delegates synthesis to Tinybox via gateway (/v1/tts).
+    - If Tinybox returns audio bytes (audio_b64), we upload to Spaces and return a public URL.
+
+    Return shape is backward-compatible with older UI code that expects {status, body}.
+    """
+    r = requests.post(GATEWAY_BASE + '/v1/tts', json=payload, headers=_h(), timeout=900)
     try:
         body = r.json()
     except Exception:
         body = r.text
+
+    # Upload returned audio to Spaces for browser playback
+    try:
+        if isinstance(body, dict) and body.get('ok') and body.get('audio_b64'):
+            import base64
+            from .spaces_upload import upload_bytes
+
+            b = base64.b64decode(str(body.get('audio_b64') or ''), validate=False)
+            ct = str(body.get('content_type') or 'audio/wav')
+            ext = 'wav'
+            if 'mpeg' in ct:
+                ext = 'mp3'
+            fn = f"sample.{ext}"
+            _key, url = upload_bytes(b, key_prefix='tts/samples', filename=fn, content_type=ct)
+            out = {'ok': True, 'url': url}
+            return {'status': 200, 'body': out}
+    except Exception as e:
+        return {'status': 500, 'body': {'ok': False, 'error': f'spaces_upload_failed: {e}'}}
+
     return {"status": r.status_code, "body": body}
