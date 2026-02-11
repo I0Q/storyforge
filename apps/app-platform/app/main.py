@@ -620,9 +620,14 @@ def index(response: Response):
 
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
-      <div class='muted'>Hide/show the build + JS error banner.</div>
+      <div class='muted'>Hide/show the build + JS error banner, and copy build/error details for debugging.</div>
+
+      <div id='dbgInfo' class='term' style='margin-top:10px;white-space:pre-wrap;'>Build: __BUILD__
+JS: (none)</div>
+
       <div class='row' style='margin-top:10px;'>
         <button id='dbgToggle' class='secondary' onclick='toggleDebugUi()'>Disable debug</button>
+        <button class='secondary' onclick='copyDebugInfo()'>Copy build + error</button>
       </div>
     </div>
 
@@ -632,14 +637,26 @@ def index(response: Response):
 // minimal boot script (runs even if the main app script has a syntax error)
 window.__SF_BUILD = '__BUILD__';
 window.__SF_BOOT_TS = Date.now();
+window.__SF_LAST_ERR = '';
+
+function __sfSetDebugInfo(msg){
+  try{
+    window.__SF_LAST_ERR = msg || '';
+    var el=document.getElementById('dbgInfo');
+    if (el) el.textContent = `Build: ${window.__SF_BUILD}\nJS: ${window.__SF_LAST_ERR || '(none)'}`;
+    var b=document.getElementById('bootText') || document.getElementById('boot');
+    if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS: ${window.__SF_LAST_ERR || 'ok'}`;
+  }catch(e){}
+}
+
 window.addEventListener('error', (ev)=>{
-  const b=document.getElementById('bootText') || document.getElementById('boot');
-  if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS error: ${ev.message || ev.type}`;
+  __sfSetDebugInfo(`error: ${ev && (ev.message||ev.type) ? (ev.message||ev.type) : 'unknown'}`);
 });
-window.addEventListener('unhandledrejection', (ev)=>{
-  const b=document.getElementById('bootText') || document.getElementById('boot');
-  if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS promise error`;
+window.addEventListener('unhandledrejection', (_ev)=>{
+  __sfSetDebugInfo('promise error');
 });
+
+try{ __sfSetDebugInfo(''); }catch(e){}
 </script>
 
 <script>
@@ -830,6 +847,16 @@ function copyBoot(){
     if (typeof copyToClipboard==='function') copyToClipboard(txt);
     try{ toastSet('Copied build/JS', 'ok', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
   }catch(e){}
+}
+
+function copyDebugInfo(){
+  try{
+    var b = (window.__SF_BUILD || '').trim();
+    var e = (window.__SF_LAST_ERR || '').trim();
+    var txt = `Build: ${b || '?'}\nJS: ${e || '(none)'}`;
+    if (typeof copyToClipboard==='function') copyToClipboard(txt);
+    try{ toastSet('Copied build + error', 'ok', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
+  }catch(_e){}
 }
 
 
