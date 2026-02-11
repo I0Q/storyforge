@@ -3,12 +3,47 @@ from __future__ import annotations
 import hashlib
 import html
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi import Response
 
 from .db import db_connect, db_init
 from .library_db import get_story_db
+
+VIEWER_EXTRA_CSS = """
+.hide{display:none}
+.rowBetween{justify-content:space-between;}
+.rowEnd{justify-content:flex-end;margin-left:auto;}
+.rowBetweenCenter{justify-content:space-between;align-items:center;}
+.fw950{font-weight:950;}
+
+/* navInner removed (use .top from base header CSS) */
+.navTitleWrap{min-width:0;}
+.navBrand h1{margin:0;}
+.storySub{margin:8px 0 10px 0;font-size:14px;}
+.storyTitleText{cursor:pointer;}
+.titleEdit{margin-top:8px;}
+
+.mdRender{margin-top:10px;line-height:1.6}
+.mdCode{width:100%;min-height:260px;margin-top:10px;white-space:pre-wrap;line-height:1.4}
+
+.vTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px 0;}
+.vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}
+.vTab.active{background:#163a74;}
+.vPane.hide{display:none;}
+
+.charsWrap{margin-top:10px;}
+.pill.ml6{margin-left:6px;}
+.desc.mt4{margin-top:4px;}
+
+.charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}
+.charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
+.charCard .cname{font-weight:950}
+.charCard .cbody{min-width:0}
+
+#titleInput,#mdCode{font-size:16px;line-height:1.35}
+textarea{font-size:16px}
+"""
 
 def _swatch(key: str) -> str:
     h = hashlib.sha256((key or "").encode("utf-8")).hexdigest()
@@ -37,7 +72,10 @@ def register_library_viewer(app: FastAPI) -> None:
         conn = db_connect()
         try:
             db_init(conn)
-            st = get_story_db(conn, story_id)
+            try:
+                st = get_story_db(conn, story_id)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="story_not_found")
         finally:
             conn.close()
 
@@ -56,12 +94,12 @@ def register_library_viewer(app: FastAPI) -> None:
             color = _swatch(cid)
 
             pill = (
-                f" <span class='pill' style='margin-left:6px'>{html.escape(ty)}</span>"
+                f" <span class='pill ml6'>{html.escape(ty)}</span>"
                 if ty
                 else ""
             )
             desc_html = (
-                f"<div class='muted' style='margin-top:4px'>{html.escape(desc)}</div>"
+                f"<div class='muted desc mt4'>{html.escape(desc)}</div>"
                 if desc
                 else ""
             )
@@ -75,7 +113,7 @@ def register_library_viewer(app: FastAPI) -> None:
             )
 
         chars_html = (
-            "<div style='margin-top:10px'>" + "".join(char_cards) + "</div>"
+            "<div class='charsWrap'>" + "".join(char_cards) + "</div>"
             if char_cards
             else "<div class='muted'>—</div>"
         )
@@ -312,23 +350,21 @@ if ($('mdCode')) {{
         body = "\n".join(
             [
                 "<div class='navBar'>",
-                "  <div class='navInner'>",
-                "    <div style='min-width:0'>",
-                "      <div class='brandRow'><h1 style='margin:0'>StoryForge</h1><div class='pageName'>Story</div></div>",
-                f"      <div class='muted' style='margin-top:2px'><span id='titleText' style='cursor:pointer;font-weight:950'>{title_txt}</span></div>",
-                "      <div id='titleEdit' class='hide' style='margin-top:8px'>",
-                f"        <input id='titleInput' value='{title_txt}' />",
-                "      </div>",
+                "  <div class='top'>",
+                "    <div class='navTitleWrap'>",
+                "      <div class='brandRow navBrand'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Story</div></div>",
+                "",  # subtitle moved below header
+
                 "    </div>",
-                "    <div class='row' style='justify-content:flex-end'>",
+                "    <div class='row rowEnd'>",
                 "      <a href='/#tab-library'><button class='secondary' type='button'>Back</button></a>",
                 "      <div class='menuWrap'>",
                 "        <button class='userBtn' type='button' onclick=\"toggleUserMenu()\" aria-label='User menu'>",
-                "          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg>",
+                "          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg>",
                 "        </button>",
                 "        <div id='topMenu' class='menuCard'>",
                 "          <div class='uTop'>",
-                "            <div class='uAvatar'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg></div>",
+                "            <div class='uAvatar'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg></div>",
                 "            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>",
                 "          </div>",
                 "          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>",
@@ -338,6 +374,11 @@ if ($('mdCode')) {{
                 "  </div>",
                 "</div>",
                 "",
+                f"<div class='muted storySub'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
+                "<div id='titleEdit' class='hide titleEdit'>",
+                f"  <input id='titleInput' value='{title_txt}' />",
+                "</div>",
+                "",
                 "<div class='vTabs'>",
                 "  <button id='vtab-story' class='vTab active' type='button' onclick=\"showVTab('story')\">Story</button>",
                 "  <button id='vtab-chars' class='vTab' type='button' onclick=\"showVTab('chars')\">Characters</button>",
@@ -345,59 +386,33 @@ if ($('mdCode')) {{
                 "",
                 "<div id='vp-story' class='vPane'>",
                 "  <div class='card'>",
-                "    <div class='row' style='justify-content:space-between;'>",
-                "      <div style='font-weight:950'>Story</div>",
+                "    <div class='row rowBetween'>",
+                "      <div class='fw950'>Story</div>",
                 "      <button class='secondary' onclick=\"toggleMd()\" type='button' id='mdBtn'>Show code</button>",
                 "    </div>",
-                f"    <div id='mdRender' style='margin-top:10px;line-height:1.6'>{rendered}</div>",
-                f"    <textarea id='mdCode' class='term hide' style='width:100%;min-height:260px;margin-top:10px;white-space:pre-wrap;line-height:1.4'>{story_md_esc}</textarea>",
+                f"    <div id='mdRender' class='mdRender'>{rendered}</div>",
+                f"    <textarea id='mdCode' class='term mdCode hide'>{story_md_esc}</textarea>",
                 "  </div>",
                 "</div>",
                 "",
                 "<div id='vp-chars' class='vPane hide'>",
                 "  <div class='card'>",
-                "    <div style='font-weight:950'>Characters</div>",
+                "    <div class='fw950'>Characters</div>",
                 f"    {chars_html}",
                 "  </div>",
                 "</div>",
                 "",
                 "<div class='card'>",
-                "  <div class='row' style='justify-content:space-between;align-items:center'>",
+                "  <div class='row rowBetweenCenter'>",
                 "    <div>",
-                "      <div style='font-weight:950'>Danger zone</div>",
+                "      <div class='fw950'>Danger zone</div>",
                 "      <div class='muted'>Delete cannot be undone.</div>",
                 "    </div>",
                 "    <button class='danger' type='button' onclick=\"doDelete()\">Delete story</button>",
                 "  </div>",
                 "</div>",
                 "",
-                "<style>",
-                ".hide{display:none}",
-                ".vTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px 0;}",
-                ".vTab{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;cursor:pointer;}",
-                ".vTab.active{background:#163a74;}",
-                ".vPane.hide{display:none;}",
-                ".charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}",
-                ".charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}",
-                ".charCard .cname{font-weight:950}",
-                ".charCard .cbody{min-width:0}",
-                "#titleInput,#mdCode{font-size:16px;line-height:1.35}",
-                "textarea{font-size:16px}",
-                ".navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 0 10px 0;margin-bottom:10px}",
-                ".navInner{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}",
-                ".brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}",
-                ".pageName{color:var(--muted);font-weight:900;font-size:12px}",
-                ".menuWrap{position:relative;display:inline-block}",
-                ".userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center}",
-                ".userBtn:hover{background:rgba(255,255,255,0.06)}",
-                ".menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45)}",
-                ".menuCard.show{display:block}",
-                ".menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px}",
-                ".menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}",
-                ".menuCard .uName{font-weight:950}",
-                ".menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px}",
-                ".menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}",
-                "</style>",
+                f"<style>{VIEWER_EXTRA_CSS}</style>",
                 js,
             ]
         )

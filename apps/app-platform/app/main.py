@@ -6,12 +6,14 @@ from typing import Any
 
 import json
 import time
+from datetime import datetime
 import html as pyhtml
 
 import requests
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 
 from .auth import register_passphrase_auth
+from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
 from .db import db_connect, db_init, db_list_jobs
@@ -37,7 +39,7 @@ from .voices_db import (
     set_voice_enabled_db,
     delete_voice_db,
 )
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi import Response
 
 APP_NAME = "storyforge"
@@ -65,81 +67,10 @@ register_passphrase_auth(app)
 register_library_pages(app)
 register_library_viewer(app)
 
-def _todo_api_check(request: Request):
-    # Token-gated write API for the assistant only (no UI writes).
-    token = os.environ.get('TODO_API_TOKEN', '').strip()
-    if not token:
-        return 'disabled'
-    got = (request.headers.get('x-sf-todo-token') or '').strip()
-    if not got:
-        auth = (request.headers.get('authorization') or '').strip()
-        if auth.lower().startswith('bearer '):
-            got = auth[7:].strip()
-    if got != token:
-        return 'unauthorized'
-    return None
+# Incremental refactor: extract the dashboard (/) CSS verbatim into a constant.
+# This should not change rendered output.
+INDEX_BASE_CSS = base_css("""\
 
-
-
-def _h() -> dict[str, str]:
-    if not GATEWAY_TOKEN:
-        return {}
-    return {"Authorization": "Bearer " + GATEWAY_TOKEN}
-
-
-def _get(path: str) -> dict[str, Any]:
-    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=8)
-    r.raise_for_status()
-    return r.json()
-
-
-@app.get("/", response_class=HTMLResponse)
-def index(response: Response):
-    build = int(time.time())
-    # iOS Safari can be aggressive about caching; keep the UI fresh.
-    response.headers["Cache-Control"] = "no-store"
-
-    # Voice servers list (rendered server-side to avoid brittle JS)
-    vs_items: list[str] = []
-    for s in VOICE_SERVERS:
-        try:
-            nm_raw = str(s.get("name") or "server")
-            nm = pyhtml.escape(nm_raw)
-            base = pyhtml.escape(str(s.get("base") or ""))
-            kind = pyhtml.escape(str(s.get("kind") or ""))
-            meta = f" <span class='pill'>{kind}</span>" if kind else ""
-
-            # Tinybox-specific monitor toggle lives inline with the Tinybox server item.
-            mon_btn = ""
-            if nm_raw.lower() == "tinybox":
-                mon_btn = (
-                    "<div class='row' style='justify-content:space-between;margin-top:10px'>"
-                    "<div class='muted' style='font-weight:950'>System monitoring</div>"
-                    "<label class='switch'>"
-                    "<input id='monToggleChk' type='checkbox' onchange='toggleMonitor()' />"
-                    "<span class='slider'></span>"
-                    "</label>"
-                    "</div>"
-                )
-
-            vs_items.append(
-                "<div class='job'>"
-                f"<div class='title'>{nm}{meta}</div>"
-                f"<div class='muted' style='margin-top:6px'><code>{base}</code></div>"
-                f"{mon_btn}"
-                "</div>"
-            )
-        except Exception:
-            continue
-    voice_servers_html = "".join(vs_items) if vs_items else "<div class='muted'>No voice servers configured.</div>"
-
-    html = """<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge</title>
-  <style>
     :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--good:#26d07c;--warn:#ffcc00;--bad:#ff4d4d;}
     body.noScroll{overflow:hidden;}
     html,body{overscroll-behavior-y:none;}
@@ -152,14 +83,13 @@ def index(response: Response):
     a{color:var(--accent);text-decoration:none}
     code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
     .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+    .top{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:10px;align-items:start;}
     .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
     .pageName{color:var(--muted);font-weight:900;font-size:12px;}
     .menuWrap{position:relative;display:inline-block;}
     .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
     .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;max-width:calc(100vw - 36px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
     .menuCard.show{display:block;}
     .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
     .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
@@ -167,22 +97,16 @@ def index(response: Response):
     .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
     .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
 
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+    /* Mobile: render the user menu as a bottom sheet so it doesn't distort the header */
+    @media (max-width:520px){
+      .menuCard{position:fixed;left:14px;right:14px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));min-width:0;max-width:none;}
+    }
 
     h1{font-size:20px;margin:0;}
+    .brandLink{color:inherit;text-decoration:none;}
+    .brandLink:active{opacity:0.9;}
     .muted{color:var(--muted);font-size:12px;}
-    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);} 
+    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);}
     body.debugOff #boot{display:none}
     .boot strong{color:var(--text);}
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
@@ -193,6 +117,7 @@ def index(response: Response):
     .todoItem input{transform:scale(1.1);margin-right:10px;}
     .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .rowEnd{justify-content:flex-end;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
 
@@ -267,7 +192,259 @@ def index(response: Response):
     .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#4aa3ff,#26d07c);}
     .bar.warn > div{background:linear-gradient(90deg,#ffcc00,#ff7a00);}
     .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
-  </style>
+
+""")
+
+# Shared CSS for Voices pages (edit + generate). Keep content verbatim.
+COMMON_VARS_HEADER_CSS = base_css("""\
+
+    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
+    a{color:var(--accent);text-decoration:none}
+
+    /* header */
+    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
+    .top{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:10px;align-items:start;}
+    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
+
+    /* user menu */
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;max-width:calc(100vw - 36px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
+    /* layout helpers */
+    .rowBetween{justify-content:space-between;}
+    .headActions{justify-content:flex-end;align-items:center;flex-wrap:nowrap;}
+
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);font-size:12px;}
+
+    /* Mobile: bottom-sheet menu */
+    @media (max-width:520px){
+      .menuCard{position:fixed;left:14px;right:14px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));min-width:0;max-width:none;}
+    }
+
+""")
+
+VOICES_BASE_CSS = (
+    base_css("""\
+
+    html,body{overscroll-behavior-y:none;}
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+
+""")
+    + COMMON_VARS_HEADER_CSS
+    + base_css("""\
+
+    .err{color:var(--bad);font-weight:950;margin-top:10px;}
+
+    /* layout */
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .rowEnd{justify-content:flex-end;margin-left:auto;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
+    textarea{min-height:90px;}
+    .hide{display:none;}
+
+""")
+)
+
+VOICE_EDIT_EXTRA_CSS = base_css("""\
+
+    /* user menu */
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;max-width:calc(100vw - 36px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
+    /* Mobile: bottom-sheet menu */
+    @media (max-width:520px){
+      .menuCard{position:fixed;left:14px;right:14px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));min-width:0;max-width:none;}
+    }
+
+    /* switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
+
+""")
+
+VOICE_NEW_EXTRA_CSS = base_css("""\
+
+    textarea{resize:none;}
+    .k{color:var(--muted);font-size:12px;margin-top:12px;}
+    audio{width:100%;margin-top:10px;}
+
+""")
+
+TODO_BASE_CSS = (
+    COMMON_VARS_HEADER_CSS
+    + base_css("""\
+
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
+    .menuWrap{position:relative;display:inline-block;}
+    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
+    .userBtn:hover{background:rgba(255,255,255,0.06);}
+    .menuCard{position:absolute;right:0;top:46px;min-width:240px;max-width:calc(100vw - 36px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    .menuCard.show{display:block;}
+    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+    .menuCard .uName{font-weight:950;}
+    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
+    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
+    /* Mobile: bottom-sheet menu */
+    @media (max-width:520px){
+      .menuCard{position:fixed;left:14px;right:14px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));min-width:0;max-width:none;}
+    }
+
+    .err{color:var(--bad);font-weight:950;margin:10px 0;}
+    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}
+    .right{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}
+    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
+    button.secondary{background:transparent;color:var(--text);}
+
+    /* iOS-like switch */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
+    .switch input{display:none;}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
+
+    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+
+    .catHead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}
+    .catTitle{font-weight:950;font-size:16px;}
+    .catCount{color:var(--muted);font-weight:800;font-size:12px;}
+
+    .todoItem{display:block;margin:10px 0;}
+    /* swipe-delete (implemented as horizontal scroll) */
+    .todoSwipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .todoSwipe::-webkit-scrollbar{display:none;}
+    .todoSwipeInner{display:flex;min-width:100%;}
+    .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
+    .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
+    .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
+    .todoHiBtn{border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:var(--muted);font-weight:950;border-radius:999px;padding:6px 10px;font-size:12px;line-height:1;cursor:pointer;}
+    .todoHiBtn:active{transform:translateY(1px);}
+    .todoItem.hi{ }
+    .todoItem.hi .todoText{color:var(--text);}
+    .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
+    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
+    .todoItem input{margin-top:3px;transform:scale(1.15);} 
+    .todoTextWrap{min-width:0;}
+    .todoText{line-height:1.25;}
+    .todoMeta{color:var(--muted);font-size:12px;margin-top:4px;}
+    .todoPlain{margin:8px 0;color:var(--muted);}
+
+""")
+)
+
+def _todo_api_check(request: Request):
+    # Token-gated write API for the assistant only (no UI writes).
+    token = os.environ.get('TODO_API_TOKEN', '').strip()
+    if not token:
+        return 'disabled'
+    got = (request.headers.get('x-sf-todo-token') or '').strip()
+    if not got:
+        auth = (request.headers.get('authorization') or '').strip()
+        if auth.lower().startswith('bearer '):
+            got = auth[7:].strip()
+    if got != token:
+        return 'unauthorized'
+    return None
+
+
+
+def _h() -> dict[str, str]:
+    if not GATEWAY_TOKEN:
+        return {}
+    return {"Authorization": "Bearer " + GATEWAY_TOKEN}
+
+
+def _get(path: str, timeout_s: float = 20.0) -> dict[str, Any]:
+    r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=float(timeout_s))
+    r.raise_for_status()
+    try:
+        return r.json()
+    except Exception:
+        # Avoid opaque 500s when the upstream returns non-JSON.
+        # (Don't include any auth headers/tokens; only surface a tiny body snippet.)
+        txt = ""
+        try:
+            txt = (r.text or "")[:200]
+        except Exception:
+            txt = ""
+        raise HTTPException(status_code=502, detail={"error": "upstream_non_json", "status": int(r.status_code), "body": txt})
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(response: Response):
+    build = int(time.time())
+    # iOS Safari can be aggressive about caching; keep the UI fresh.
+    response.headers["Cache-Control"] = "no-store"
+
+    # Voice servers list (rendered server-side to avoid brittle JS)
+    vs_items: list[str] = []
+    for s in VOICE_SERVERS:
+        try:
+            nm_raw = str(s.get("name") or "server")
+            nm = pyhtml.escape(nm_raw)
+            base = pyhtml.escape(str(s.get("base") or ""))
+            kind = pyhtml.escape(str(s.get("kind") or ""))
+            meta = f" <span class='pill'>{kind}</span>" if kind else ""
+
+            # Tinybox-specific monitor toggle lives inline with the Tinybox server item.
+            mon_btn = ""
+            if nm_raw.lower() == "tinybox":
+                mon_btn = (
+                    "<div class='row' style='justify-content:space-between;margin-top:10px'>"
+                    "<div class='muted' style='font-weight:950'>System monitoring</div>"
+                    "<label class='switch'>"
+                    "<input id='monToggleChk' type='checkbox' onchange='toggleMonitor()' />"
+                    "<span class='slider'></span>"
+                    "</label>"
+                    "</div>"
+                )
+
+            vs_items.append(
+                "<div class='job'>"
+                f"<div class='title'>{nm}{meta}</div>"
+                f"<div class='muted' style='margin-top:6px'><code>{base}</code></div>"
+                f"{mon_btn}"
+                "</div>"
+            )
+        except Exception:
+            continue
+    voice_servers_html = "".join(vs_items) if vs_items else "<div class='muted'>No voice servers configured.</div>"
+
+    html = """<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge</title>
+  <style>__INDEX_BASE_CSS__</style>
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
   // Emergency override: add ?mon=0 (or ?monitor=0 / ?monoff=1) to force monitor OFF even if the sheet is stuck.
@@ -313,10 +490,10 @@ def index(response: Response):
   <div class='navBar'>
   <div class='top'>
     <div>
-      <div class='brandRow'><h1>StoryForge</h1><div id='pageName' class='pageName'>Jobs</div></div>
-      
+      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
+
     </div>
-    <div class='row' style='justify-content:flex-end;'>
+    <div class='row rowEnd'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
       <div class='menuWrap'>
         <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
@@ -343,7 +520,7 @@ def index(response: Response):
           </div>
         </div>
       </div>
-            
+
     </div>
   </div>
 
@@ -366,16 +543,16 @@ def index(response: Response):
           <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
-          
+
+
+
         </div>
       </div>
       <div id='jobs'>Loading…</div>
     </div>
   </div>
 
-  
+
 
   <div id='pane-library' class='hide'>
     <div class='card'>
@@ -385,10 +562,10 @@ def index(response: Response):
           <div class='muted'>Text-only source stories (no voice/SFX assignments yet).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
+
+
           <a href='/library/new'><button class='secondary'>New story</button></a>
-          
+
         </div>
       </div>
       <div id='lib' class='muted'>Tap Reload to load stories.</div>
@@ -401,17 +578,17 @@ def index(response: Response):
           <div id='libDesc' class='muted'></div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
+
+
           <button class='secondary' onclick='closeStory()'>Close</button>
         </div>
       </div>
 
       <div style='font-weight:950;margin-top:12px;'>Characters</div>
-      <pre id='libChars' class='term' style='margin-top:8px;'>—</pre>
+      <pre id='libChars' class='term' style='margin-top:8px;'>-</pre>
 
       <div style='font-weight:950;margin-top:12px;'>Narrative (Markdown)</div>
-      <pre id='libStory' class='term' style='margin-top:8px;white-space:pre-wrap;'>—</pre>
+      <pre id='libStory' class='term' style='margin-top:8px;white-space:pre-wrap;'>-</pre>
 
       <div class='row' style='margin-top:12px;'>
         <button class='secondary' onclick='copyStory()'>Copy story text</button>
@@ -634,6 +811,7 @@ function toggleMenu(){
   if (m.classList.contains('show')) m.classList.remove('show');
   else m.classList.add('show');
 }
+function toggleUserMenu(){ return toggleMenu(); }
 
 document.addEventListener('click', function(ev){
   try{
@@ -656,7 +834,7 @@ function copyBoot(){
 
 
 function fmtTs(ts){
-  if (!ts) return '—';
+  if (!ts) return '-';
   try{
     const d=new Date(ts*1000);
     return d.toLocaleString();
@@ -689,8 +867,8 @@ function loadHistory(){
         <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>segments</div><div>${job.total_segments||0}</div>
-        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'—'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
-        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'—'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
     </div></a>`;
     }).join('');
@@ -1118,7 +1296,7 @@ function openStory(id){
     const meta = currentStory.meta || {};
 
   document.getElementById('libTitle').textContent = meta.title || currentStory.id;
-  
+
   const chars = (currentStory.characters || []).map(c => {
     const nm = c.name || c.id || '';
     const ty = c.type || '';
@@ -1139,7 +1317,7 @@ function closeStory(){
 }
 
 function copyStory(){
-  const txt = (currentStory && currentStory.story_md) ? currentStory.story_md : ''; 
+  const txt = (currentStory && currentStory.story_md) ? currentStory.story_md : '';
   if (txt) copyToClipboard(txt);
 }
 
@@ -1162,7 +1340,7 @@ function setBar(elId, pct){
 }
 
 function fmtPct(x){
-  if (x==null) return '—';
+  if (x==null) return '-';
   return (Number(x).toFixed(1)) + '%';
 }
 
@@ -1250,7 +1428,7 @@ function renderGpus(b){
 
       <div class='gpuRow' style='margin-top:10px'>
         <div class='k'>VRAM</div>
-        <div class='v'>${vt ? `${(vu/1024).toFixed(1)} / ${(vt/1024).toFixed(1)} GB` : '—'}</div>
+        <div class='v'>${vt ? `${(vu/1024).toFixed(1)} / ${(vt/1024).toFixed(1)} GB` : '-'}</div>
       </div>
       <div class='bar small' id='barVram${idx}'><div></div></div>
     </div>`;
@@ -1271,10 +1449,10 @@ function updateDockFromMetrics(m){
   const el = document.getElementById('dockStats');
   if (!el) return;
   const b = m?.body || m || {};
-  const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '—';
+  const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
   const rt = Number(b.ram_total_mb||0); const ru = Number(b.ram_used_mb||0);
   const rp = rt ? (ru/rt*100) : 0;
-  const ram = rt ? rp.toFixed(1)+'%' : '—';
+  const ram = rt ? rp.toFixed(1)+'%' : '-';
   const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
   let maxGpu = null;
   if (gpus.length){
@@ -1284,7 +1462,7 @@ function updateDockFromMetrics(m){
       if (u > maxGpu) maxGpu = u;
     }
   }
-  const gpu = (maxGpu==null) ? '—' : maxGpu.toFixed(1)+'%';
+  const gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
   el.textContent = `CPU ${cpu} • RAM ${ram} • GPU ${gpu}`;
 }
 
@@ -1299,11 +1477,11 @@ function updateMonitorFromMetrics(m){
   const rt = Number(b.ram_total_mb || 0);
   const ru = Number(b.ram_used_mb || 0);
   const rp = rt ? (ru/rt*100) : 0;
-  document.getElementById('monRam').textContent = rt ? `${ru.toFixed(0)} / ${rt.toFixed(0)} MB (${rp.toFixed(1)}%)` : '—';
+  document.getElementById('monRam').textContent = rt ? `${ru.toFixed(0)} / ${rt.toFixed(0)} MB (${rp.toFixed(1)}%)` : '-';
   setBar('barRam', rp);
   renderGpus(b);
 
-  const ts = b.ts ? fmtTs(b.ts) : '—';
+  const ts = b.ts ? fmtTs(b.ts) : '-';
   document.getElementById('monSub').textContent = `Tinybox time: ${ts}`;
     updateDockFromMetrics(m);
 }
@@ -1353,7 +1531,7 @@ try{
 </script>
 
 
-  
+
 
   <div id='monitorDock' class='dock' onclick='openMonitor()'>
     <div class='dockInner'>
@@ -1372,8 +1550,8 @@ try{
           <div id='monSub' class='muted'>Connecting…</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
-      
-      
+
+
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
         </div>
       </div>
@@ -1381,12 +1559,12 @@ try{
       <div class='grid2' style='margin-top:10px;'>
         <div class='meter'>
           <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>—</div>
+          <div class='v' id='monCpu'>-</div>
           <div class='bar' id='barCpu'><div></div></div>
         </div>
         <div class='meter'>
           <div class='k'>RAM</div>
-          <div class='v' id='monRam'>—</div>
+          <div class='v' id='monRam'>-</div>
           <div class='bar' id='barRam'><div></div></div>
         </div>
       </div>
@@ -1399,10 +1577,12 @@ try{
       <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
     </div>
 
-      
+
 
 </body>
 </html>"""
+    html = html.replace('__INDEX_BASE_CSS__', INDEX_BASE_CSS)
+
 
     return html.replace("__BUILD__", str(build)).replace("__VOICE_SERVERS__", voice_servers_html)
 
@@ -1502,6 +1682,13 @@ def api_voices_train(payload: dict = Body(default={})):
             return {'ok': False, 'error': 'bad_json'}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
+@app.get('/voices', response_class=HTMLResponse)
+def voices_root(response: Response):
+    # Legacy route: keep compatibility with older links.
+    response.headers['Cache-Control'] = 'no-store'
+    return RedirectResponse(url='/#tab-voices', status_code=302)
+
+
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -1532,61 +1719,16 @@ def voices_edit_page(voice_id: str, response: Response):
   <meta charset='utf-8'/>
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge - Edit Voice</title>
-  <style>
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    html,body{overscroll-behavior-y:none;}
-    *{box-sizing:border-box;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
-    a{color:var(--accent);text-decoration:none}
-
-    /* header */
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
-    .err{color:var(--bad);font-weight:950;margin-top:10px;}
-
-    /* user menu */
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    /* layout */
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
-    textarea{min-height:90px;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
-    .hide{display:none;}
-
-    /* switch */
-    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
-    .switch input{display:none;}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
-    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
-    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
-    .switch input:checked + .slider:before{transform:translateX(22px);}
-  </style>
+  <style>__VOICES_BASE_CSS____VOICE_EDIT_EXTRA_CSS__</style>
 </head>
 <body>
   <div class='navBar'>
     <div class='top'>
       <div>
-        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Edit voice</div></div>
+        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
         <div class='muted'><code>__VID__</code></div>
       </div>
-      <div class='row' style='justify-content:flex-end;'>
+      <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
         <div class='menuWrap'>
           <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
@@ -1648,7 +1790,7 @@ def voices_edit_page(voice_id: str, response: Response):
       <button type='button' onclick='save()'>Save</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px'>—</div>
+    <div id='out' class='muted' style='margin-top:10px'>-</div>
     <audio id='audio' controls class='hide'></audio>
   </div>
 
@@ -1701,6 +1843,10 @@ function testSample(){
         .replace('__ENABLED__', enabled_checked)
         .replace('__VID_RAW__', voice_id)
     )
+    html = (html
+        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
+        .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
+    )
     return html
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
@@ -1712,39 +1858,42 @@ def voices_new_page(response: Response):
   <meta charset='utf-8'/>
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge - Generate voice</title>
-  <style>
-    html,body{overscroll-behavior-y:none;}
-    *{box-sizing:border-box;}
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
-    a{color:var(--accent);text-decoration:none}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
-    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
-    textarea{min-height:90px;resize:none;}
-    .k{color:var(--muted);font-size:12px;margin-top:12px;}
-    audio{width:100%;margin-top:10px;}
-    .hide{display:none}
-    .err{color:var(--bad);font-weight:950;margin-top:10px;}
-  </style>
+  <style>__VOICES_BASE_CSS____VOICE_NEW_EXTRA_CSS__</style>
 </head>
 <body>
   <div class='navBar'>
     <div class='top'>
       <div>
-        <div class='brandRow'><h1>StoryForge</h1><div class='pageName'>Generate voice</div></div>
+        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
         <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
       </div>
-      <div class='row' style='justify-content:flex-end;'>
+      <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
+        <div class='menuWrap'>
+          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
+            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+            </svg>
+          </button>
+          <div id='topMenu' class='menuCard'>
+            <div class='uTop'>
+              <div class='uAvatar'>
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+                </svg>
+              </div>
+              <div>
+                <div class='uName'>User</div>
+                <div class='uSub'>Admin</div>
+              </div>
+            </div>
+            <div class='uActions'>
+              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1784,7 +1933,7 @@ def voices_new_page(response: Response):
       <button type='button' class='secondary' onclick='startTrain()'>Generate model</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px'>—</div>
+    <div id='out' class='muted' style='margin-top:10px'>-</div>
   </div>
 
   <div class='card'>
@@ -1934,6 +2083,10 @@ try{ document.addEventListener('DOMContentLoaded', function(){
 </script>
 </body>
 </html>'''
+    html = (html
+        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
+        .replace('__VOICE_NEW_EXTRA_CSS__', VOICE_NEW_EXTRA_CSS)
+    )
     return html
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(request: Request, response: Response):
@@ -1965,6 +2118,19 @@ def todo_page(request: Request, response: Response):
 
     def esc(x: str) -> str:
         return pyhtml.escape(str(x or ''))
+
+    def fmt_ts(ts: Any) -> str:
+        try:
+            v = int(ts)
+        except Exception:
+            return ''
+        if v <= 0:
+            return ''
+        try:
+            # Server-local time. (Good enough for internal TODO display.)
+            return datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M')
+        except Exception:
+            return ''
 
     # Group by category
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -2003,6 +2169,14 @@ def todo_page(request: Request, response: Response):
             txt = esc(it.get('text') or '')
             checked = 'checked' if st != 'open' else ''
             hi_cls = ' hi' if bool(it.get('highlighted')) else ''
+            created_s = fmt_ts(it.get('created_at'))
+            updated_s = fmt_ts(it.get('updated_at'))
+            meta_parts = []
+            if created_s:
+                meta_parts.append('created ' + esc(created_s))
+            if updated_s and updated_s != created_s:
+                meta_parts.append('updated ' + esc(updated_s))
+            meta_html = "<div class='todoMeta'>" + " • ".join(meta_parts) + "</div>" if meta_parts else ""
             # If id is missing, render as plain text
             if tid is None:
                 box = '☑' if checked else '☐'
@@ -2016,7 +2190,10 @@ def todo_page(request: Request, response: Response):
                 + "<label class='todoMain'>"
                 + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
                 + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
-                + "<span class='todoText'>" + txt + "</span>"
+                + "<div class='todoTextWrap'>"
+                + "<div class='todoText'>" + txt + "</div>"
+                + meta_html
+                + "</div>"
                 + "</label>"
                 + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\" ontouchend=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\">Delete</button></div>"
                 + "</div></div>"
@@ -2033,90 +2210,38 @@ def todo_page(request: Request, response: Response):
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>StoryForge - TODO</title>
-  <style>
-    :root{--bg:#0b1020;--card:#0f1733;--text:#e7edff;--muted:#a8b3d8;--line:#24305e;--accent:#4aa3ff;--bad:#ff4d4d;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;}
-    a{color:var(--accent);text-decoration:none}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .navBar{position:sticky;top:0;z-index:1200;background:rgba(11,16,32,0.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(36,48,94,.55);padding:14px 0 10px 0;margin-bottom:10px;}
-    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    .brandRow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
-    .pageName{color:var(--muted);font-weight:900;font-size:12px;}
-    .menuWrap{position:relative;display:inline-block;}
-    .userBtn{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:950;display:inline-flex;align-items:center;justify-content:center;}
-    .userBtn:hover{background:rgba(255,255,255,0.06);}
-    .menuCard{position:absolute;right:0;top:46px;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:none;z-index:60;box-shadow:0 18px 60px rgba(0,0,0,.45);}
-    .menuCard.show{display:block;}
-    .menuCard .uTop{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
-    .menuCard .uAvatar{width:36px;height:36px;border-radius:999px;background:#0b1020;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
-    .menuCard .uName{font-weight:950;}
-    .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
-    .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
-
-    h1{font-size:20px;margin:0;}
-    .muted{color:var(--muted);font-size:12px;}
-    .err{color:var(--bad);font-weight:950;margin:10px 0;}
-    .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;}
-    .right{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-left:auto;}
-    button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
-    button.secondary{background:transparent;color:var(--text);}
-
-    /* iOS-like switch */
-    .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
-    .switch input{display:none;}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#0a0f20;border:1px solid rgba(255,255,255,0.12);transition:.18s;border-radius:999px;}
-    .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
-    .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
-    .switch input:checked + .slider:before{transform:translateX(22px);}
-
-    .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
-
-    .catHead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}
-    .catTitle{font-weight:950;font-size:16px;}
-    .catCount{color:var(--muted);font-weight:800;font-size:12px;}
-
-    .todoItem{display:block;margin:10px 0;}
-    /* swipe-delete (implemented as horizontal scroll) */
-    .todoSwipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-    .todoSwipe::-webkit-scrollbar{display:none;}
-    .todoSwipeInner{display:flex;min-width:100%;}
-    .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
-    .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
-    .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
-    .todoHiBtn{border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:var(--muted);font-weight:950;border-radius:999px;padding:6px 10px;font-size:12px;line-height:1;cursor:pointer;}
-    .todoHiBtn:active{transform:translateY(1px);}
-    .todoItem.hi{ }
-    .todoItem.hi .todoText{color:var(--text);}
-    .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
-    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
-    .todoItem input{margin-top:3px;transform:scale(1.15);}
-    .todoText{line-height:1.25;}
-    .todoPlain{margin:8px 0;color:var(--muted);}
-  </style>
+  <style>__TODO_BASE_CSS__</style>
 </head>
 <body>
   <div class="navBar">
     <div class="top">
       <div>
-        <div class="brandRow"><h1>StoryForge</h1><div class="pageName">TODO</div></div>
+        <div class="brandRow"><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class="pageName">TODO</div></div>
         <div class="muted">Internal tracker (check/uncheck requires login).</div>
       </div>
       <div class="right">
         <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-                
+        <div class='menuWrap'>
+          <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
+            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+            </svg>
+          </button>
+          <div id='topMenu' class='menuCard'>
+            <div class='uTop'>
+              <div class='uAvatar'>
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
+                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
+                </svg>
+              </div>
+              <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
+            </div>
+            <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -2286,12 +2411,13 @@ function archiveDone(){
 </html>'''
 
     html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
+    html = html.replace('__TODO_BASE_CSS__', TODO_BASE_CSS)
     return html
 
 
 
 @app.post('/api/todos')
-def api_todos_add(request: Request, payload: dict = Body(default={})): 
+def api_todos_add(request: Request, payload: dict = Body(default={})):
     err = _todo_api_check(request)
     if err == 'disabled':
         raise HTTPException(status_code=503, detail='todo api disabled')
@@ -2497,7 +2623,13 @@ def api_ping():
 
 @app.get('/api/metrics')
 def api_metrics():
-    return _get('/v1/metrics')
+    try:
+        # Keep this endpoint snappy; it is polled by the UI.
+        return _get('/v1/metrics', timeout_s=4.0)
+    except HTTPException as e:
+        return {"ok": False, "error": e.detail}
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
 
 
 @app.get('/api/metrics/stream')
@@ -2506,13 +2638,13 @@ def api_metrics_stream():
         # Keep-alive + periodic samples. EventSource will auto-reconnect.
         while True:
             try:
-                m = _get('/v1/metrics')
+                m = _get('/v1/metrics', timeout_s=4.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception as e:
                 # Don't leak secrets; just emit a small error payload.
                 yield f"data: {json.dumps({'ok': False, 'error': type(e).__name__})}\n\n"
-            time.sleep(1.0)
+            time.sleep(2.0)
 
     headers = {
         'Cache-Control': 'no-store',
