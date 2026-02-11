@@ -106,7 +106,7 @@ INDEX_BASE_CSS = base_css("""\
     .brandLink{color:inherit;text-decoration:none;}
     .brandLink:active{opacity:0.9;}
     .muted{color:var(--muted);font-size:12px;}
-    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);}
+    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);display:flex;align-items:center;gap:10px;}
     body.debugOff #boot{display:none}
     .boot strong{color:var(--text);}
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
@@ -526,7 +526,14 @@ def index(response: Response):
 
   </div>
 
-  <div id='boot' class='boot muted'><span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span> <button class='secondary' type='button' onclick='copyBoot()' style='padding:6px 10px;border-radius:10px;margin-left:8px'>Copy</button></div>
+  <div id='boot' class='boot muted'>
+    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
+    <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
+      </svg>
+    </button>
+  </div>
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
