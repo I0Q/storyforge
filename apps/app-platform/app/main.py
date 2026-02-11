@@ -2036,6 +2036,24 @@ function jsonFetch(url, opts){
   });
 }
 
+// user menu
+function toggleMenu(){
+  var m=document.getElementById('topMenu');
+  if (!m) return;
+  if (m.classList.contains('show')) m.classList.remove('show');
+  else m.classList.add('show');
+}
+try{
+  document.addEventListener('click', function(ev){
+    try{
+      var m=document.getElementById('topMenu');
+      if (!m) return;
+      var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
+      if (!w) m.classList.remove('show');
+    }catch(e){}
+  });
+}catch(e){}
+
 function setVis(){
   var m=(($('clipMode')||{}).value||'upload');
   var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
@@ -2086,8 +2104,24 @@ function uploadClip(){
 
 function getClipUrl(){
   var m=(($('clipMode')||{}).value||'upload');
-  if(m==='url') return Promise.resolve(String((($('clipUrl')||{}).value||'')).trim());
-  if(m==='preset') return Promise.resolve(String((($('clipPreset')||{}).value||'')).trim());
+  if(m==='url'){
+    var u=String((($('clipUrl')||{}).value||'')).trim();
+    if (!u) return Promise.reject('missing_url');
+    return Promise.resolve(u);
+  }
+  if(m==='preset'){
+    var v=String((($('clipPreset')||{}).value||'')).trim();
+    if (!v) return Promise.reject('missing_preset');
+    // If provider returns a Tinybox path, copy it to Spaces first.
+    if (v.indexOf('/')===0){
+      return jsonFetch('/api/voice_provider/preset_to_spaces', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:v})})
+        .then(function(j){
+          if (!j || !j.ok || !j.url) throw new Error((j&&j.error)||'preset_to_spaces_failed');
+          return String(j.url);
+        });
+    }
+    return Promise.resolve(v);
+  }
   return uploadClip();
 }
 
