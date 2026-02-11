@@ -887,7 +887,7 @@ function copyDebugInfo(){
   try{
     var b = (window.__SF_BUILD || '').trim();
     var e = (window.__SF_LAST_ERR || '').trim();
-    var txt = 'Build: ' + (b || '?') + '\nJS: ' + (e || '(none)');
+    var txt = 'Build: ' + (b || '?') + '\\nJS: ' + (e || '(none)');
     if (typeof copyToClipboard==='function') copyToClipboard(txt);
     try{ toastSet('Copied', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
   }catch(_e){}
