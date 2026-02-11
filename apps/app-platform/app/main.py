@@ -646,20 +646,43 @@ window.__SF_BUILD = '__BUILD__';
 window.__SF_BOOT_TS = Date.now();
 window.__SF_LAST_ERR = '';
 
+function __sfEnsureBootBanner(){
+  // Some code paths may accidentally set #boot.textContent (which nukes children).
+  // Ensure we always have a dedicated #bootText span + copy button.
+  try{
+    var boot = document.getElementById('boot');
+    if (!boot) return null;
+    var t = document.getElementById('bootText');
+    if (t) return t;
+
+    boot.innerHTML = "<span id='bootText'><strong>Build</strong>: " + window.__SF_BUILD + " • JS: ok</span>" +
+      "<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>" +
+      "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4\"/></svg>" +
+      "</button>";
+
+    return document.getElementById('bootText');
+  }catch(e){
+    return null;
+  }
+}
+
 function __sfSetDebugInfo(msg){
   try{
     window.__SF_LAST_ERR = msg || '';
     var el=document.getElementById('dbgInfo');
-    if (el) el.textContent = `Build: ${window.__SF_BUILD}\nJS: ${window.__SF_LAST_ERR || '(none)'}`;
-    var b=document.getElementById('bootText') || document.getElementById('boot');
-    if (b) b.textContent = `Build: ${window.__SF_BUILD} • JS: ${window.__SF_LAST_ERR || 'ok'}`;
+    if (el) el.textContent = 'Build: ' + window.__SF_BUILD + '\nJS: ' + (window.__SF_LAST_ERR || '(none)');
+
+    var t = __sfEnsureBootBanner();
+    if (t) t.textContent = 'Build: ' + window.__SF_BUILD + ' • JS: ' + (window.__SF_LAST_ERR || 'ok');
   }catch(e){}
 }
 
-window.addEventListener('error', (ev)=>{
-  __sfSetDebugInfo(`error: ${ev && (ev.message||ev.type) ? (ev.message||ev.type) : 'unknown'}`);
+window.addEventListener('error', function(ev){
+  var m = 'unknown';
+  try{ m = (ev && (ev.message||ev.type)) ? (ev.message||ev.type) : 'unknown'; }catch(_e){}
+  __sfSetDebugInfo('error: ' + m);
 });
-window.addEventListener('unhandledrejection', (_ev)=>{
+window.addEventListener('unhandledrejection', function(_ev){
   __sfSetDebugInfo('promise error');
 });
 
