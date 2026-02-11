@@ -42,6 +42,11 @@ LIBRARY_BASE_CSS = """
     .menuCard .uName{font-weight:950;}
     .menuCard .uSub{color:var(--muted);font-size:12px;margin-top:2px;}
     .menuCard .uActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+
+    @media (max-width:520px){
+      .top{align-items:flex-start;}
+      .rowEnd{margin-left:0;width:100%;justify-content:flex-start;}
+    }
     h1{font-size:20px;margin:0;}
     .muted{color:var(--muted);font-size:12px;}
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
