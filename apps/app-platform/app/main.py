@@ -1081,13 +1081,13 @@ function renderJobs(jobs){
     const progBar = (!isDone && total) ? `<div class='bar small' style='margin-top:6px'><div style='width:${pct.toFixed(1)}%'></div></div>` : '';
 
     const meta = safeJson(job.meta_json||'') || null;
-    const isSample = (String(job.kind||'') === 'tts_sample');
-    const playable = (isSample && String(job.state||'')==='completed' && job.mp3_url);
+    const isSample = (String(job.kind||'') === 'tts_sample') || (String(job.title||'').indexOf('TTS (')===0);
+    const playable = (String(job.state||'')==='completed' && job.mp3_url);
 
-    const actions = playable ? (
+    const actions = (isSample && playable) ? (
       `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
       + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.mp3_url||'')}')">Play</button>`
-      + `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>`
+      + (meta ? `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>` : `<button type='button' class='saveRosterBtn' onclick="alert('This older job is missing metadata. Re-run Test sample once and then Save will appear here.')">Save to roster</button>`)
       + `</div>`
     ) : '';
 
