@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS sf_voices (
 """
     )
 
+    # Settings (small JSON blobs)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_settings (
+  key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL DEFAULT '',
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
+
 
     # Internal TODO tracker (DB-backed, read-only UI)
     cur.execute(

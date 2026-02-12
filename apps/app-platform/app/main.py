@@ -729,6 +729,18 @@ def index(response: Response):
   <div id='pane-advanced' class='hide'>
 
     <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Tinybox services</div>
+      <div class='muted'>Configure which services/models are enabled and which GPUs they may use.</div>
+
+      <div id='svcBox' class='muted' style='margin-top:10px'>Loading…</div>
+
+      <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap'>
+        <button type='button' class='secondary' onclick='reloadTinyboxSettings()'>Reload</button>
+        <button type='button' onclick='saveTinyboxSettings()'>Save</button>
+      </div>
+    </div>
+
+    <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Voice servers</div>
       <div class='muted'>Configured endpoints used for voice/TTS work.</div>
       <div style='margin-top:10px'>__VOICE_SERVERS__</div>
@@ -1335,6 +1347,76 @@ function escAttr(s){
   }
 }
 
+function renderTinyboxSettings(s){
+  var el=document.getElementById('svcBox');
+  if (!el) return;
+  s = s || {};
+
+  var voiceEnabled = (s.voice_enabled !== false);
+  var llmEnabled = (s.llm_enabled === true);
+  var llmModel = String(s.llm_model || 'google/gemma-2-9b-it');
+  var voiceGpus = Array.isArray(s.voice_gpus) ? s.voice_gpus : [0,1];
+  var llmGpus = Array.isArray(s.llm_gpus) ? s.llm_gpus : [2];
+
+  var enabledModels = [
+    {kind:'llm', id:'google/gemma-2-9b-it', label:'Gemma 2 9B Instruct'},
+  ];
+
+  var html = '';
+  html += "<div class='kvs'>";
+
+  html += "<div class='k'>Voice service</div><div>" + (voiceEnabled ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>") + "</div>";
+  html += "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>enabled</span> &nbsp; <code>tortoise</code> <span class='pill good'>enabled</span></div>";
+  html += "<div class='k'>Voice GPUs</div><div><input id='set_voice_gpus' value='" + escAttr(voiceGpus.join(',')) + "' placeholder='0,1' /></div>";
+
+  html += "<div class='k'>LLM service</div><div>" + (llmEnabled ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>") + "</div>";
+  html += "<div class='k'>LLM enabled</div><div><label><input id='set_llm_enabled' type='checkbox' " + (llmEnabled ? 'checked' : '') + " /> Always on</label></div>";
+  html += "<div class='k'>LLM model</div><div><input id='set_llm_model' value='" + escAttr(llmModel) + "' /></div>";
+  html += "<div class='k'>LLM GPUs</div><div><input id='set_llm_gpus' value='" + escAttr(llmGpus.join(',')) + "' placeholder='2' /></div>";
+
+  html += "<div class='k'>Enabled models</div><div>" + enabledModels.map(function(m){ return '<div><code>'+escapeHtml(m.id)+'</code> — '+escapeHtml(m.label)+'</div>'; }).join('') + "</div>";
+
+  html += "</div>";
+  el.innerHTML = html;
+}
+
+function reloadTinyboxSettings(){
+  var el=document.getElementById('svcBox');
+  if (el) el.textContent='Loading…';
+  return fetchJsonAuthed('/api/settings/tinybox').then(function(j){
+    if (!j || !j.ok){ if(el) el.innerHTML="<div class='muted'>Error: "+escapeHtml((j&&j.error)||'unknown')+"</div>"; return; }
+    renderTinyboxSettings(j.settings || {});
+  }).catch(function(e){ if(el) el.innerHTML="<div class='muted'>Load failed: "+escapeHtml(String(e))+"</div>"; });
+}
+
+function parseGpuList(s){
+  try{
+    s = String(s||'');
+    if (!s.trim()) return [];
+    return s.split(',').map(function(x){ return parseInt(String(x).trim(),10); }).filter(function(n){ return !isNaN(n); });
+  }catch(e){
+    return [];
+  }
+}
+
+function saveTinyboxSettings(){
+  var payload = {
+    voice_enabled: true,
+    voice_gpus: parseGpuList((document.getElementById('set_voice_gpus')||{}).value),
+    llm_enabled: !!((document.getElementById('set_llm_enabled')||{}).checked),
+    llm_model: String((document.getElementById('set_llm_model')||{}).value||'').trim() || 'google/gemma-2-9b-it',
+    llm_gpus: parseGpuList((document.getElementById('set_llm_gpus')||{}).value),
+  };
+
+  return fetchJsonAuthed('/api/settings/tinybox', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
+      try{ toastSet('Saved', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+      return reloadTinyboxSettings();
+    })
+    .catch(function(e){ alert('Save failed: '+String(e)); });
+}
+
 function loadVoices(){
   var el=document.getElementById('voicesList');
   if (el) el.textContent='Loading…';
@@ -1811,6 +1893,7 @@ setDebugUiEnabled(loadDebugPref());
 loadHistory();
 loadVoices();
 startJobsStream();
+reloadTinyboxSettings();
 
 try{
   var __bootText2 = __sfEnsureBootBanner();
@@ -4172,6 +4255,96 @@ def api_history(limit: int = 60):
         return {'ok': True, 'jobs': jobs}
     except Exception as e:
         # Avoid leaking DATABASE_URL or secrets; keep message short.
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+def _settings_get(conn, key: str) -> dict[str, Any] | None:
+    cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
+    cur.execute("SELECT value_json FROM sf_settings WHERE key=%s", (key,))
+    r = cur.fetchone()
+    if not r:
+        return None
+    try:
+        return json.loads(r[0] or '{}') if (r[0] or '').strip() else {}
+    except Exception:
+        return {}
+
+
+def _settings_set(conn, key: str, val: dict[str, Any]) -> None:
+    cur = conn.cursor()
+    now = int(time.time())
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
+    cur.execute(
+        "INSERT INTO sf_settings (key,value_json,updated_at) VALUES (%s,%s,%s) "
+        "ON CONFLICT (key) DO UPDATE SET value_json=EXCLUDED.value_json, updated_at=EXCLUDED.updated_at",
+        (key, json.dumps(val or {}, separators=(',', ':')), now),
+    )
+    conn.commit()
+
+
+@app.get('/api/settings/tinybox')
+def api_settings_tinybox_get():
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            s = _settings_get(conn, 'tinybox')
+        finally:
+            conn.close()
+        if s is None:
+            # defaults
+            s = {
+                'voice_enabled': True,
+                'voice_gpus': [0, 1],
+                'llm_enabled': False,
+                'llm_model': 'google/gemma-2-9b-it',
+                'llm_gpus': [2],
+            }
+        return {'ok': True, 'settings': s}
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/settings/tinybox')
+def api_settings_tinybox_set(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    try:
+        s = payload or {}
+        # Normalize
+        def _ints(x):
+            if not isinstance(x, list):
+                return []
+            out = []
+            for v in x:
+                try:
+                    out.append(int(v))
+                except Exception:
+                    pass
+            return out
+
+        out = {
+            'voice_enabled': bool(s.get('voice_enabled', True)),
+            'voice_gpus': _ints(s.get('voice_gpus') or [0, 1]),
+            'llm_enabled': bool(s.get('llm_enabled', False)),
+            'llm_model': str(s.get('llm_model') or 'google/gemma-2-9b-it'),
+            'llm_gpus': _ints(s.get('llm_gpus') or [2]),
+        }
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            _settings_set(conn, 'tinybox', out)
+        finally:
+            conn.close()
+
+        return {'ok': True}
+    except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
