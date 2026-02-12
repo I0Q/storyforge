@@ -46,6 +46,7 @@ APP_NAME = "storyforge"
 
 GATEWAY_BASE = os.environ.get("GATEWAY_BASE", "http://10.108.0.3:8791").rstrip("/")
 GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
+SF_JOB_TOKEN = os.environ.get("SF_JOB_TOKEN", "").strip()
 
 VOICE_SERVERS: list[dict[str, Any]] = []
 try:
@@ -3752,6 +3753,79 @@ def api_jobs_stream():
         'X-Accel-Buffering': 'no',
     }
     return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
+
+
+def _require_job_token(request: Request) -> None:
+    if not SF_JOB_TOKEN:
+        raise HTTPException(status_code=500, detail='SF_JOB_TOKEN not configured')
+    tok = (request.headers.get('x-sf-job-token') or '').strip()
+    if not tok or tok != SF_JOB_TOKEN:
+        raise HTTPException(status_code=401, detail='unauthorized')
+
+
+@app.post('/api/jobs/update')
+def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Update a job record (used by external workers like Tinybox).
+
+    Auth: x-sf-job-token
+    Payload supports: id (required), title, state, started_at, finished_at,
+    total_segments, segments_done, mp3_url, sfml_url.
+    """
+    _require_job_token(request)
+    try:
+        job_id = str((payload or {}).get('id') or '').strip()
+        if not job_id:
+            return {'ok': False, 'error': 'missing_id'}
+
+        fields = {
+            'title': payload.get('title'),
+            'state': payload.get('state'),
+            'started_at': payload.get('started_at'),
+            'finished_at': payload.get('finished_at'),
+            'total_segments': payload.get('total_segments'),
+            'segments_done': payload.get('segments_done'),
+            'mp3_url': payload.get('mp3_url'),
+            'sfml_url': payload.get('sfml_url'),
+        }
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            # Ensure exists
+            cur.execute(
+                "INSERT INTO jobs (id,title,state,created_at) VALUES (%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
+                (job_id, str(fields.get('title') or job_id), str(fields.get('state') or 'running'), int(time.time())),
+            )
+            # Patch
+            sets = []
+            vals = []
+            for k, v in fields.items():
+                if v is None:
+                    continue
+                sets.append(f"{k}=%s")
+                if k in ('started_at', 'finished_at', 'total_segments', 'segments_done'):
+                    try:
+                        vals.append(int(v))
+                    except Exception:
+                        vals.append(0)
+                else:
+                    vals.append(str(v))
+            if sets:
+                vals.append(job_id)
+                cur.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=%s", tuple(vals))
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        return {'ok': True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
 
