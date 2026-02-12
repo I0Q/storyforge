@@ -2487,6 +2487,20 @@ def voices_new_page(response: Response):
 
 <script>
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){
+  // escape for HTML attributes / single-quoted contexts
+  try{
+    return String(s||'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }catch(e){
+    return '';
+  }
+}
+
 function $(id){ return document.getElementById(id); }
 function jsonFetch(url, opts){
   opts = opts || {};
