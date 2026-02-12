@@ -2687,7 +2687,12 @@ function testSample(){
 
   if (vref) return go(vref).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 
-  // No trained voice_ref yet; best-effort derive from clip mode.
+  // If using tortoise, voice_ref is a built-in voice name (not a clip URL).
+  if (engine==='tortoise'){
+    return go('random').catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+  }
+
+  // No trained voice_ref yet (xtts): derive from clip mode.
   return getClipUrl().then(function(url){ return go(url); })
     .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
