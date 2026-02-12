@@ -256,6 +256,45 @@ VOICES_BASE_CSS = (
     textarea{min-height:90px;}
     .hide{display:none;}
 
+    /* bottom dock */
+    .dock{display:none;position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
+    html.monOn .dock{display:block;}
+    .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+    .dockStats{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
+    body.sheetOpen .dock{pointer-events:none;}
+
+    /* bottom sheet */
+    .sheetBackdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:2000;touch-action:none;}
+    .sheet{will-change:transform;display:none;position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
+    html.monOn .sheetBackdrop{display:block;}
+    html.monOn .sheet{display:block;}
+    .sheetInner{max-width:920px;margin:0 auto;padding:12px;}
+    .sheetHandle{width:46px;height:5px;border-radius:999px;background:rgba(255,255,255,.18);margin:2px auto 10px auto;}
+    .sheetTitle{font-weight:950;}
+
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .meter .k{color:var(--muted);font-size:12px;font-weight:900;}
+    .meter .v{font-weight:950;margin-top:4px;}
+    .bar{height:10px;background:#0a0f20;border:1px solid rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-top:8px;}
+    .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#4aa3ff,#26d07c);}
+    .bar.warn > div{background:linear-gradient(90deg,#ffcc00,#ff7a00);}
+    .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
+    .bar.small{height:8px;margin-top:6px;}
+
+    .gpuGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .gpuCard{border:1px solid rgba(255,255,255,0.10);border-radius:14px;background:#0b1020;padding:10px;}
+    .gpuHead{display:flex;justify-content:space-between;gap:10px;}
+    .gpuHead .l{font-weight:950;}
+    .gpuHead .r{color:var(--muted);font-size:12px;white-space:nowrap;}
+    .gpuRow{display:flex;justify-content:space-between;gap:10px;margin-top:8px;}
+    .gpuRow .k{color:var(--muted);font-size:12px;font-weight:900;}
+    .gpuRow .v{font-weight:950;}
+
+    @media (max-width:520px){
+      .grid2{grid-template-columns:1fr;}
+      .gpuGrid{grid-template-columns:1fr 1fr;}
+    }
+
 """)
 )
 
@@ -295,6 +334,76 @@ VOICE_NEW_EXTRA_CSS = base_css("""\
     audio{width:100%;margin-top:10px;}
 
 """)
+
+MONITOR_HTML = """
+  <div id='monitorDock' class='dock' onclick='openMonitor()'>
+    <div class='dockInner'>
+      <div style='font-weight:950;'>Monitor</div>
+      <div class='dockStats' id='dockStats'>Monitor off</div>
+    </div>
+  </div>
+
+  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
+  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>System monitor</div>
+          <div id='monSub' class='muted'>Connecting…</div>
+        </div>
+        <div class='row' style='justify-content:flex-end;'>
+          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
+        </div>
+      </div>
+
+      <div class='grid2' style='margin-top:10px;'>
+        <div class='meter'>
+          <div class='k'>CPU</div>
+          <div class='v' id='monCpu'>-</div>
+          <div class='bar' id='barCpu'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>RAM</div>
+          <div class='v' id='monRam'>-</div>
+          <div class='bar' id='barRam'><div></div></div>
+        </div>
+      </div>
+
+      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
+      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
+
+      <div style='font-weight:950;margin-top:12px;'>Processes</div>
+      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
+    </div>
+  </div>
+"""
+
+# Monitor JS expects the same function names used on the main page.
+# NOTE: This duplicates logic so standalone pages can include the same monitor dock.
+MONITOR_JS = """
+<script>
+let metricsES=null; let monitorEnabled=true; let lastMetrics=null;
+function loadMonitorPref(){ try{ var v=localStorage.getItem('sf_monitor_enabled'); if(v===null) return true; return v==='1'; }catch(e){ return true; } }
+function saveMonitorPref(on){ try{ localStorage.setItem('sf_monitor_enabled', on?'1':'0'); }catch(e){} }
+function stopMetricsStream(){ if(metricsES){ try{ metricsES.close(); }catch(e){} metricsES=null; } }
+function setBar(elId,pct){ var el=document.getElementById(elId); if(!el) return; var p=Math.max(0,Math.min(100,pct||0)); var f=el.querySelector('div'); if(f) f.style.width=p.toFixed(0)+'%'; el.classList.remove('warn','bad'); if(p>=85) el.classList.add('bad'); else if(p>=60) el.classList.add('warn'); }
+function fmtPct(x){ if(x==null) return '-'; return (Number(x).toFixed(1))+'%'; }
+function fmtTs(ts){ if(!ts) return '-'; try{ return new Date(ts*1000).toLocaleString(); }catch(e){ return String(ts); } }
+function updateDockFromMetrics(m){ var el=document.getElementById('dockStats'); if(!el) return; var b=(m&&m.body)?m.body:(m||{}); var cpu=(b.cpu_pct!=null)?Number(b.cpu_pct).toFixed(1)+'%':'-'; var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var ram=rt?rp.toFixed(1)+'%':'-'; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); var maxGpu=null; if(gpus.length){ maxGpu=0; for(var i=0;i<gpus.length;i++){ var u=Number((gpus[i]||{}).util_gpu_pct||0); if(u>maxGpu) maxGpu=u; } } var gpu=(maxGpu==null)?'-':maxGpu.toFixed(1)+'%'; el.textContent='CPU '+cpu+' • RAM '+ram+' • GPU '+gpu; }
+function renderGpus(b){ var el=document.getElementById('monGpus'); if(!el) return; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); if(!gpus.length){ el.innerHTML='<div class="muted">No GPU data</div>'; return; } el.innerHTML=gpus.slice(0,8).map(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; var util=Number(g.util_gpu_pct||0); var power=(g.power_w!=null)?Number(g.power_w).toFixed(0)+'W':null; var temp=(g.temp_c!=null)?Number(g.temp_c).toFixed(0)+'C':null; var right=[power,temp].filter(Boolean).join(' • '); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); return "<div class='gpuCard'>"+"<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+"<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+"<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+"<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt?((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB'):'-')+"</div></div>"+"<div class='bar small' id='barVram"+idx+"'><div></div></div>"+"</div>"; }).join(''); gpus.slice(0,8).forEach(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; setBar('barGpu'+idx, Number(g.util_gpu_pct||0)); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); setBar('barVram'+idx, vt?(vu/vt*100):0); }); }
+function updateMonitorFromMetrics(m){ var b=(m&&m.body)?m.body:(m||{}); var cpu=Number(b.cpu_pct||0); var c=document.getElementById('monCpu'); if(c) c.textContent=fmtPct(cpu); setBar('barCpu',cpu); var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var r=document.getElementById('monRam'); if(r) r.textContent=rt?(ru.toFixed(0)+' / '+rt.toFixed(0)+' MB ('+rp.toFixed(1)+'%)'):'-'; setBar('barRam',rp); renderGpus(b); var sub=document.getElementById('monSub'); if(sub) sub.textContent='Tinybox time: '+(b.ts?fmtTs(b.ts):'-'); updateDockFromMetrics(m); try{ var procs=Array.isArray(b.processes)?b.processes:[]; var pre=document.getElementById('monProc'); if(pre){ if(!procs.length) pre.textContent='(no process data)'; else{ var lines=['PID     %CPU   %MEM   GPU   ELAPSED   COMMAND','-----------------------------------------------']; for(var i=0;i<procs.length;i++){ var p=procs[i]||{}; var pid=String(p.pid||'').padEnd(7,' '); var cpuS=String(Number(p.cpu_pct||0).toFixed(1)).padStart(5,' '); var memS=String(Number(p.mem_pct||0).toFixed(1)).padStart(5,' '); var gpuS=(p.gpu_mem_mb!=null?String(Number(p.gpu_mem_mb).toFixed(0))+'MB':'-').padStart(6,' '); var et=String(p.elapsed||'').padEnd(9,' '); var cmd=String(p.args||p.command||p.name||''); lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);} pre.textContent=lines.join('\n'); } } }catch(e){} }
+function startMetricsStream(){ if(!monitorEnabled) return; stopMetricsStream(); try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting…'; }catch(e){} try{ metricsES=new EventSource('/api/metrics/stream'); metricsES.onmessage=function(ev){ try{ var m=JSON.parse(ev.data||'{}'); lastMetrics=m; updateMonitorFromMetrics(m);}catch(e){} }; metricsES.onerror=function(_e){ try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor error'; }catch(e){} }; }catch(e){} }
+function setMonitorEnabled(on){ monitorEnabled=!!on; saveMonitorPref(monitorEnabled); try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){} if(!monitorEnabled){ stopMetricsStream(); try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; } startMetricsStream(); }
+function openMonitor(){ if(!monitorEnabled) return; var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.remove('hide'); b.style.display='block'; } if(sh){ sh.classList.remove('hide'); sh.style.display='block'; } try{ document.body.classList.add('sheetOpen'); }catch(e){} startMetricsStream(); if(lastMetrics) updateMonitorFromMetrics(lastMetrics); }
+function closeMonitor(){ var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.add('hide'); b.style.display='none'; } if(sh){ sh.classList.add('hide'); sh.style.display='none'; } try{ document.body.classList.remove('sheetOpen'); }catch(e){} }
+function closeMonitorEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeMonitor(); return false; }
+function bindMonitorClose(){ try{ var btn=document.getElementById('monCloseBtn'); if(btn && !btn.__bound){ btn.__bound=true; btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false}); btn.addEventListener('click', function(ev){ closeMonitorEv(ev); }); } }catch(e){} }
+try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
+try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+</script>
+"""
 
 TODO_BASE_CSS = (
     COMMON_VARS_HEADER_CSS
@@ -1895,7 +2004,280 @@ function testSample(){
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
 }
 </script>
-</body>
+
+
+  <div id='monitorDock' class='dock' onclick='openMonitor()'>
+    <div class='dockInner'>
+      <div style='font-weight:950;'>Monitor</div>
+      <div class='dockStats' id='dockStats'>Monitor off</div>
+    </div>
+  </div>
+
+  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
+  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>System monitor</div>
+          <div id='monSub' class='muted'>Connecting…</div>
+        </div>
+        <div class='row' style='justify-content:flex-end;'>
+          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
+        </div>
+      </div>
+
+      <div class='grid2' style='margin-top:10px;'>
+        <div class='meter'>
+          <div class='k'>CPU</div>
+          <div class='v' id='monCpu'>-</div>
+          <div class='bar' id='barCpu'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>RAM</div>
+          <div class='v' id='monRam'>-</div>
+          <div class='bar' id='barRam'><div></div></div>
+        </div>
+      </div>
+
+      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
+      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
+
+      <div style='font-weight:950;margin-top:12px;'>Processes</div>
+      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
+    </div>
+  </div>
+  
+
+<script>
+let metricsES = null;
+let monitorEnabled = true;
+let lastMetrics = null;
+
+function loadMonitorPref(){
+  try{
+    var v = localStorage.getItem('sf_monitor_enabled');
+    if (v === null) return true;
+    return v === '1';
+  }catch(e){
+    return true;
+  }
+}
+
+function saveMonitorPref(on){
+  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
+}
+
+function stopMetricsStream(){
+  if (metricsES){
+    try{ metricsES.close(); }catch(e){}
+    metricsES = null;
+  }
+}
+
+function setBar(elId, pct){
+  var el=document.getElementById(elId);
+  if (!el) return;
+  var p=Math.max(0, Math.min(100, pct||0));
+  var fill=el.querySelector('div');
+  if (fill) fill.style.width = p.toFixed(0) + '%';
+  el.classList.remove('warn','bad');
+  if (p >= 85) el.classList.add('bad');
+  else if (p >= 60) el.classList.add('warn');
+}
+
+function fmtPct(x){
+  if (x==null) return '-';
+  return (Number(x).toFixed(1)) + '%';
+}
+
+function fmtTs(ts){
+  if (!ts) return '-';
+  try{
+    var d=new Date(ts*1000);
+    return d.toLocaleString();
+  }catch(e){
+    return String(ts);
+  }
+}
+
+function updateDockFromMetrics(m){
+  var el = document.getElementById('dockStats');
+  if (!el) return;
+  var b = (m && m.body) ? m.body : (m || {});
+  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
+  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
+  var rp = rt ? (ru/rt*100) : 0;
+  var ram = rt ? rp.toFixed(1)+'%' : '-';
+  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
+  var maxGpu = null;
+  if (gpus.length){
+    maxGpu = 0;
+    for (var i=0;i<gpus.length;i++){
+      var u = Number((gpus[i]||{}).util_gpu_pct||0);
+      if (u > maxGpu) maxGpu = u;
+    }
+  }
+  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
+  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
+}
+
+function renderGpus(b){
+  var el = document.getElementById('monGpus');
+  if (!el) return;
+  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
+  if (!gpus.length){
+    el.innerHTML = '<div class="muted">No GPU data</div>';
+    return;
+  }
+
+  el.innerHTML = gpus.slice(0,8).map(function(g,i){
+    g = g || {};
+    var idx = (g.index!=null) ? g.index : i;
+    var util = Number(g.util_gpu_pct||0);
+    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
+    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
+    var right = [power, temp].filter(Boolean).join(' • ');
+    var vt = Number(g.vram_total_mb||0);
+    var vu = Number(g.vram_used_mb||0);
+    var vp = vt ? (vu/vt*100) : 0;
+
+    return "<div class='gpuCard'>"+
+      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
+      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
+      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
+      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
+      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
+    "</div>";
+  }).join('');
+
+  gpus.slice(0,8).forEach(function(g,i){
+    g=g||{};
+    var idx = (g.index!=null) ? g.index : i;
+    var util = Number(g.util_gpu_pct||0);
+    var vt = Number(g.vram_total_mb||0);
+    var vu = Number(g.vram_used_mb||0);
+    var vp = vt ? (vu/vt*100) : 0;
+    setBar('barGpu'+idx, util);
+    setBar('barVram'+idx, vp);
+  });
+}
+
+function updateMonitorFromMetrics(m){
+  var b = (m && m.body) ? m.body : (m || {});
+  var cpu = Number(b.cpu_pct || 0);
+  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
+  setBar('barCpu', cpu);
+
+  var rt = Number(b.ram_total_mb || 0);
+  var ru = Number(b.ram_used_mb || 0);
+  var rp = rt ? (ru/rt*100) : 0;
+  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
+  setBar('barRam', rp);
+  renderGpus(b);
+
+  var ts = b.ts ? fmtTs(b.ts) : '-';
+  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
+  updateDockFromMetrics(m);
+
+  // processes
+  try{
+    var procs = Array.isArray(b.processes) ? b.processes : [];
+    var pre=document.getElementById('monProc');
+    if (pre){
+      if (!procs.length) pre.textContent = '(no process data)';
+      else {
+        var lines=[];
+        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
+        lines.push('-----------------------------------------------');
+        for (var i=0;i<procs.length;i++){
+          var p=procs[i]||{};
+          var pid=String(p.pid||'').padEnd(7,' ');
+          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
+          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
+          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
+          var et=String(p.elapsed||'').padEnd(9,' ');
+          var cmd=String(p.args||p.command||p.name||'');
+          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
+        }
+        pre.textContent = lines.join('\n');
+      }
+    }
+  }catch(e){}
+}
+
+function startMetricsStream(){
+  if (!monitorEnabled) return;
+  stopMetricsStream();
+  try{
+    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+    metricsES = new EventSource('/api/metrics/stream');
+    metricsES.onmessage = function(ev){
+      try{
+        var m = JSON.parse(ev.data || '{}');
+        lastMetrics = m;
+        updateMonitorFromMetrics(m);
+      }catch(e){}
+    };
+    metricsES.onerror = function(_e){
+      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+    };
+  }catch(e){}
+}
+
+function setMonitorEnabled(on){
+  monitorEnabled = !!on;
+  saveMonitorPref(monitorEnabled);
+  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
+  if (!monitorEnabled){
+    stopMetricsStream();
+    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
+    return;
+  }
+  startMetricsStream();
+}
+
+function openMonitor(){
+  if (!monitorEnabled) return;
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.remove('hide'); b.style.display='block'; }
+  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+  try{ document.body.classList.add('sheetOpen'); }catch(e){}
+  startMetricsStream();
+  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
+}
+
+function closeMonitor(){
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.add('hide'); b.style.display='none'; }
+  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
+  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+}
+
+function closeMonitorEv(ev){
+  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
+  closeMonitor();
+  return false;
+}
+
+function bindMonitorClose(){
+  try{
+    var btn = document.getElementById('monCloseBtn');
+    if (btn && !btn.__bound){
+      btn.__bound = true;
+      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
+      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
+    }
+  }catch(e){}
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
+try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+</script>
+  </body>
 </html>"""
 
     html = (html
@@ -2181,7 +2563,280 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
 }); }catch(e){}
 </script>
-</body>
+
+
+  <div id='monitorDock' class='dock' onclick='openMonitor()'>
+    <div class='dockInner'>
+      <div style='font-weight:950;'>Monitor</div>
+      <div class='dockStats' id='dockStats'>Monitor off</div>
+    </div>
+  </div>
+
+  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
+  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>System monitor</div>
+          <div id='monSub' class='muted'>Connecting…</div>
+        </div>
+        <div class='row' style='justify-content:flex-end;'>
+          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
+        </div>
+      </div>
+
+      <div class='grid2' style='margin-top:10px;'>
+        <div class='meter'>
+          <div class='k'>CPU</div>
+          <div class='v' id='monCpu'>-</div>
+          <div class='bar' id='barCpu'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>RAM</div>
+          <div class='v' id='monRam'>-</div>
+          <div class='bar' id='barRam'><div></div></div>
+        </div>
+      </div>
+
+      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
+      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
+
+      <div style='font-weight:950;margin-top:12px;'>Processes</div>
+      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
+    </div>
+  </div>
+  
+
+<script>
+let metricsES = null;
+let monitorEnabled = true;
+let lastMetrics = null;
+
+function loadMonitorPref(){
+  try{
+    var v = localStorage.getItem('sf_monitor_enabled');
+    if (v === null) return true;
+    return v === '1';
+  }catch(e){
+    return true;
+  }
+}
+
+function saveMonitorPref(on){
+  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
+}
+
+function stopMetricsStream(){
+  if (metricsES){
+    try{ metricsES.close(); }catch(e){}
+    metricsES = null;
+  }
+}
+
+function setBar(elId, pct){
+  var el=document.getElementById(elId);
+  if (!el) return;
+  var p=Math.max(0, Math.min(100, pct||0));
+  var fill=el.querySelector('div');
+  if (fill) fill.style.width = p.toFixed(0) + '%';
+  el.classList.remove('warn','bad');
+  if (p >= 85) el.classList.add('bad');
+  else if (p >= 60) el.classList.add('warn');
+}
+
+function fmtPct(x){
+  if (x==null) return '-';
+  return (Number(x).toFixed(1)) + '%';
+}
+
+function fmtTs(ts){
+  if (!ts) return '-';
+  try{
+    var d=new Date(ts*1000);
+    return d.toLocaleString();
+  }catch(e){
+    return String(ts);
+  }
+}
+
+function updateDockFromMetrics(m){
+  var el = document.getElementById('dockStats');
+  if (!el) return;
+  var b = (m && m.body) ? m.body : (m || {});
+  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
+  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
+  var rp = rt ? (ru/rt*100) : 0;
+  var ram = rt ? rp.toFixed(1)+'%' : '-';
+  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
+  var maxGpu = null;
+  if (gpus.length){
+    maxGpu = 0;
+    for (var i=0;i<gpus.length;i++){
+      var u = Number((gpus[i]||{}).util_gpu_pct||0);
+      if (u > maxGpu) maxGpu = u;
+    }
+  }
+  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
+  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
+}
+
+function renderGpus(b){
+  var el = document.getElementById('monGpus');
+  if (!el) return;
+  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
+  if (!gpus.length){
+    el.innerHTML = '<div class="muted">No GPU data</div>';
+    return;
+  }
+
+  el.innerHTML = gpus.slice(0,8).map(function(g,i){
+    g = g || {};
+    var idx = (g.index!=null) ? g.index : i;
+    var util = Number(g.util_gpu_pct||0);
+    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
+    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
+    var right = [power, temp].filter(Boolean).join(' • ');
+    var vt = Number(g.vram_total_mb||0);
+    var vu = Number(g.vram_used_mb||0);
+    var vp = vt ? (vu/vt*100) : 0;
+
+    return "<div class='gpuCard'>"+
+      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
+      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
+      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
+      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
+      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
+    "</div>";
+  }).join('');
+
+  gpus.slice(0,8).forEach(function(g,i){
+    g=g||{};
+    var idx = (g.index!=null) ? g.index : i;
+    var util = Number(g.util_gpu_pct||0);
+    var vt = Number(g.vram_total_mb||0);
+    var vu = Number(g.vram_used_mb||0);
+    var vp = vt ? (vu/vt*100) : 0;
+    setBar('barGpu'+idx, util);
+    setBar('barVram'+idx, vp);
+  });
+}
+
+function updateMonitorFromMetrics(m){
+  var b = (m && m.body) ? m.body : (m || {});
+  var cpu = Number(b.cpu_pct || 0);
+  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
+  setBar('barCpu', cpu);
+
+  var rt = Number(b.ram_total_mb || 0);
+  var ru = Number(b.ram_used_mb || 0);
+  var rp = rt ? (ru/rt*100) : 0;
+  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
+  setBar('barRam', rp);
+  renderGpus(b);
+
+  var ts = b.ts ? fmtTs(b.ts) : '-';
+  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
+  updateDockFromMetrics(m);
+
+  // processes
+  try{
+    var procs = Array.isArray(b.processes) ? b.processes : [];
+    var pre=document.getElementById('monProc');
+    if (pre){
+      if (!procs.length) pre.textContent = '(no process data)';
+      else {
+        var lines=[];
+        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
+        lines.push('-----------------------------------------------');
+        for (var i=0;i<procs.length;i++){
+          var p=procs[i]||{};
+          var pid=String(p.pid||'').padEnd(7,' ');
+          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
+          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
+          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
+          var et=String(p.elapsed||'').padEnd(9,' ');
+          var cmd=String(p.args||p.command||p.name||'');
+          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
+        }
+        pre.textContent = lines.join('\n');
+      }
+    }
+  }catch(e){}
+}
+
+function startMetricsStream(){
+  if (!monitorEnabled) return;
+  stopMetricsStream();
+  try{
+    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+    metricsES = new EventSource('/api/metrics/stream');
+    metricsES.onmessage = function(ev){
+      try{
+        var m = JSON.parse(ev.data || '{}');
+        lastMetrics = m;
+        updateMonitorFromMetrics(m);
+      }catch(e){}
+    };
+    metricsES.onerror = function(_e){
+      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+    };
+  }catch(e){}
+}
+
+function setMonitorEnabled(on){
+  monitorEnabled = !!on;
+  saveMonitorPref(monitorEnabled);
+  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
+  if (!monitorEnabled){
+    stopMetricsStream();
+    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
+    return;
+  }
+  startMetricsStream();
+}
+
+function openMonitor(){
+  if (!monitorEnabled) return;
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.remove('hide'); b.style.display='block'; }
+  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+  try{ document.body.classList.add('sheetOpen'); }catch(e){}
+  startMetricsStream();
+  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
+}
+
+function closeMonitor(){
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.add('hide'); b.style.display='none'; }
+  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
+  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+}
+
+function closeMonitorEv(ev){
+  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
+  closeMonitor();
+  return false;
+}
+
+function bindMonitorClose(){
+  try{
+    var btn = document.getElementById('monCloseBtn');
+    if (btn && !btn.__bound){
+      btn.__bound = true;
+      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
+      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
+    }
+  }catch(e){}
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
+try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+</script>
+  </body>
 </html>'''
     html = (html
         .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
@@ -2507,7 +3162,280 @@ function archiveDone(){
   }catch(e){}
 }
 </script>
-</body>
+
+
+  <div id='monitorDock' class='dock' onclick='openMonitor()'>
+    <div class='dockInner'>
+      <div style='font-weight:950;'>Monitor</div>
+      <div class='dockStats' id='dockStats'>Monitor off</div>
+    </div>
+  </div>
+
+  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
+  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>System monitor</div>
+          <div id='monSub' class='muted'>Connecting…</div>
+        </div>
+        <div class='row' style='justify-content:flex-end;'>
+          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
+        </div>
+      </div>
+
+      <div class='grid2' style='margin-top:10px;'>
+        <div class='meter'>
+          <div class='k'>CPU</div>
+          <div class='v' id='monCpu'>-</div>
+          <div class='bar' id='barCpu'><div></div></div>
+        </div>
+        <div class='meter'>
+          <div class='k'>RAM</div>
+          <div class='v' id='monRam'>-</div>
+          <div class='bar' id='barRam'><div></div></div>
+        </div>
+      </div>
+
+      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
+      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
+
+      <div style='font-weight:950;margin-top:12px;'>Processes</div>
+      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
+    </div>
+  </div>
+  
+
+<script>
+let metricsES = null;
+let monitorEnabled = true;
+let lastMetrics = null;
+
+function loadMonitorPref(){
+  try{
+    var v = localStorage.getItem('sf_monitor_enabled');
+    if (v === null) return true;
+    return v === '1';
+  }catch(e){
+    return true;
+  }
+}
+
+function saveMonitorPref(on){
+  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
+}
+
+function stopMetricsStream(){
+  if (metricsES){
+    try{ metricsES.close(); }catch(e){}
+    metricsES = null;
+  }
+}
+
+function setBar(elId, pct){
+  var el=document.getElementById(elId);
+  if (!el) return;
+  var p=Math.max(0, Math.min(100, pct||0));
+  var fill=el.querySelector('div');
+  if (fill) fill.style.width = p.toFixed(0) + '%';
+  el.classList.remove('warn','bad');
+  if (p >= 85) el.classList.add('bad');
+  else if (p >= 60) el.classList.add('warn');
+}
+
+function fmtPct(x){
+  if (x==null) return '-';
+  return (Number(x).toFixed(1)) + '%';
+}
+
+function fmtTs(ts){
+  if (!ts) return '-';
+  try{
+    var d=new Date(ts*1000);
+    return d.toLocaleString();
+  }catch(e){
+    return String(ts);
+  }
+}
+
+function updateDockFromMetrics(m){
+  var el = document.getElementById('dockStats');
+  if (!el) return;
+  var b = (m && m.body) ? m.body : (m || {});
+  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
+  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
+  var rp = rt ? (ru/rt*100) : 0;
+  var ram = rt ? rp.toFixed(1)+'%' : '-';
+  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
+  var maxGpu = null;
+  if (gpus.length){
+    maxGpu = 0;
+    for (var i=0;i<gpus.length;i++){
+      var u = Number((gpus[i]||{}).util_gpu_pct||0);
+      if (u > maxGpu) maxGpu = u;
+    }
+  }
+  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
+  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
+}
+
+function renderGpus(b){
+  var el = document.getElementById('monGpus');
+  if (!el) return;
+  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
+  if (!gpus.length){
+    el.innerHTML = '<div class="muted">No GPU data</div>';
+    return;
+  }
+
+  el.innerHTML = gpus.slice(0,8).map(function(g,i){
+    g = g || {};
+    var idx = (g.index!=null) ? g.index : i;
+    var util = Number(g.util_gpu_pct||0);
+    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
+    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
+    var right = [power, temp].filter(Boolean).join(' • ');
+    var vt = Number(g.vram_total_mb||0);
+    var vu = Number(g.vram_used_mb||0);
+    var vp = vt ? (vu/vt*100) : 0;
+
+    return "<div class='gpuCard'>"+
+      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
+      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
+      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
+      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
+      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
+    "</div>";
+  }).join('');
+
+  gpus.slice(0,8).forEach(function(g,i){
+    g=g||{};
+    var idx = (g.index!=null) ? g.index : i;
+    var util = Number(g.util_gpu_pct||0);
+    var vt = Number(g.vram_total_mb||0);
+    var vu = Number(g.vram_used_mb||0);
+    var vp = vt ? (vu/vt*100) : 0;
+    setBar('barGpu'+idx, util);
+    setBar('barVram'+idx, vp);
+  });
+}
+
+function updateMonitorFromMetrics(m){
+  var b = (m && m.body) ? m.body : (m || {});
+  var cpu = Number(b.cpu_pct || 0);
+  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
+  setBar('barCpu', cpu);
+
+  var rt = Number(b.ram_total_mb || 0);
+  var ru = Number(b.ram_used_mb || 0);
+  var rp = rt ? (ru/rt*100) : 0;
+  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
+  setBar('barRam', rp);
+  renderGpus(b);
+
+  var ts = b.ts ? fmtTs(b.ts) : '-';
+  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
+  updateDockFromMetrics(m);
+
+  // processes
+  try{
+    var procs = Array.isArray(b.processes) ? b.processes : [];
+    var pre=document.getElementById('monProc');
+    if (pre){
+      if (!procs.length) pre.textContent = '(no process data)';
+      else {
+        var lines=[];
+        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
+        lines.push('-----------------------------------------------');
+        for (var i=0;i<procs.length;i++){
+          var p=procs[i]||{};
+          var pid=String(p.pid||'').padEnd(7,' ');
+          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
+          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
+          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
+          var et=String(p.elapsed||'').padEnd(9,' ');
+          var cmd=String(p.args||p.command||p.name||'');
+          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
+        }
+        pre.textContent = lines.join('\n');
+      }
+    }
+  }catch(e){}
+}
+
+function startMetricsStream(){
+  if (!monitorEnabled) return;
+  stopMetricsStream();
+  try{
+    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+    metricsES = new EventSource('/api/metrics/stream');
+    metricsES.onmessage = function(ev){
+      try{
+        var m = JSON.parse(ev.data || '{}');
+        lastMetrics = m;
+        updateMonitorFromMetrics(m);
+      }catch(e){}
+    };
+    metricsES.onerror = function(_e){
+      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+    };
+  }catch(e){}
+}
+
+function setMonitorEnabled(on){
+  monitorEnabled = !!on;
+  saveMonitorPref(monitorEnabled);
+  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
+  if (!monitorEnabled){
+    stopMetricsStream();
+    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
+    return;
+  }
+  startMetricsStream();
+}
+
+function openMonitor(){
+  if (!monitorEnabled) return;
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.remove('hide'); b.style.display='block'; }
+  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+  try{ document.body.classList.add('sheetOpen'); }catch(e){}
+  startMetricsStream();
+  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
+}
+
+function closeMonitor(){
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if (b){ b.classList.add('hide'); b.style.display='none'; }
+  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
+  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+}
+
+function closeMonitorEv(ev){
+  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
+  closeMonitor();
+  return false;
+}
+
+function bindMonitorClose(){
+  try{
+    var btn = document.getElementById('monCloseBtn');
+    if (btn && !btn.__bound){
+      btn.__bound = true;
+      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
+      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
+    }
+  }catch(e){}
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
+try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+</script>
+  </body>
 </html>'''
 
     html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
