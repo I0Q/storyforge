@@ -1012,20 +1012,21 @@ function fmtTs(ts){
   }
 }
 
-function loadHistory(){
+function renderJobs(jobs){
   const el=document.getElementById('jobs');
-  el.textContent='Loading…';
-  return fetchJsonAuthed('/api/history?limit=60').then(function(j){
-    if (!j.ok){
-      el.innerHTML=`<div class='muted'>Error: ${j.error||'unknown'}</div>`;
-      return;
-    }
-    if (!j.jobs.length){
-      el.innerHTML="<div class='muted'>No jobs yet.</div>";
-      return;
-    }
+  if (!el) return;
+  if (!jobs || !jobs.length){
+    el.innerHTML = "<div class='muted'>No jobs yet.</div>";
+    return;
+  }
 
-      el.innerHTML=j.jobs.map(job=>{
+  el.innerHTML = jobs.map(job=>{
+    const total = Number(job.total_segments||0);
+    const done = Number(job.segments_done||0);
+    const pct = total ? Math.max(0, Math.min(100, (done/total*100))) : 0;
+    const progText = total ? `${done} / ${total} (${pct.toFixed(0)}%)` : '-';
+    const progBar = total ? `<div class='bar small' style='margin-top:6px'><div style='width:${pct.toFixed(1)}%'></div></div>` : '';
+
     return `<div class='job'>
       <div class='row' style='justify-content:space-between;'>
         <div class='title'>${job.title||job.id}</div>
@@ -1035,15 +1036,41 @@ function loadHistory(){
         <div class='k'>id</div><div>${job.id}</div>
         <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
-        <div class='k'>segments</div><div>${job.total_segments||0}</div>
+        <div class='k'>progress</div><div>${progText}${progBar}</div>
         <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
         <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
-    </div></a>`;
-    }).join('');
+    </div>`;
+  }).join('');
+}
+
+function loadHistory(){
+  const el=document.getElementById('jobs');
+  if (el) el.textContent='Loading…';
+  return fetchJsonAuthed('/api/history?limit=60').then(function(j){
+    if (!j.ok){
+      if (el) el.innerHTML=`<div class='muted'>Error: ${j.error||'unknown'}</div>`;
+      return;
+    }
+    renderJobs(j.jobs || []);
   }).catch(function(e){
-    el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
+    if (el) el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
   });
+}
+
+// Live job updates
+let jobsES = null;
+function startJobsStream(){
+  try{ if (jobsES){ jobsES.close(); jobsES=null; } }catch(e){}
+  try{
+    jobsES = new EventSource('/api/jobs/stream');
+    jobsES.onmessage = function(ev){
+      try{
+        var j = JSON.parse(ev.data || '{}');
+        if (j && j.ok && Array.isArray(j.jobs)) renderJobs(j.jobs);
+      }catch(e){}
+    };
+  }catch(e){}
 }
 
 let metricsES = null;
@@ -1693,6 +1720,7 @@ setMonitorEnabled(loadMonitorPref());
 setDebugUiEnabled(loadDebugPref());
 loadHistory();
 loadVoices();
+startJobsStream();
 
 try{
   var __bootText2 = __sfEnsureBootBanner();
@@ -3689,10 +3717,35 @@ def api_metrics_stream():
                 m = _get('/v1/metrics', timeout_s=4.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
-            except Exception as e:
+            except Exception:
                 # Don't leak secrets; just emit a small error payload.
-                yield f"data: {json.dumps({'ok': False, 'error': type(e).__name__})}\n\n"
+                yield f"data: {json.dumps({'ok': False, 'error': 'metrics_failed'})}\n\n"
             time.sleep(2.0)
+
+    headers = {
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+    }
+    return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
+
+
+@app.get('/api/jobs/stream')
+def api_jobs_stream():
+    def gen():
+        # Live jobs stream for progress bars.
+        while True:
+            try:
+                conn = db_connect()
+                try:
+                    db_init(conn)
+                    jobs = db_list_jobs(conn, limit=60)
+                finally:
+                    conn.close()
+                data = json.dumps({'ok': True, 'jobs': jobs}, separators=(',', ':'))
+                yield f"data: {data}\n\n"
+            except Exception:
+                yield f"data: {json.dumps({'ok': False, 'error': 'jobs_failed'})}\n\n"
+            time.sleep(1.5)
 
     headers = {
         'Cache-Control': 'no-store',
