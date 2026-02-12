@@ -2579,15 +2579,13 @@ function testSample(){
 
   function go(voiceRef){
     var payload={engine: engine, voice: String(voiceRef||''), text: String(val('sampleText')||val('text')||'') || ('Hello. This is ' + (val('voiceName')||val('id')||'a voice') + '.'), upload:true};
-    return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+
+    // Run as a job so progress is visible on the Jobs/History tab.
+    return jsonFetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
-        var body = (j && j.body) ? j.body : j;
-        if (body && body.ok === false){ if(out) out.innerHTML='<div class="err">'+esc(body.error||'tts_failed')+'</div>'; return; }
-        var url = (body && (body.url || body.sample_url)) ? (body.url || body.sample_url) : '';
-        if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
-        if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
-        var a=$('audio');
-        if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+        if (!j || !j.ok || !j.job_id){ if(out) out.innerHTML='<div class="err">'+esc((j&&j.error)||'tts_job_failed')+'</div>'; return; }
+        var jid = String(j.job_id||'');
+        if(out) out.innerHTML = "<div class='muted'>Queued as job: <code>"+esc(jid)+"</code>. Open <a href='/#tab-history'>History</a> to watch progress.</div>";
       });
   }
 
@@ -4082,9 +4080,43 @@ def api_history(limit: int = 60):
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
+def _job_patch(job_id: str, patch: dict[str, Any]) -> None:
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        # Ensure row exists
+        cur.execute(
+            "INSERT INTO jobs (id,title,state,created_at) VALUES (%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
+            (job_id, str(patch.get('title') or job_id), str(patch.get('state') or 'running'), int(time.time())),
+        )
+        sets = []
+        vals = []
+        for k, v in (patch or {}).items():
+            if k == 'id' or v is None:
+                continue
+            sets.append(f"{k}=%s")
+            if k in ('started_at', 'finished_at', 'total_segments', 'segments_done', 'created_at'):
+                try:
+                    vals.append(int(v))
+                except Exception:
+                    vals.append(0)
+            else:
+                vals.append(str(v))
+        if sets:
+            vals.append(job_id)
+            cur.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=%s", tuple(vals))
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 @app.post('/api/tts')
 def api_tts(payload: dict[str, Any]):
-    """Text-to-speech helper.
+    """Text-to-speech helper (sync).
 
     - Delegates synthesis to Tinybox via gateway (/v1/tts).
     - If Tinybox returns audio bytes (audio_b64), we upload to Spaces and return a public URL.
@@ -4116,3 +4148,96 @@ def api_tts(payload: dict[str, Any]):
         return {'status': 500, 'body': {'ok': False, 'error': f'spaces_upload_failed: {e}'}}
 
     return {"status": r.status_code, "body": body}
+
+
+@app.post('/api/tts_job')
+def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Run TTS as a background job so progress is visible on History/Jobs."""
+    try:
+        engine = str((payload or {}).get('engine') or '').strip()
+        voice = str((payload or {}).get('voice') or '').strip()
+        text = str((payload or {}).get('text') or '').strip()
+        if not engine or not voice or not text:
+            return {'ok': False, 'error': 'missing_required_fields'}
+
+        job_id = "tts_" + str(int(time.time())) + "_" + os.urandom(4).hex()
+        title = f"TTS ({engine})"
+        now = int(time.time())
+        total = 3
+
+        _job_patch(
+            job_id,
+            {
+                'title': title,
+                'state': 'running',
+                'started_at': now,
+                'finished_at': 0,
+                'total_segments': total,
+                'segments_done': 0,
+            },
+        )
+
+        def worker():
+            try:
+                # stage 1
+                _job_patch(job_id, {'segments_done': 1})
+
+                # stage 2: synth
+                r = requests.post(
+                    GATEWAY_BASE + '/v1/tts',
+                    json={'engine': engine, 'voice': voice, 'text': text, 'upload': True},
+                    headers=_h(),
+                    timeout=1800,
+                )
+                r.raise_for_status()
+                j = r.json()
+                if not isinstance(j, dict) or not j.get('ok'):
+                    raise RuntimeError(str((j or {}).get('error') or 'tts_failed'))
+
+                _job_patch(job_id, {'segments_done': 2})
+
+                # stage 3: upload to Spaces (via same logic as api_tts)
+                if j.get('audio_b64'):
+                    import base64
+                    from .spaces_upload import upload_bytes
+
+                    b = base64.b64decode(str(j.get('audio_b64') or ''), validate=False)
+                    ct = str(j.get('content_type') or 'audio/wav')
+                    ext = 'wav'
+                    if 'mpeg' in ct:
+                        ext = 'mp3'
+                    fn = f"sample.{ext}"
+                    _key, url = upload_bytes(b, key_prefix='tts/samples', filename=fn, content_type=ct)
+                else:
+                    url = str(j.get('url') or j.get('sample_url') or '')
+
+                if not url:
+                    raise RuntimeError('no_url')
+
+                _job_patch(
+                    job_id,
+                    {
+                        'segments_done': total,
+                        'state': 'completed',
+                        'finished_at': int(time.time()),
+                        'mp3_url': url,
+                    },
+                )
+            except Exception as e:
+                _job_patch(
+                    job_id,
+                    {
+                        'state': 'failed',
+                        'finished_at': int(time.time()),
+                        'segments_done': 0,
+                        'mp3_url': '',
+                        'sfml_url': f"error: {type(e).__name__}: {str(e)[:200]}",
+                    },
+                )
+
+        import threading
+
+        threading.Thread(target=worker, daemon=True).start()
+        return {'ok': True, 'job_id': job_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'tts_job_failed: {type(e).__name__}: {e}'}
