@@ -1310,6 +1310,20 @@ function escapeHtml(s){
   }
 }
 
+function escAttr(s){
+  // escape for HTML attributes / single-quoted contexts
+  try{
+    return String(s||'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }catch(e){
+    return '';
+  }
+}
+
 function loadVoices(){
   var el=document.getElementById('voicesList');
   if (el) el.textContent='Loading…';
