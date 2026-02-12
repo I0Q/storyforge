@@ -1784,16 +1784,24 @@ def api_upload_voice_clip(file: UploadFile = File(...)):
 @app.get('/api/voice_provider/engines')
 def api_voice_provider_engines():
     # Requires passphrase session auth (middleware).
-    # Best-effort ask Tinybox provider; fallback.
+    # For now we only expose engines that are end-to-end supported by the provider.
+    # (tortoise training + tts playback is not wired yet.)
     try:
-        r = requests.get(GATEWAY_BASE + '/v1/engines', timeout=4, headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None)
+        r = requests.get(
+            GATEWAY_BASE + '/v1/engines',
+            timeout=4,
+            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None,
+        )
         if r.status_code == 200:
             j = r.json()
             if isinstance(j, dict) and j.get('ok') and isinstance(j.get('engines'), list):
-                return {'ok': True, 'engines': j['engines']}
+                engs = [str(x) for x in (j.get('engines') or [])]
+                # Only show engines we can actually play back today.
+                engs = [e for e in engs if e == 'xtts']
+                return {'ok': True, 'engines': engs or ['xtts']}
     except Exception:
         pass
-    return {'ok': True, 'engines': ['xtts', 'tortoise']}
+    return {'ok': True, 'engines': ['xtts']}
 
 
 @app.get('/api/voice_provider/presets')
@@ -1840,6 +1848,10 @@ def api_voices_train(payload: dict = Body(default={})):
     # Requires passphrase session auth (middleware).
     # Delegates to Tinybox provider if available.
     try:
+        eng = str((payload or {}).get('engine') or '').strip()
+        if eng and eng != 'xtts':
+            return {'ok': False, 'error': 'engine_not_supported_yet', 'engine': eng}
+
         r = requests.post(
             GATEWAY_BASE + '/v1/voices/train',
             json=payload or {},
