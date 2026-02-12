@@ -1407,12 +1407,12 @@ function renderProviders(providers){
 
     var body = "<div class='kvs' style='margin-top:10px'>"+
       (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' /></div>") : "")+
-      "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+"/><span class='slider'></span></label></div>"+
-      "<div class='k'>Voice</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='voice_enabled' "+(voiceOn?'checked':'')+"/><span class='slider'></span></label></div>"+
-      "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>enabled</span> &nbsp; <code>tortoise</code> <span class='pill good'>enabled</span></div>"+
+      "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+" onchange='onProvMonitorToggle(this); event.stopPropagation();'/><span class='slider'></span></label></div>"+
+      "<div class='k'>Voice service</div><div><span class='pill good'>available</span></div>"+
+      "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>available</span> &nbsp; <code>tortoise</code> <span class='pill good'>available</span></div>"+
       "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' /></div>"+
 
-      "<div class='k'>LLM (always on)</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='llm_enabled' "+(llmOn?'checked':'')+"/><span class='slider'></span></label></div>"+
+      "<div class='k'>LLM service</div><div><span class='pill good'>available</span></div>"+
       "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model'>"+
         enabledModels.map(function(m){
           var sel = (String(m.id)===llmModel) ? 'selected' : '';
@@ -1441,6 +1441,15 @@ function toggleProvBtn(btn){
     var id = btn && btn.getAttribute ? (btn.getAttribute('data-pid')||'') : '';
     if (!id) return;
     toggleProv(id);
+  }catch(e){}
+}
+
+function onProvMonitorToggle(inputEl){
+  try{
+    var on = !!(inputEl && inputEl.checked);
+    // Keep behavior consistent with the existing global monitor preference.
+    try{ saveMonitorPref(on); }catch(e){}
+    try{ setMonitorEnabled(on); }catch(e){}
   }catch(e){}
 }
 
