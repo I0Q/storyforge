@@ -76,6 +76,14 @@ INDEX_BASE_CSS = base_css("""\
     body.noScroll{overflow:hidden;}
     html,body{overscroll-behavior-y:none;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+
+    /* iOS-friendly toggle switches */
+    .switch{position:relative;display:inline-block;width:52px;height:30px;vertical-align:middle;}
+    .switch input{opacity:0;width:0;height:0;}
+    .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(168,179,216,0.25);border:1px solid rgba(36,48,94,.65);transition:.18s;border-radius:999px;}
+    .slider:before{position:absolute;content:"";height:24px;width:24px;left:3px;bottom:2px;background:white;transition:.18s;border-radius:999px;}
+    .switch input:checked + .slider{background:rgba(74,163,255,0.55);border-color:rgba(74,163,255,0.9);}
+    .switch input:checked + .slider:before{transform:translateX(22px);}
     html.monOn body{padding-bottom:calc(18px + 74px + env(safe-area-inset-bottom));}
     body.monOff{padding-bottom:18px;}
     body.monOff .dock{will-change:transform;display:none}
@@ -736,9 +744,7 @@ def index(response: Response):
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap'>
         <button type='button' class='secondary' onclick='reloadProviders()'>Reload</button>
-        <button type='button' onclick='addProviderTinybox()'>Add Tinybox</button>
-        <button type='button' class='secondary' onclick='addProviderOpenAI()'>Add OpenAI</button>
-        <button type='button' class='secondary' onclick='addProviderGoogle()'>Add Google</button>
+        <a href='/settings/providers/new'><button type='button' class='secondary'>Add provider</button></a>
         <button type='button' onclick='saveProviders()'>Save</button>
       </div>
     </div>
@@ -1392,22 +1398,21 @@ function renderProviders(providers){
     var llmG = Array.isArray(p.llm_gpus) ? p.llm_gpus : [2];
     var llmModel = String(p.llm_model || 'google/gemma-2-9b-it');
 
-    var header = "<div class='row' style='justify-content:space-between;'>"+
+    var header = "<div class='row provHead' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)' style='justify-content:space-between;cursor:pointer;'>"+
       "<div><div style='font-weight:950'>"+escapeHtml(name||kind||'Provider')+"</div><div class='muted'>"+escapeHtml(kind)+" • id: <code>"+escapeHtml(id)+"</code></div></div>"+
       "<div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>"+
-        "<button class='secondary' type='button' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)'>Toggle</button>"+
-        "<button class='secondary' type='button' data-pid='"+escAttr(id)+"' onclick='removeProviderBtn(this)'>Remove</button>"+
+        "<button class='secondary' type='button' data-pid='"+escAttr(id)+"' onclick='removeProviderBtn(this); event.stopPropagation();'>Remove</button>"+
       "</div>"+
     "</div>";
 
     var body = "<div class='kvs' style='margin-top:10px'>"+
       (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' /></div>") : "")+
-      "<div class='k'>System monitor</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+"/> Enabled</label></div>"+
-      "<div class='k'>Voice</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='voice_enabled' "+(voiceOn?'checked':'')+"/> Enabled</label></div>"+
+      "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+"/><span class='slider'></span></label></div>"+
+      "<div class='k'>Voice</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='voice_enabled' "+(voiceOn?'checked':'')+"/><span class='slider'></span></label></div>"+
       "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>enabled</span> &nbsp; <code>tortoise</code> <span class='pill good'>enabled</span></div>"+
       "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' /></div>"+
 
-      "<div class='k'>LLM</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='llm_enabled' "+(llmOn?'checked':'')+"/> Always on</label></div>"+
+      "<div class='k'>LLM (always on)</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='llm_enabled' "+(llmOn?'checked':'')+"/><span class='slider'></span></label></div>"+
       "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model'>"+
         enabledModels.map(function(m){
           var sel = (String(m.id)===llmModel) ? 'selected' : '';
@@ -2627,6 +2632,40 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
     )
     return html
 @app.get('/voices/new', response_class=HTMLResponse)
+@app.get('/settings/providers/new')
+def settings_new_provider_page(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return HTMLResponse(
+        """<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <title>StoryForge - Add provider</title>
+  <style>__INDEX_BASE_CSS__</style>
+</head>
+<body>
+  <div class='navBar'>
+    <div class='top'>
+      <div>
+        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Add provider</div></div>
+        <div class='muted'>Coming soon. Providers will be added here later.</div>
+      </div>
+      <div class='row headActions'>
+        <a href='/#tab-advanced'><button class='secondary' type='button'>Back</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Add provider</div>
+    <div class='muted'>This is a placeholder page. We'll implement provider creation here later.</div>
+  </div>
+</body>
+</html>""".replace('__INDEX_BASE_CSS__', INDEX_BASE_CSS)
+    )
+
+
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
     # Separate screen for generating/testing a voice before saving.
