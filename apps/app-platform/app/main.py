@@ -2344,10 +2344,14 @@ def voices_new_page(response: Response):
   </div>
 
   <div class='card'>
-    <div style='font-weight:950;margin-bottom:6px;'>Training</div>
+    <div style='font-weight:950;margin-bottom:6px;'>Generate voice</div>
 
     <div class='k'>Voice name</div>
     <input id='voiceName' placeholder='Luna' />
+
+    <div class='k'>Roster id</div>
+    <input id='id' placeholder='luna' />
+    <div class='muted' style='margin-top:6px'>Leave blank to auto-generate from the name.</div>
 
     <div class='k'>Engine</div>
     <select id='engineSel'></select>
@@ -2375,35 +2379,11 @@ def voices_new_page(response: Response):
     <textarea id='sampleText' placeholder='Hello…'>Hello. This is a test sample for a new voice.</textarea>
 
     <div class='row' style='margin-top:12px'>
-      <button type='button' class='secondary' onclick='startTrain()'>Generate model</button>
+      <button type='button' onclick='trainAndSave()'>Generate + Save</button>
+      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
     </div>
 
     <div id='out' class='muted' style='margin-top:10px'>-</div>
-  </div>
-
-  <div class='card'>
-    <div style='font-weight:950;margin-bottom:6px;'>Save to roster</div>
-
-    <div class='k'>id</div>
-    <input id='id' placeholder='luna' />
-
-    <div class='k'>display name</div>
-    <input id='name' placeholder='Luna' />
-
-    <div class='k'>engine</div>
-    <input id='engine' placeholder='xtts' />
-
-    <div class='k'>voice_ref</div>
-    <input id='voice_ref' placeholder='provider voice ref' />
-
-    <div class='k'>sample text</div>
-    <textarea id='text' placeholder='Hello…'>Hello. This is Luna.</textarea>
-
-    <div class='row' style='margin-top:12px'>
-      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
-      <button type='button' onclick='saveVoice()'>Save voice</button>
-    </div>
-
     <audio id='audio' controls class='hide'></audio>
   </div>
 
@@ -2508,51 +2488,80 @@ function getClipUrl(){
   return uploadClip();
 }
 
-function startTrain(){
-  var out=$('out'); if(out) out.textContent='Starting training…';
-  var name=String((($('voiceName')||{}).value||'')).trim();
-  var engine=String((($('engineSel')||{}).value||'')).trim();
-  var sample=String((($('sampleText')||{}).value||'')).trim();
+function slugify(s){
+  try{
+    s = String(s||'').toLowerCase();
+    s = s.replace(/[^a-z0-9]+/g,'-');
+    s = s.replace(/^-+|-+$/g,'');
+    return s || 'voice';
+  }catch(e){
+    return 'voice';
+  }
+}
+
+function trainAndSave(){
+  var out=$('out'); if(out) out.textContent='Training…';
+
+  var displayName = String((($('voiceName')||{}).value||'')).trim();
+  var engine = String((($('engineSel')||{}).value||'')).trim();
+  var sample = String((($('sampleText')||{}).value||'')).trim();
+
+  var rid = String((($('id')||{}).value||'')).trim();
+  if (!rid) rid = slugify(displayName);
+  if ($('id')) $('id').value = rid;
+
+  if (!displayName){ if(out) out.innerHTML='<div class="err">Missing voice name</div>'; return; }
+  if (!engine){ if(out) out.innerHTML='<div class="err">Missing engine</div>'; return; }
+
   return getClipUrl().then(function(url){
-    var payload={name:name, engine:engine, clip_url:String(url||''), sample_text:sample};
+    var payload={name:displayName, engine:engine, clip_url:String(url||''), sample_text:sample};
     return jsonFetch('/api/voices/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
   }).then(function(j){
     if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">Train failed: '+esc((j&&j.error)||'unknown')+'</div>'; return; }
-    if(out) out.textContent='Training complete (placeholder). voice_ref set.';
-    // Fill save fields
-    if($('engine')) $('engine').value = String(j.engine||engine||'');
-    if($('voice_ref')) $('voice_ref').value = String(j.voice_ref||'');
-    if($('name') && name) $('name').value = name;
-    if($('text') && sample) $('text').value = sample;
+    var vref = String(j.voice_ref||'').trim();
+    var eng = String(j.engine||engine||'').trim();
+    if (!vref){ if(out) out.innerHTML='<div class="err">Train succeeded but no voice_ref returned</div>'; return; }
+
+    if(out) out.textContent='Saving…';
+    var savePayload={id: rid, display_name: displayName, engine: eng, voice_ref: vref, sample_text: sample};
+    return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(savePayload)});
+  }).then(function(j){
+    if (!j) return;
+    if (!j.ok){ if(out) out.innerHTML='<div class="err">'+esc(j.error||'save failed')+'</div>'; return; }
+    if(out) out.textContent='Saved.';
+    window.location.href='/#tab-voices';
   }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
 
 function val(id){ var el=$(id); return el?el.value:''; }
 
 function testSample(){
-  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('text') || ('Hello. This is ' + (val('name')||val('id')||'a voice') + '.'), upload:true};
-  var out=$('out'); if(out) out.textContent='Generating…';
-  return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    .then(function(j){
-      var body = (j && j.body) ? j.body : j;
-      if (body && body.ok === false){ if(out) out.innerHTML='<div class="err">'+esc(body.error||'tts_failed')+'</div>'; return; }
-      var url = (body && (body.url || body.sample_url)) ? (body.url || body.sample_url) : '';
-      if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
-      if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
-      var a=$('audio');
-      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
-}
+  var engine = String(val('engineSel') || '').trim();
+  if (!engine) engine = String(val('engine') || '').trim();
 
-function saveVoice(){
-  var payload={id: val('id'), display_name: val('name'), engine: val('engine'), voice_ref: val('voice_ref'), sample_text: val('text')};
-  var out=$('out'); if(out) out.textContent='Saving…';
-  return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    .then(function(j){
-      if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">'+esc(j && j.error ? j.error : 'save failed')+'</div>'; return; }
-      if(out) out.textContent='Saved.';
-      window.location.href='/#tab-voices';
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+  // Prefer using the last trained voice_ref if present; otherwise, try current preset/url/upload.
+  var vref = String(val('voice_ref') || '').trim();
+  var out=$('out'); if(out) out.textContent='Generating…';
+
+  function go(voiceRef){
+    var payload={engine: engine, voice: String(voiceRef||''), text: String(val('sampleText')||val('text')||'') || ('Hello. This is ' + (val('voiceName')||val('id')||'a voice') + '.'), upload:true};
+    return jsonFetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+      .then(function(j){
+        var body = (j && j.body) ? j.body : j;
+        if (body && body.ok === false){ if(out) out.innerHTML='<div class="err">'+esc(body.error||'tts_failed')+'</div>'; return; }
+        var url = (body && (body.url || body.sample_url)) ? (body.url || body.sample_url) : '';
+        if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
+        if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + esc(url) + "</code></div>";
+        var a=$('audio');
+        if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+      });
+  }
+
+  if (vref) return go(vref).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+
+  // No trained voice_ref yet; best-effort derive from clip mode.
+  return getClipUrl().then(function(url){ return go(url); })
+    .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
 
 try{ document.addEventListener('DOMContentLoaded', function(){
