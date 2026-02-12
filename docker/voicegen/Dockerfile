@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Coqui TTS supports py<3.12; we use py3.11 in this container.
 RUN pip install --no-cache-dir --upgrade pip wheel
 RUN pip install --no-cache-dir TTS==0.22.0 \
-  && pip install --no-cache-dir "transformers<5" "tokenizers<0.20" \
+  && pip install --no-cache-dir "transformers<5" "tokenizers<0.20" torchcodec \
   && python -c "import transformers; print('transformers', transformers.__version__)"
 
 WORKDIR /work
