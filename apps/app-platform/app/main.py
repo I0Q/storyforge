@@ -1058,9 +1058,11 @@ function saveJobToRoster(jobId){
     fetchJsonAuthed('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
-        if (btn) btn.textContent='Saved';
+        try{ localStorage.setItem('sf_job_saved_'+String(jobId||''), '1'); }catch(_e){}
+        try{ toastSet('Saved to roster', 'ok', 1400); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
+        if (btn){ btn.textContent='Saved'; btn.disabled=true; }
       })
-      .catch(function(e){ if(btn) btn.textContent='Save to roster'; alert('Save failed: '+String(e)); });
+      .catch(function(e){ if(btn){ btn.textContent='Save to roster'; btn.disabled=false; } alert('Save failed: '+String(e)); });
   }catch(e){ alert('Save failed'); }
 }
 
@@ -1087,7 +1089,16 @@ function renderJobs(jobs){
     const actions = (isSample && playable) ? (
       `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
       + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.mp3_url||'')}')">Play</button>`
-      + (meta ? `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>` : `<button type='button' class='saveRosterBtn' onclick="alert('This older job is missing metadata. Re-run Test sample once and then Save will appear here.')">Save to roster</button>`)
+      + (function(){
+          try{
+            var saved = false;
+            try{ saved = (localStorage.getItem('sf_job_saved_'+String(job.id||'')) === '1'); }catch(_e){}
+            if (saved){
+              return `<button type='button' class='saveRosterBtn' disabled>Saved</button>`;
+            }
+          }catch(_e){}
+          return (meta ? `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>` : `<button type='button' class='saveRosterBtn' onclick="alert('This older job is missing metadata. Re-run Test sample once and then Save will appear here.')">Save to roster</button>`);
+        })()
       + `</div>`
     ) : '';
 
