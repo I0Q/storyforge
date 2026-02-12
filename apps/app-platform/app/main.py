@@ -2433,7 +2433,7 @@ def voices_new_page(response: Response):
     <div class='top'>
       <div>
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
-        <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then save.</div>
+        <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then generate. Save to roster from the job card.</div>
       </div>
       <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
@@ -2472,9 +2472,12 @@ def voices_new_page(response: Response):
     <div class='k'>Voice name</div>
     <input id='voiceName' placeholder='Luna' />
 
-    <div class='k'>Roster id</div>
-    <input id='id' placeholder='luna' />
-    <div class='muted' style='margin-top:6px'>Leave blank to auto-generate from the name.</div>
+    <details style='margin-top:10px'>
+      <summary style='cursor:pointer;font-weight:900;'>Advanced</summary>
+      <div class='k' style='margin-top:10px'>Roster id</div>
+      <input id='id' placeholder='luna' />
+      <div class='muted' style='margin-top:6px'>Optional. Auto-generated from the voice name.</div>
+    </details>
 
     <div class='k'>Engine</div>
     <select id='engineSel'></select>
@@ -2502,12 +2505,10 @@ def voices_new_page(response: Response):
     <textarea id='sampleText' placeholder='Hello…'>Hello. This is a test sample for a new voice.</textarea>
 
     <div class='row' style='margin-top:12px'>
-      <button type='button' onclick='trainAndSave()'>Generate + Save</button>
-      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
+      <button type='button' onclick='trainAndSave()'>Generate</button>
     </div>
 
     <div id='out' class='muted' style='margin-top:10px'>-</div>
-    <audio id='audio' controls class='hide'></audio>
   </div>
 
 <script>
