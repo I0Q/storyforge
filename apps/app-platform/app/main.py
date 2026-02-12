@@ -1055,7 +1055,7 @@ function saveJobToRoster(jobId){
 
     var btn = card ? card.querySelector('.saveRosterBtn') : null;
     if (btn) btn.textContent='Saving…';
-    jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    fetchJsonAuthed('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
         if (btn) btn.textContent='Saved';
