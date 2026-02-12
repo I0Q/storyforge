@@ -1013,6 +1013,57 @@ function fmtTs(ts){
   }
 }
 
+function safeJson(s){
+  try{ if(!s) return null; return JSON.parse(String(s)); }catch(e){ return null; }
+}
+
+function jobPlay(url){
+  try{
+    if (!url) return;
+    var a=document.getElementById('jobAudio');
+    if (!a){
+      a=document.createElement('audio');
+      a.id='jobAudio';
+      a.controls=true;
+      a.style.width='100%';
+      a.style.marginTop='8px';
+      document.body.appendChild(a);
+    }
+    a.src=String(url);
+    try{ a.play(); }catch(e){}
+  }catch(e){}
+}
+
+function saveJobToRoster(jobId){
+  try{
+    var card=document.querySelector('[data-jobid="'+jobId+'"]');
+    var meta = safeJson(card ? card.getAttribute('data-meta') : '');
+    var url = card ? String(card.getAttribute('data-url')||'') : '';
+    if (!meta || !url){ alert('Missing job metadata'); return; }
+
+    var rid = String(meta.roster_id||meta.id||'').trim();
+    if (!rid) rid = slugify(String(meta.display_name||'voice'));
+    var payload={
+      id: rid,
+      display_name: String(meta.display_name||rid),
+      engine: String(meta.engine||''),
+      voice_ref: String(meta.voice_ref||meta.voice||''),
+      sample_text: String(meta.sample_text||meta.text||''),
+      sample_url: url,
+      enabled: true,
+    };
+
+    var btn = card ? card.querySelector('.saveRosterBtn') : null;
+    if (btn) btn.textContent='Saving…';
+    jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+      .then(function(j){
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
+        if (btn) btn.textContent='Saved';
+      })
+      .catch(function(e){ if(btn) btn.textContent='Save to roster'; alert('Save failed: '+String(e)); });
+  }catch(e){ alert('Save failed'); }
+}
+
 function renderJobs(jobs){
   const el=document.getElementById('jobs');
   if (!el) return;
@@ -1025,10 +1076,22 @@ function renderJobs(jobs){
     const total = Number(job.total_segments||0);
     const done = Number(job.segments_done||0);
     const pct = total ? Math.max(0, Math.min(100, (done/total*100))) : 0;
+    const isDone = (String(job.state||'') === 'completed' || String(job.state||'') === 'failed');
     const progText = total ? `${done} / ${total} (${pct.toFixed(0)}%)` : '-';
-    const progBar = total ? `<div class='bar small' style='margin-top:6px'><div style='width:${pct.toFixed(1)}%'></div></div>` : '';
+    const progBar = (!isDone && total) ? `<div class='bar small' style='margin-top:6px'><div style='width:${pct.toFixed(1)}%'></div></div>` : '';
 
-    return `<div class='job'>
+    const meta = safeJson(job.meta_json||'') || null;
+    const isSample = (String(job.kind||'') === 'tts_sample');
+    const playable = (isSample && String(job.state||'')==='completed' && job.mp3_url);
+
+    const actions = playable ? (
+      `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
+      + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.mp3_url||'')}')">Play</button>`
+      + `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>`
+      + `</div>`
+    ) : '';
+
+    return `<div class='job' data-jobid='${escAttr(job.id||'')}' data-url='${escAttr(job.mp3_url||'')}' data-meta='${escAttr(job.meta_json||'')}'>
       <div class='row' style='justify-content:space-between;'>
         <div class='title'>${job.title||job.id}</div>
         <div>${pill(job.state)}</div>
@@ -1041,6 +1104,7 @@ function renderJobs(jobs){
         <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
         <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
       </div>
+      ${actions}
     </div>`;
   }).join('');
 }
@@ -2581,11 +2645,15 @@ function testSample(){
     var payload={engine: engine, voice: String(voiceRef||''), text: String(val('sampleText')||val('text')||'') || ('Hello. This is ' + (val('voiceName')||val('id')||'a voice') + '.'), upload:true};
 
     // Run as a job so progress is visible on the Jobs/History tab.
+    // Provide some metadata so the completed job can offer "Save to roster".
+    payload.display_name = String(val('voiceName')||val('id')||'').trim() || 'Voice';
+    payload.roster_id = String(val('id')||'').trim() || slugify(payload.display_name);
+
     return jsonFetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
         if (!j || !j.ok || !j.job_id){ if(out) out.innerHTML='<div class="err">'+esc((j&&j.error)||'tts_job_failed')+'</div>'; return; }
-        var jid = String(j.job_id||'');
-        if(out) out.innerHTML = "<div class='muted'>Queued as job: <code>"+esc(jid)+"</code>. Open <a href='/#tab-history'>History</a> to watch progress.</div>";
+        // Jump straight to Jobs/History so you can watch it.
+        window.location.href = '/#tab-history';
       });
   }
 
@@ -4087,8 +4155,15 @@ def _job_patch(job_id: str, patch: dict[str, Any]) -> None:
         cur = conn.cursor()
         # Ensure row exists
         cur.execute(
-            "INSERT INTO jobs (id,title,state,created_at) VALUES (%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
-            (job_id, str(patch.get('title') or job_id), str(patch.get('state') or 'running'), int(time.time())),
+            "INSERT INTO jobs (id,title,kind,meta_json,state,created_at) VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
+            (
+                job_id,
+                str(patch.get('title') or job_id),
+                str(patch.get('kind') or ''),
+                str(patch.get('meta_json') or ''),
+                str(patch.get('state') or 'running'),
+                int(time.time()),
+            ),
         )
         sets = []
         vals = []
@@ -4165,10 +4240,21 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
         now = int(time.time())
         total = 3
 
+        meta = {
+            'engine': engine,
+            'voice_ref': voice,
+            'text': text,
+            'display_name': str((payload or {}).get('display_name') or '').strip() or 'Voice',
+            'roster_id': str((payload or {}).get('roster_id') or '').strip() or '',
+            'sample_text': text,
+        }
+
         _job_patch(
             job_id,
             {
                 'title': title,
+                'kind': 'tts_sample',
+                'meta_json': json.dumps(meta, separators=(',', ':')),
                 'state': 'running',
                 'started_at': now,
                 'finished_at': 0,

@@ -25,7 +25,17 @@ def db_init(conn) -> None:
         cur.execute("SET statement_timeout = '5000'")
     except Exception:
         pass
-    cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  created_at BIGINT NOT NULL\n);')
+    cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT \'\',\n  meta_json TEXT NOT NULL DEFAULT \'\',\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  created_at BIGINT NOT NULL\n);')
+    # Migrations: add columns to existing jobs table
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS meta_json TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+
     cur.execute('CREATE TABLE IF NOT EXISTS voice_ratings (\n  engine TEXT NOT NULL,\n  voice_id TEXT NOT NULL,\n  rating INTEGER NOT NULL,\n  updated_at BIGINT NOT NULL,\n  PRIMARY KEY(engine, voice_id)\n);')
     cur.execute('CREATE TABLE IF NOT EXISTS metrics_samples (\n  ts BIGINT PRIMARY KEY,\n  payload_json TEXT NOT NULL\n);')
 
@@ -106,7 +116,8 @@ def db_list_jobs(conn, limit: int = 60):
     except Exception:
         pass
     cur.execute(
-        'SELECT id,title,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '        'FROM jobs ORDER BY created_at DESC LIMIT %s',
+        'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '
+        'FROM jobs ORDER BY created_at DESC LIMIT %s',
         (int(limit),),
     )
     rows = cur.fetchall()
@@ -114,14 +125,16 @@ def db_list_jobs(conn, limit: int = 60):
         {
             'id': r[0],
             'title': r[1],
-            'state': r[2],
-            'started_at': r[3],
-            'finished_at': r[4],
-            'total_segments': r[5],
-            'segments_done': r[6],
-            'mp3_url': r[7],
-            'sfml_url': r[8],
-            'created_at': r[9],
+            'kind': r[2] or '',
+            'meta_json': r[3] or '',
+            'state': r[4],
+            'started_at': r[5],
+            'finished_at': r[6],
+            'total_segments': r[7],
+            'segments_done': r[8],
+            'mp3_url': r[9],
+            'sfml_url': r[10],
+            'created_at': r[11],
         }
         for r in rows
     ]
