@@ -2626,12 +2626,12 @@ function slugify(s){
 }
 
 function trainAndSave(){
-  var out=$('out'); if(out) out.textContent='Training…';
+  // New UX: generating a sample should NOT auto-save to roster.
+  // Queue a job, redirect to Jobs, then user can Play + Save from the job card.
+  var out=$('out'); if(out) out.textContent='Queuing job…';
 
   var displayName = String((($('voiceName')||{}).value||'')).trim();
   var engine = String((($('engineSel')||{}).value||'')).trim();
-  var sample = String((($('sampleText')||{}).value||'')).trim();
-
   var rid = String((($('id')||{}).value||'')).trim();
   if (!rid) rid = slugify(displayName);
   if ($('id')) $('id').value = rid;
@@ -2639,24 +2639,8 @@ function trainAndSave(){
   if (!displayName){ if(out) out.innerHTML='<div class="err">Missing voice name</div>'; return; }
   if (!engine){ if(out) out.innerHTML='<div class="err">Missing engine</div>'; return; }
 
-  return getClipUrl().then(function(url){
-    var payload={name:displayName, engine:engine, clip_url:String(url||''), sample_text:sample};
-    return jsonFetch('/api/voices/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-  }).then(function(j){
-    if (!j || !j.ok){ if(out) out.innerHTML='<div class="err">Train failed: '+esc((j&&j.error)||'unknown')+'</div>'; return; }
-    var vref = String(j.voice_ref||'').trim();
-    var eng = String(j.engine||engine||'').trim();
-    if (!vref){ if(out) out.innerHTML='<div class="err">Train succeeded but no voice_ref returned</div>'; return; }
-
-    if(out) out.textContent='Saving…';
-    var savePayload={id: rid, display_name: displayName, engine: eng, voice_ref: vref, sample_text: sample};
-    return jsonFetch('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(savePayload)});
-  }).then(function(j){
-    if (!j) return;
-    if (!j.ok){ if(out) out.innerHTML='<div class="err">'+esc(j.error||'save failed')+'</div>'; return; }
-    if(out) out.textContent='Saved.';
-    window.location.href='/#tab-voices';
-  }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+  // Reuse testSample path (which queues /api/tts_job and redirects to History)
+  return testSample();
 }
 
 function val(id){ var el=$(id); return el?el.value:''; }
@@ -2682,7 +2666,7 @@ function testSample(){
         if (!j || !j.ok || !j.job_id){ if(out) out.innerHTML='<div class="err">'+esc((j&&j.error)||'tts_job_failed')+'</div>'; return; }
         // Jump straight to Jobs/History so you can watch it.
         window.location.href = '/#tab-history';
-      });
+      }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
   }
 
   if (vref) return go(vref).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
