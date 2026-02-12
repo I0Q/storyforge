@@ -3717,13 +3717,25 @@ def api_voices_create(payload: dict[str, Any]):
         sample_text = str(payload.get('sample_text') or '')
         sample_url = str(payload.get('sample_url') or '')
 
+        # Auto-generate a playable sample URL when possible (xtts + URL voice_ref).
+        if (not sample_url) and engine and voice_ref and sample_text:
+            try:
+                # Reuse /api/tts behavior (Tinybox synth -> Spaces upload -> public URL)
+                tts_resp = api_tts({'engine': engine, 'voice': voice_ref, 'text': sample_text, 'upload': True})
+                if isinstance(tts_resp, dict):
+                    body = tts_resp.get('body') if 'body' in tts_resp else None
+                    if isinstance(body, dict) and body.get('ok') and body.get('url'):
+                        sample_url = str(body.get('url') or '')
+            except Exception:
+                pass
+
         conn = db_connect()
         try:
             db_init(conn)
             upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, enabled, sample_text, sample_url)
         finally:
             conn.close()
-        return {'ok': True}
+        return {'ok': True, 'sample_url': sample_url}
     except Exception as e:
         return {'ok': False, 'error': f'create_failed: {type(e).__name__}: {e}'}
 
@@ -3812,11 +3824,12 @@ def api_voice_sample(voice_id: str):
         voice_ref = str(v.get('voice_ref') or '')
         text = str(v.get('sample_text') or '').strip() or f"Hello. This is {v.get('display_name') or voice_id}."
 
-        payload = {'engine': engine, 'voice': voice_ref, 'text': text, 'upload': True}
-        r = requests.post(GATEWAY_BASE + '/v1/tts', json=payload, headers=_h(), timeout=120)
-        r.raise_for_status()
-        j = r.json()
-        sample_url = str(j.get('url') or j.get('sample_url') or '')
+        # Use the Cloud /api/tts path so we always return a playable Spaces URL.
+        tts_resp = api_tts({'engine': engine, 'voice': voice_ref, 'text': text, 'upload': True})
+        body = tts_resp.get('body') if isinstance(tts_resp, dict) else None
+        sample_url = ''
+        if isinstance(body, dict) and body.get('ok') and body.get('url'):
+            sample_url = str(body.get('url') or '')
 
         conn = db_connect()
         try:
