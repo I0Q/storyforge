@@ -1386,6 +1386,8 @@ function renderProviders(providers){
     var voiceOn = !!(p.voice_enabled);
     var llmOn = !!(p.llm_enabled);
 
+    var gatewayBase = String(p.gateway_base || '');
+
     var voiceG = Array.isArray(p.voice_gpus) ? p.voice_gpus : [0,1];
     var llmG = Array.isArray(p.llm_gpus) ? p.llm_gpus : [2];
     var llmModel = String(p.llm_model || 'google/gemma-2-9b-it');
@@ -1399,7 +1401,8 @@ function renderProviders(providers){
     "</div>";
 
     var body = "<div class='kvs' style='margin-top:10px'>"+
-      "<div class='k'>Monitoring</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+"/> Enabled</label></div>"+
+      (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' /></div>") : "")+
+      "<div class='k'>System monitor</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+"/> Enabled</label></div>"+
       "<div class='k'>Voice</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='voice_enabled' "+(voiceOn?'checked':'')+"/> Enabled</label></div>"+
       "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>enabled</span> &nbsp; <code>tortoise</code> <span class='pill good'>enabled</span></div>"+
       "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' /></div>"+
@@ -1507,6 +1510,7 @@ function addProviderTinybox(){
     id: __newId('tinybox'),
     kind: 'tinybox',
     name: 'Tinybox',
+    gateway_base: '',
     monitoring_enabled: true,
     voice_enabled: true,
     voice_gpus: [0,1],
@@ -4421,6 +4425,7 @@ def _default_providers() -> list[dict[str, Any]]:
             'id': 'tinybox_default',
             'kind': 'tinybox',
             'name': 'Tinybox',
+            'gateway_base': GATEWAY_BASE,
             'monitoring_enabled': True,
             'voice_enabled': True,
             'voice_gpus': [0, 1],
@@ -4493,6 +4498,7 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                     'id': pid,
                     'kind': kind,
                     'name': name,
+                    'gateway_base': str(p.get('gateway_base') or '').strip()[:200],
                     'monitoring_enabled': bool(p.get('monitoring_enabled', False)),
                     'voice_enabled': bool(p.get('voice_enabled', False)),
                     'voice_gpus': _ints(p.get('voice_gpus') or []),
