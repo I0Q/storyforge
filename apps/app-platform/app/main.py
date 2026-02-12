@@ -4305,7 +4305,11 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 r.raise_for_status()
                 j = r.json()
                 if not isinstance(j, dict) or not j.get('ok'):
-                    raise RuntimeError(str((j or {}).get('error') or 'tts_failed'))
+                    err = str((j or {}).get('error') or 'tts_failed')
+                    det = (j or {}).get('detail')
+                    if det:
+                        err = err + ' :: ' + str(det)
+                    raise RuntimeError(err)
 
                 _job_patch(job_id, {'segments_done': 2})
 
