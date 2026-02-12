@@ -2079,12 +2079,10 @@ def voices_edit_page(voice_id: str, response: Response):
     <textarea id='sample_text' placeholder='Hello…'>__STXT__</textarea>
 
     <div class='row' style='margin-top:12px'>
-      <button class='secondary' type='button' onclick='testSample()'>Test sample</button>
       <button type='button' onclick='save()'>Save</button>
     </div>
 
     <div id='out' class='muted' style='margin-top:10px'>-</div>
-    <audio id='audio' controls class='hide'></audio>
   </div>
 
 <script>
