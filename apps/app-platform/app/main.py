@@ -729,21 +729,18 @@ def index(response: Response):
   <div id='pane-advanced' class='hide'>
 
     <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Tinybox services</div>
-      <div class='muted'>Configure which services/models are enabled and which GPUs they may use.</div>
+      <div style='font-weight:950;margin-bottom:6px;'>Providers</div>
+      <div class='muted'>Configure local and cloud providers. Expand a card to edit its settings.</div>
 
-      <div id='svcBox' class='muted' style='margin-top:10px'>Loading…</div>
+      <div id='providersBox' class='muted' style='margin-top:10px'>Loading…</div>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap'>
-        <button type='button' class='secondary' onclick='reloadTinyboxSettings()'>Reload</button>
-        <button type='button' onclick='saveTinyboxSettings()'>Save</button>
+        <button type='button' class='secondary' onclick='reloadProviders()'>Reload</button>
+        <button type='button' onclick='addProviderTinybox()'>Add Tinybox</button>
+        <button type='button' class='secondary' onclick='addProviderOpenAI()'>Add OpenAI</button>
+        <button type='button' class='secondary' onclick='addProviderGoogle()'>Add Google</button>
+        <button type='button' onclick='saveProviders()'>Save</button>
       </div>
-    </div>
-
-    <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Voice servers</div>
-      <div class='muted'>Configured endpoints used for voice/TTS work.</div>
-      <div style='margin-top:10px'>__VOICE_SERVERS__</div>
     </div>
 
     <div class='card'>
@@ -1347,48 +1344,6 @@ function escAttr(s){
   }
 }
 
-function renderTinyboxSettings(s){
-  var el=document.getElementById('svcBox');
-  if (!el) return;
-  s = s || {};
-
-  var voiceEnabled = (s.voice_enabled !== false);
-  var llmEnabled = (s.llm_enabled === true);
-  var llmModel = String(s.llm_model || 'google/gemma-2-9b-it');
-  var voiceGpus = Array.isArray(s.voice_gpus) ? s.voice_gpus : [0,1];
-  var llmGpus = Array.isArray(s.llm_gpus) ? s.llm_gpus : [2];
-
-  var enabledModels = [
-    {kind:'llm', id:'google/gemma-2-9b-it', label:'Gemma 2 9B Instruct'},
-  ];
-
-  var html = '';
-  html += "<div class='kvs'>";
-
-  html += "<div class='k'>Voice service</div><div>" + (voiceEnabled ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>") + "</div>";
-  html += "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>enabled</span> &nbsp; <code>tortoise</code> <span class='pill good'>enabled</span></div>";
-  html += "<div class='k'>Voice GPUs</div><div><input id='set_voice_gpus' value='" + escAttr(voiceGpus.join(',')) + "' placeholder='0,1' /></div>";
-
-  html += "<div class='k'>LLM service</div><div>" + (llmEnabled ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>") + "</div>";
-  html += "<div class='k'>LLM enabled</div><div><label><input id='set_llm_enabled' type='checkbox' " + (llmEnabled ? 'checked' : '') + " /> Always on</label></div>";
-  html += "<div class='k'>LLM model</div><div><input id='set_llm_model' value='" + escAttr(llmModel) + "' /></div>";
-  html += "<div class='k'>LLM GPUs</div><div><input id='set_llm_gpus' value='" + escAttr(llmGpus.join(',')) + "' placeholder='2' /></div>";
-
-  html += "<div class='k'>Enabled models</div><div>" + enabledModels.map(function(m){ return '<div><code>'+escapeHtml(m.id)+'</code> — '+escapeHtml(m.label)+'</div>'; }).join('') + "</div>";
-
-  html += "</div>";
-  el.innerHTML = html;
-}
-
-function reloadTinyboxSettings(){
-  var el=document.getElementById('svcBox');
-  if (el) el.textContent='Loading…';
-  return fetchJsonAuthed('/api/settings/tinybox').then(function(j){
-    if (!j || !j.ok){ if(el) el.innerHTML="<div class='muted'>Error: "+escapeHtml((j&&j.error)||'unknown')+"</div>"; return; }
-    renderTinyboxSettings(j.settings || {});
-  }).catch(function(e){ if(el) el.innerHTML="<div class='muted'>Load failed: "+escapeHtml(String(e))+"</div>"; });
-}
-
 function parseGpuList(s){
   try{
     s = String(s||'');
@@ -1399,22 +1354,176 @@ function parseGpuList(s){
   }
 }
 
-function saveTinyboxSettings(){
-  var payload = {
-    voice_enabled: true,
-    voice_gpus: parseGpuList((document.getElementById('set_voice_gpus')||{}).value),
-    llm_enabled: !!((document.getElementById('set_llm_enabled')||{}).checked),
-    llm_model: String((document.getElementById('set_llm_model')||{}).value||'').trim() || 'google/gemma-2-9b-it',
-    llm_gpus: parseGpuList((document.getElementById('set_llm_gpus')||{}).value),
-  };
+function __provId(p){
+  return String((p&&p.id)||'').trim();
+}
 
-  return fetchJsonAuthed('/api/settings/tinybox', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+function __provTitle(p){
+  var kind=String((p&&p.kind)||'');
+  var name=String((p&&p.name)||'');
+  return name || (kind ? kind : 'provider');
+}
+
+function renderProviders(providers){
+  var el=document.getElementById('providersBox');
+  if (!el) return;
+  providers = Array.isArray(providers) ? providers : [];
+  if (!providers.length){
+    el.innerHTML = "<div class='muted'>No providers yet. Add Tinybox/OpenAI/Google above.</div>";
+    return;
+  }
+
+  var enabledModels = [
+    {id:'google/gemma-2-9b-it', label:'Gemma 2 9B Instruct', kind:'llm'},
+  ];
+
+  el.innerHTML = providers.map(function(p, idx){
+    var id = __provId(p) || ('p'+idx);
+    var kind = String(p.kind||'');
+    var name = String(p.name||'');
+
+    var monOn = !!(p.monitoring_enabled);
+    var voiceOn = !!(p.voice_enabled);
+    var llmOn = !!(p.llm_enabled);
+
+    var voiceG = Array.isArray(p.voice_gpus) ? p.voice_gpus : [0,1];
+    var llmG = Array.isArray(p.llm_gpus) ? p.llm_gpus : [2];
+    var llmModel = String(p.llm_model || 'google/gemma-2-9b-it');
+
+    var header = "<div class='row' style='justify-content:space-between;'>"+
+      "<div><div style='font-weight:950'>"+escapeHtml(name||kind||'Provider')+"</div><div class='muted'>"+escapeHtml(kind)+" • id: <code>"+escapeHtml(id)+"</code></div></div>"+
+      "<div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>"+
+        "<button class='secondary' type='button' onclick=\"toggleProv('"+escAttr(id)+"')\">Toggle</button>"+
+        "<button class='secondary' type='button' onclick=\"removeProvider('"+escAttr(id)+"')\">Remove</button>"+
+      "</div>"+
+    "</div>";
+
+    var body = "<div class='kvs' style='margin-top:10px'>"+
+      "<div class='k'>Monitoring</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+"/> Enabled</label></div>"+
+      "<div class='k'>Voice</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='voice_enabled' "+(voiceOn?'checked':'')+"/> Enabled</label></div>"+
+      "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>enabled</span> &nbsp; <code>tortoise</code> <span class='pill good'>enabled</span></div>"+
+      "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' /></div>"+
+
+      "<div class='k'>LLM</div><div><label><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='llm_enabled' "+(llmOn?'checked':'')+"/> Always on</label></div>"+
+      "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model'>"+
+        enabledModels.map(function(m){
+          var sel = (String(m.id)===llmModel) ? 'selected' : '';
+          return "<option value='"+escAttr(m.id)+"' "+sel+">"+escapeHtml(m.label)+"</option>";
+        }).join('')+
+      "</select></div>"+
+      "<div class='k'>LLM GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"' placeholder='2' /></div>"+
+
+      "<div class='k'>Enabled models</div><div>"+enabledModels.map(function(m){return '<div><code>'+escapeHtml(m.id)+'</code> — '+escapeHtml(m.label)+'</div>';}).join('')+"</div>"+
+    "</div>";
+
+    return "<div class='job'>" + header + "<div id='provBody_"+escAttr(id)+"' style='display:none'>" + body + "</div></div>";
+  }).join('');
+}
+
+function toggleProv(id){
+  try{
+    var b=document.getElementById('provBody_'+id);
+    if (!b) return;
+    b.style.display = (b.style.display==='none' || b.style.display==='') ? 'block' : 'none';
+  }catch(e){}
+}
+
+function collectProvidersFromUI(){
+  // Start from the last loaded providers snapshot.
+  var arr = (window.__SF_PROVIDERS && Array.isArray(window.__SF_PROVIDERS)) ? window.__SF_PROVIDERS : [];
+  // Clone
+  arr = arr.map(function(p){
+    try{ return JSON.parse(JSON.stringify(p||{})); }catch(e){ return (p||{}); }
+  });
+
+  var inputs = document.querySelectorAll('#providersBox [data-pid]');
+  for (var i=0;i<inputs.length;i++){
+    var el=inputs[i];
+    var pid=el.getAttribute('data-pid');
+    var k=el.getAttribute('data-k');
+    if (!pid || !k) continue;
+    var p = null;
+    for (var j=0;j<arr.length;j++){
+      if (String(arr[j].id||'')===pid){ p=arr[j]; break; }
+    }
+    if (!p) continue;
+
+    if (el.type==='checkbox'){
+      p[k] = !!el.checked;
+    } else if (k==='voice_gpus' || k==='llm_gpus'){
+      p[k] = parseGpuList(el.value);
+    } else {
+      p[k] = String(el.value||'').trim();
+    }
+  }
+  return arr;
+}
+
+function reloadProviders(){
+  var el=document.getElementById('providersBox');
+  if (el) el.textContent='Loading…';
+  return fetchJsonAuthed('/api/settings/providers').then(function(j){
+    if (!j || !j.ok){ if(el) el.innerHTML="<div class='muted'>Error: "+escapeHtml((j&&j.error)||'unknown')+"</div>"; return; }
+    window.__SF_PROVIDERS = (j.providers || []);
+    renderProviders(window.__SF_PROVIDERS);
+  }).catch(function(e){ if(el) el.innerHTML="<div class='muted'>Load failed: "+escapeHtml(String(e))+"</div>"; });
+}
+
+function saveProviders(){
+  var arr = collectProvidersFromUI();
+  return fetchJsonAuthed('/api/settings/providers', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({providers: arr})})
     .then(function(j){
       if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
       try{ toastSet('Saved', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-      return reloadTinyboxSettings();
+      return reloadProviders();
     })
     .catch(function(e){ alert('Save failed: '+String(e)); });
+}
+
+function __newId(prefix){
+  return (prefix||'p') + '_' + (Date.now().toString(36)) + '_' + (Math.random().toString(16).slice(2,8));
+}
+
+function addProviderTinybox(){
+  var arr = (window.__SF_PROVIDERS && Array.isArray(window.__SF_PROVIDERS)) ? window.__SF_PROVIDERS : [];
+  arr = arr.slice();
+  arr.unshift({
+    id: __newId('tinybox'),
+    kind: 'tinybox',
+    name: 'Tinybox',
+    monitoring_enabled: true,
+    voice_enabled: true,
+    voice_gpus: [0,1],
+    llm_enabled: false,
+    llm_model: 'google/gemma-2-9b-it',
+    llm_gpus: [2],
+  });
+  window.__SF_PROVIDERS = arr;
+  renderProviders(arr);
+}
+
+function addProviderOpenAI(){
+  var arr = (window.__SF_PROVIDERS && Array.isArray(window.__SF_PROVIDERS)) ? window.__SF_PROVIDERS : [];
+  arr = arr.slice();
+  arr.unshift({id: __newId('openai'), kind:'openai', name:'OpenAI', llm_enabled:false, voice_enabled:false, monitoring_enabled:false});
+  window.__SF_PROVIDERS = arr;
+  renderProviders(arr);
+}
+
+function addProviderGoogle(){
+  var arr = (window.__SF_PROVIDERS && Array.isArray(window.__SF_PROVIDERS)) ? window.__SF_PROVIDERS : [];
+  arr = arr.slice();
+  arr.unshift({id: __newId('google'), kind:'google', name:'Google', llm_enabled:false, voice_enabled:false, monitoring_enabled:false});
+  window.__SF_PROVIDERS = arr;
+  renderProviders(arr);
+}
+
+function removeProvider(id){
+  if (!confirm('Remove provider ' + id + '?')) return;
+  var arr = (window.__SF_PROVIDERS && Array.isArray(window.__SF_PROVIDERS)) ? window.__SF_PROVIDERS : [];
+  arr = arr.filter(function(p){ return String(p.id||'')!==String(id||''); });
+  window.__SF_PROVIDERS = arr;
+  renderProviders(arr);
 }
 
 function loadVoices(){
@@ -1893,7 +2002,7 @@ setDebugUiEnabled(loadDebugPref());
 loadHistory();
 loadVoices();
 startJobsStream();
-reloadTinyboxSettings();
+reloadProviders();
 
 try{
   var __bootText2 = __sfEnsureBootBanner();
@@ -4289,57 +4398,98 @@ def _settings_set(conn, key: str, val: dict[str, Any]) -> None:
     conn.commit()
 
 
-@app.get('/api/settings/tinybox')
-def api_settings_tinybox_get():
+def _default_providers() -> list[dict[str, Any]]:
+    # Default single Tinybox provider; user can add more.
+    return [
+        {
+            'id': 'tinybox_default',
+            'kind': 'tinybox',
+            'name': 'Tinybox',
+            'monitoring_enabled': True,
+            'voice_enabled': True,
+            'voice_gpus': [0, 1],
+            'llm_enabled': False,
+            'llm_model': 'google/gemma-2-9b-it',
+            'llm_gpus': [2],
+        }
+    ]
+
+
+@app.get('/api/settings/providers')
+def api_settings_providers_get():
     try:
         conn = db_connect()
         try:
             db_init(conn)
-            s = _settings_get(conn, 'tinybox')
+            s = _settings_get(conn, 'providers')
         finally:
             conn.close()
-        if s is None:
-            # defaults
-            s = {
-                'voice_enabled': True,
-                'voice_gpus': [0, 1],
-                'llm_enabled': False,
-                'llm_model': 'google/gemma-2-9b-it',
-                'llm_gpus': [2],
-            }
-        return {'ok': True, 'settings': s}
+        providers = None
+        if isinstance(s, dict):
+            providers = s.get('providers')
+        if not isinstance(providers, list) or not providers:
+            providers = _default_providers()
+        # sanitize minimal
+        out = []
+        for p in providers:
+            if not isinstance(p, dict):
+                continue
+            pid = str(p.get('id') or '').strip()
+            if not pid:
+                continue
+            out.append(p)
+        return {'ok': True, 'providers': out}
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
-@app.post('/api/settings/tinybox')
-def api_settings_tinybox_set(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+@app.post('/api/settings/providers')
+def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     try:
-        s = payload or {}
-        # Normalize
-        def _ints(x):
-            if not isinstance(x, list):
-                return []
-            out = []
-            for v in x:
-                try:
-                    out.append(int(v))
-                except Exception:
-                    pass
-            return out
+        providers = (payload or {}).get('providers')
+        if not isinstance(providers, list):
+            return {'ok': False, 'error': 'bad_providers'}
 
-        out = {
-            'voice_enabled': bool(s.get('voice_enabled', True)),
-            'voice_gpus': _ints(s.get('voice_gpus') or [0, 1]),
-            'llm_enabled': bool(s.get('llm_enabled', False)),
-            'llm_model': str(s.get('llm_model') or 'google/gemma-2-9b-it'),
-            'llm_gpus': _ints(s.get('llm_gpus') or [2]),
-        }
+        # Basic validation + normalization
+        norm = []
+        for p in providers:
+            if not isinstance(p, dict):
+                continue
+            pid = str(p.get('id') or '').strip()
+            if not pid or len(pid) > 80:
+                continue
+            kind = str(p.get('kind') or '').strip()[:40]
+            name = str(p.get('name') or '').strip()[:80]
+
+            def _ints(x):
+                if not isinstance(x, list):
+                    return []
+                out2 = []
+                for v in x:
+                    try:
+                        out2.append(int(v))
+                    except Exception:
+                        pass
+                return out2
+
+            norm.append(
+                {
+                    'id': pid,
+                    'kind': kind,
+                    'name': name,
+                    'monitoring_enabled': bool(p.get('monitoring_enabled', False)),
+                    'voice_enabled': bool(p.get('voice_enabled', False)),
+                    'voice_gpus': _ints(p.get('voice_gpus') or []),
+                    'llm_enabled': bool(p.get('llm_enabled', False)),
+                    'llm_model': str(p.get('llm_model') or '').strip(),
+                    'llm_gpus': _ints(p.get('llm_gpus') or []),
+                }
+            )
 
         conn = db_connect()
         try:
             db_init(conn)
-            _settings_set(conn, 'tinybox', out)
+            _settings_set(conn, 'providers', {'providers': norm})
         finally:
             conn.close()
 
