@@ -1393,8 +1393,8 @@ function renderProviders(providers){
     var header = "<div class='row' style='justify-content:space-between;'>"+
       "<div><div style='font-weight:950'>"+escapeHtml(name||kind||'Provider')+"</div><div class='muted'>"+escapeHtml(kind)+" • id: <code>"+escapeHtml(id)+"</code></div></div>"+
       "<div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>"+
-        "<button class='secondary' type='button' onclick=\"toggleProv('"+escAttr(id)+"')\">Toggle</button>"+
-        "<button class='secondary' type='button' onclick=\"removeProvider('"+escAttr(id)+"')\">Remove</button>"+
+        "<button class='secondary' type='button' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)'>Toggle</button>"+
+        "<button class='secondary' type='button' data-pid='"+escAttr(id)+"' onclick='removeProviderBtn(this)'>Remove</button>"+
       "</div>"+
     "</div>";
 
@@ -1425,6 +1425,22 @@ function toggleProv(id){
     var b=document.getElementById('provBody_'+id);
     if (!b) return;
     b.style.display = (b.style.display==='none' || b.style.display==='') ? 'block' : 'none';
+  }catch(e){}
+}
+
+function toggleProvBtn(btn){
+  try{
+    var id = btn && btn.getAttribute ? (btn.getAttribute('data-pid')||'') : '';
+    if (!id) return;
+    toggleProv(id);
+  }catch(e){}
+}
+
+function removeProviderBtn(btn){
+  try{
+    var id = btn && btn.getAttribute ? (btn.getAttribute('data-pid')||'') : '';
+    if (!id) return;
+    removeProvider(id);
   }catch(e){}
 }
 
