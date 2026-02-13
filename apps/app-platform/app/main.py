@@ -2922,18 +2922,20 @@ def voices_new_page(response: Response):
         <option value='upload'>Upload</option>
         <option value='url'>Paste URL</option>
       </select>
+
       <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
         <select id='clipPreset'></select>
       </div>
-    </div>
 
-    <div id='clipUploadRow' style='margin-top:8px'>
-      <input id='clipFile' type='file' accept='audio/*' />
-      <div class='muted' style='margin-top:6px'>Uploads to Spaces.</div>
+      <div id='clipUploadRow' class='hide' style='flex:1;min-width:0'>
+        <input id='clipFile' type='file' accept='audio/*' />
+      </div>
+
+      <div id='clipUrlRow' class='hide' style='flex:1;min-width:0'>
+        <input id='clipUrl' placeholder='https://…/clip.wav' />
+      </div>
     </div>
-    <div id='clipUrlRow' class='hide' style='margin-top:8px'>
-      <input id='clipUrl' placeholder='https://…/clip.wav' />
-    </div>
+    <div id='clipUploadHelp' class='muted hide' style='margin-top:6px'>Uploads to Spaces.</div>
 
     <div class='k'>Sample text</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
@@ -3004,9 +3006,11 @@ try{
 function setVis(){
   var m=(($('clipMode')||{}).value||'upload');
   var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
+  var h=$('clipUploadHelp');
   if(u) u.classList.toggle('hide', m!=='upload');
   if(p) p.classList.toggle('hide', m!=='preset');
   if(r) r.classList.toggle('hide', m!=='url');
+  if(h) h.classList.toggle('hide', m!=='upload');
 }
 
 function loadEngines(){
@@ -3279,6 +3283,8 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   try{ loadPresets(); }catch(e){}
   try{ setVis(); }catch(e){}
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
+  // Suggest a random voice name on first load (only if empty)
+  try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
   // Mark JS as running for the debug banner.
   try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
 }); }catch(e){}
