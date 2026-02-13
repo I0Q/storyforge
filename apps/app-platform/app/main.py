@@ -6,6 +6,7 @@ from typing import Any
 
 import json
 import time
+import threading
 from datetime import datetime
 import html as pyhtml
 
@@ -5341,6 +5342,68 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
+# Round-robin GPU selection state (best-effort, in-memory)
+_GPU_RR: dict[str, int] = {}
+_GPU_RR_LOCK = threading.Lock() if 'threading' in globals() else None
+
+
+def _pick_rr_from_list(key: str, gpus: list[int]) -> int | None:
+    try:
+        gpus = [int(x) for x in (gpus or [])]
+    except Exception:
+        gpus = []
+    if not gpus:
+        return None
+    # Stable order
+    gpus = sorted(list(dict.fromkeys(gpus)))
+
+    # Thread-safe if possible
+    try:
+        lock = _GPU_RR_LOCK
+        if lock is None:
+            import threading as _th
+            lock = _th.Lock()
+            globals()['_GPU_RR_LOCK'] = lock
+        with lock:
+            cur = int(_GPU_RR.get(key) or 0)
+            gpu = gpus[cur % len(gpus)]
+            _GPU_RR[key] = (cur + 1) % len(gpus)
+            return int(gpu)
+    except Exception:
+        # fallback
+        return int(gpus[0])
+
+
+def _get_tinybox_provider() -> dict[str, Any] | None:
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            s = _settings_get(conn, 'providers')
+        finally:
+            conn.close()
+        providers = None
+        if isinstance(s, dict):
+            providers = s.get('providers')
+        if not isinstance(providers, list) or not providers:
+            providers = _default_providers()
+        for p in providers:
+            if isinstance(p, dict) and str(p.get('kind') or '').strip() == 'tinybox':
+                return p
+    except Exception:
+        return None
+    return None
+
+
+def _pick_voice_gpu_rr() -> int | None:
+    p = _get_tinybox_provider() or {}
+    pid = str(p.get('id') or 'tinybox')
+    gpus = p.get('voice_gpus') if isinstance(p, dict) else None
+    if not isinstance(gpus, list):
+        gpus = []
+    return _pick_rr_from_list('voice:' + pid, gpus)
+
+
 def _job_patch(job_id: str, patch: dict[str, Any]) -> None:
     conn = db_connect()
     try:
@@ -5440,6 +5503,10 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
             'display_name': str((payload or {}).get('display_name') or '').strip() or 'Voice',
             'roster_id': str((payload or {}).get('roster_id') or '').strip() or '',
             'sample_text': text,
+            # passthrough for roster metadata
+            'tortoise_voice': str((payload or {}).get('tortoise_voice') or '').strip(),
+            'tortoise_gender': str((payload or {}).get('tortoise_gender') or '').strip(),
+            'tortoise_preset': str((payload or {}).get('tortoise_preset') or '').strip(),
         }
 
         _job_patch(
@@ -5462,9 +5529,16 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 _job_patch(job_id, {'segments_done': 1})
 
                 # stage 2: synth
+                # Respect configured provider GPU list via round-robin selection.
+                gpu = None
+                try:
+                    gpu = _pick_voice_gpu_rr()
+                except Exception:
+                    gpu = None
+
                 r = requests.post(
                     GATEWAY_BASE + '/v1/tts',
-                    json={'engine': engine, 'voice': voice, 'text': text, 'upload': True},
+                    json={'engine': engine, 'voice': voice, 'text': text, 'upload': True, 'gpu': gpu},
                     headers=_h(),
                     timeout=1800,
                 )
