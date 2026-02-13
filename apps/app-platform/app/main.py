@@ -265,6 +265,11 @@ VOICES_BASE_CSS = (
     textarea{min-height:90px;}
     .hide{display:none;}
 
+    /* Debug banner (Build/JS) */
+    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);display:flex;align-items:center;gap:10px;}
+    body.debugOff #boot{display:none}
+    .boot strong{color:var(--text);}
+
     /* bottom dock */
     .dock{display:block;position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
     .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
@@ -415,6 +420,64 @@ function closeMonitorEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagatio
 function bindMonitorClose(){ try{ var btn=document.getElementById('monCloseBtn'); if(btn && !btn.__bound){ btn.__bound=true; btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false}); btn.addEventListener('click', function(ev){ closeMonitorEv(ev); }); } }catch(e){} }
 try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
 try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+</script>
+"""
+
+DEBUG_BANNER_HTML = """
+  <div id='boot' class='boot muted'>
+    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
+    <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
+      </svg>
+    </button>
+  </div>
+"""
+
+DEBUG_BANNER_BOOT_JS = """
+<script>
+// minimal boot script (runs even if the main app script has a syntax error)
+window.__SF_BUILD = '__BUILD__';
+window.__SF_BOOT_TS = Date.now();
+window.__SF_LAST_ERR = '';
+
+function __sfEnsureBootBanner(){
+  // Ensure we always have a dedicated #bootText span + copy button.
+  try{
+    var boot = document.getElementById('boot');
+    if (!boot) return null;
+    var t = document.getElementById('bootText');
+    if (t) return t;
+
+    boot.innerHTML = "<span id='bootText'><strong>Build</strong>: " + window.__SF_BUILD + " • JS: ok</span>" +
+      "<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>" +
+      "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4\"/></svg>" +
+      "</button>";
+
+    return document.getElementById('bootText');
+  }catch(e){
+    return null;
+  }
+}
+
+function __sfSetDebugInfo(msg){
+  try{
+    window.__SF_LAST_ERR = msg || '';
+    var t = __sfEnsureBootBanner();
+    if (t) t.textContent = 'Build: ' + window.__SF_BUILD + ' • JS: ' + (window.__SF_LAST_ERR || 'ok');
+  }catch(e){}
+}
+
+window.addEventListener('error', function(ev){
+  var m = 'unknown';
+  try{ m = (ev && (ev.message||ev.type)) ? (ev.message||ev.type) : 'unknown'; }catch(_e){}
+  __sfSetDebugInfo('error: ' + m);
+});
+window.addEventListener('unhandledrejection', function(_ev){
+  __sfSetDebugInfo('promise error');
+});
+
+try{ __sfSetDebugInfo(''); }catch(e){}
 </script>
 """
 
@@ -2728,6 +2791,7 @@ def settings_new_provider_page(response: Response):
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
+    build = int(time.time())
     # Separate screen for generating/testing a voice before saving.
     html = '''<!doctype html>
 <html>
@@ -2738,6 +2802,7 @@ def voices_new_page(response: Response):
   <style>__VOICES_BASE_CSS____VOICE_NEW_EXTRA_CSS__</style>
 </head>
 <body>
+  __DEBUG_BANNER_BOOT_JS__
   <div class='navBar'>
     <div class='top'>
       <div>
@@ -2773,6 +2838,8 @@ def voices_new_page(response: Response):
       </div>
     </div>
   </div>
+
+  __DEBUG_BANNER_HTML__
 
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Generate voice</div>
@@ -3439,6 +3506,9 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
     html = (html
         .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
         .replace('__VOICE_NEW_EXTRA_CSS__', VOICE_NEW_EXTRA_CSS)
+        .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
+        .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
+        .replace('__BUILD__', str(build))
     )
     return html
 @app.get('/todo', response_class=HTMLResponse)
