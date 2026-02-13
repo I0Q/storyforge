@@ -156,6 +156,8 @@ INDEX_BASE_CSS = base_css("""\
     .pill.bad{color:var(--bad);border-color:rgba(255,77,77,.35)}
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
+    .kvs > div{min-width:0;align-self:center;}
+    .provKvs .k{padding-top:2px;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
@@ -1531,14 +1533,13 @@ function renderProviders(providers){
       "</div>"+
     "</div>";
 
-    var body = "<div class='kvs' style='margin-top:10px'>"+
+    var body = "<div class='kvs provKvs' style='margin-top:10px'>"+
       (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' /></div>") : "")+
       "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+" onchange='onProvMonitorToggle(this); event.stopPropagation();'/><span class='slider'></span></label></div>"+
-      "<div class='k'>Voice service</div><div><span class='pill good'>available</span></div>"+
-      "<div class='k'>Voice engines</div><div><code>xtts</code> <span class='pill good'>available</span> &nbsp; <code>tortoise</code> <span class='pill good'>available</span></div>"+
-      "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' /></div>"+
 
-      "<div class='k'>LLM service</div><div><span class='pill good'>available</span></div>"+
+      "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' /></div>"+
+      "<div class='k'>Voice engines</div><div class='muted'><code>xtts</code> • <code>tortoise</code></div>"+
+
       "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model'>"+
         enabledModels.map(function(m){
           var sel = (String(m.id)===llmModel) ? 'selected' : '';
@@ -1546,8 +1547,6 @@ function renderProviders(providers){
         }).join('')+
       "</select></div>"+
       "<div class='k'>LLM GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"' placeholder='2' /></div>"+
-
-      "<div class='k'>Enabled models</div><div>"+enabledModels.map(function(m){return '<div><code>'+escapeHtml(m.id)+'</code> — '+escapeHtml(m.label)+'</div>';}).join('')+"</div>"+
     "</div>";
 
     return "<div class='job'>" + header + "<div id='provBody_"+escAttr(id)+"' style='display:none'>" + body + "</div></div>";
