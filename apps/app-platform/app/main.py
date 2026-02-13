@@ -266,6 +266,9 @@ VOICES_BASE_CSS = (
     /* layout */
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
+    .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .fadeText::-webkit-scrollbar{display:none;}
     .rowEnd{justify-content:flex-end;margin-left:auto;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
@@ -2472,9 +2475,16 @@ def voices_edit_page(voice_id: str, response: Response):
     <div class='muted'>Engine</div>
     <div class='term' style='margin-top:8px;'>__ENG__</div>
 
+    <div class='row' style='justify-content:space-between;align-items:baseline;margin-top:12px'>
+      <div class='muted'>Sample text</div>
+      <button class='secondary' type='button' onclick='playSample()'>Play</button>
+    </div>
+    <div class='term' id='sample_text' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
+    <audio id='audio' class='hide' controls style='width:100%;margin-top:10px'></audio>
+
     <div class='muted' style='margin-top:12px'>voice_ref</div>
-    <div class='row' style='gap:10px;flex-wrap:nowrap;margin-top:8px'>
-      <div class='term' id='voice_ref' style='flex:1;min-width:0;overflow:auto;-webkit-overflow-scrolling:touch;'>__VREF__</div>
+    <div class='fadeLine' style='margin-top:8px'>
+      <div class='fadeText' id='voice_ref' title='__VREF__'>__VREF__</div>
       <button class='copyBtn' type='button' onclick='copyVoiceRef()' aria-label='Copy voice ref' title='Copy voice ref'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
@@ -2482,14 +2492,11 @@ def voices_edit_page(voice_id: str, response: Response):
       </button>
     </div>
 
-    <div class='muted' style='margin-top:12px'>Sample text</div>
-    <div class='term' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
-
     <div class='row' style='margin-top:12px'>
       <button type='button' onclick='save()'>Save</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px'>-</div>
+    <div id='out' class='muted' style='margin-top:10px'></div>
   </div>
 
 <script>
@@ -2537,6 +2544,21 @@ function __copyText(txt){
     ta.focus(); ta.select();
     try{ document.execCommand('copy'); }catch(_e){}
     ta.remove();
+  }catch(e){}
+}
+
+function playSample(){
+  try{
+    var out=$('out'); if(out) out.textContent='Generating sample…';
+    fetch('/api/voices/__VID_RAW__/sample', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
+      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+      .then(function(j){
+        if (!j || !j.ok || !j.sample_url){ throw new Error((j&&j.error)||'no_sample_url'); }
+        var a=$('audio');
+        if (a){ a.src=String(j.sample_url||''); a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+        if(out) out.textContent='';
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
