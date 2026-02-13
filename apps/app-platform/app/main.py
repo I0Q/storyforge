@@ -146,8 +146,9 @@ INDEX_BASE_CSS = base_css("""\
     .slider:before{position:absolute;content:'';height:24px;width:24px;left:3px;top:2px;background:white;transition:.18s;border-radius:999px;}
     .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
     .switch input:checked + .slider:before{transform:translateX(22px);}
-    input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);}
+    input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);}
     textarea{min-height:90px;}
+    select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) calc(50% - 2px),calc(100% - 13px) calc(50% - 2px);background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px;}
     pre{background:#070b16;color:#d7e1ff;padding:12px;border-radius:12px;overflow:auto;border:1px solid var(--line)}
     .term{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.25;white-space:pre;}
     .job{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}
@@ -156,9 +157,12 @@ INDEX_BASE_CSS = base_css("""\
     .pill.good{color:var(--good);border-color:rgba(38,208,124,.35)}
     .pill.bad{color:var(--bad);border-color:rgba(255,77,77,.35)}
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
-    .kvs{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;margin-top:8px;font-size:13px;}
+    .kvs{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin-top:8px;font-size:13px;}
     .kvs > div{min-width:0;align-self:center;}
     .provKvs .k{padding-top:2px;}
+    .provKvs input,.provKvs select{max-width:100%;}
+    .provSection{grid-column:1 / -1;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);font-weight:950;}
+    .provHint{grid-column:1 / -1;color:var(--muted);font-size:12px;margin-top:-2px;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
@@ -1537,10 +1541,12 @@ function renderProviders(providers){
       (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' style='width:100%;min-width:0' /></div>") : "")+
       "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+" onchange='onProvMonitorToggle(this); event.stopPropagation();'/><span class='slider'></span></label></div>"+
 
-      "<div class='k' style='font-weight:950'>Voice service</div><div class='muted'><code>xtts</code> • <code>tortoise</code></div>"+
+      "<div class='provSection'>Voice service</div>"+
+      "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
       "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' style='width:96px;max-width:100%;min-width:0' /></div>"+
 
-      "<div class='k' style='font-weight:950'>LLM service</div><div class='muted'>Model + GPUs</div>"+
+      "<div class='provSection'>LLM service</div>"+
+      "<div class='provHint'>Choose a model and which GPU(s) it can use.</div>"+
       "<div class='k'>LLM GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"' placeholder='2' style='width:72px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model' style='width:220px;max-width:100%;min-width:0'>"+
           enabledModels.map(function(m){
