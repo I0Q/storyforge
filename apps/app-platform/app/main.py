@@ -2341,6 +2341,7 @@ def voices_root(response: Response):
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
+    build = int(time.time())
     try:
         voice_id = validate_voice_id(voice_id)
         conn = db_connect()
@@ -2371,6 +2372,7 @@ def voices_edit_page(voice_id: str, response: Response):
   <style>__VOICES_BASE_CSS____VOICE_EDIT_EXTRA_CSS__</style>
 </head>
 <body>
+  __DEBUG_BANNER_BOOT_JS__
   <div class='navBar'>
     <div class='top'>
       <div>
@@ -2408,6 +2410,8 @@ def voices_edit_page(voice_id: str, response: Response):
     </div>
   </div>
 
+  __DEBUG_BANNER_HTML__
+
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
 
@@ -2426,13 +2430,20 @@ def voices_edit_page(voice_id: str, response: Response):
     <div style='font-weight:950;margin-bottom:6px;'>Provider fields</div>
 
     <div class='muted'>Engine</div>
-    <input id='engine' value='__ENG__' placeholder='xtts' />
+    <input id='engine' value='__ENG__' placeholder='xtts' disabled />
 
     <div class='muted' style='margin-top:12px'>voice_ref</div>
-    <input id='voice_ref' value='__VREF__' placeholder='speaker_03' />
+    <div class='row' style='gap:10px;flex-wrap:nowrap'>
+      <input id='voice_ref' value='__VREF__' placeholder='speaker_03' readonly style='flex:1;min-width:0' />
+      <button class='copyBtn' type='button' onclick='copyVoiceRef()' aria-label='Copy voice ref' title='Copy voice ref'>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
+        </svg>
+      </button>
+    </div>
 
     <div class='muted' style='margin-top:12px'>Sample text</div>
-    <textarea id='sample_text' placeholder='Hello…'>__STXT__</textarea>
+    <textarea id='sample_text' placeholder='Hello…' readonly>__STXT__</textarea>
 
     <div class='row' style='margin-top:12px'>
       <button type='button' onclick='save()'>Save</button>
@@ -2451,9 +2462,6 @@ function save(){
   var out=$('out'); if(out) out.textContent='Saving…';
   var payload={
     display_name: val('display_name'),
-    engine: val('engine'),
-    voice_ref: val('voice_ref'),
-    sample_text: val('sample_text'),
     enabled: chk('enabled')
   };
   fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
@@ -2464,20 +2472,40 @@ function save(){
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
 }
 
-function testSample(){
-  var out=$('out'); if(out) out.textContent='Generating…';
-  var payload={engine: val('engine'), voice: val('voice_ref'), text: val('sample_text') || ('Hello. This is ' + (val('display_name')||'a voice') + '.'), upload:true};
-  fetch('/api/tts', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
-    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-    .then(function(j){
-      var body = (j && j.body) ? j.body : j;
-      if (body && body.ok === false){ if(out) out.innerHTML='<div class="err">'+escJs(body.error||'tts_failed')+'</div>'; return; }
-      var url = (body && (body.url || body.sample_url)) ? (body.url || body.sample_url) : '';
-      if (!url){ if(out) out.innerHTML='<div class="err">No URL returned</div>'; return; }
-      if(out) out.innerHTML = "<div class='muted'>Sample: <code>" + escJs(url) + "</code></div>";
-      var a=$('audio');
-      if (a){ a.src=url; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
+function __copyText(txt){
+  try{
+    txt = String(txt||'');
+    if (!txt) return;
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).catch(function(){
+        try{
+          var ta=document.createElement('textarea');
+          ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          try{ document.execCommand('copy'); }catch(_e){}
+          ta.remove();
+        }catch(_e){}
+      });
+      return;
+    }
+  }catch(e){}
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try{ document.execCommand('copy'); }catch(_e){}
+    ta.remove();
+  }catch(e){}
+}
+
+function copyVoiceRef(){
+  try{
+    var txt = val('voice_ref');
+    __copyText(txt);
+    try{ if (typeof toastSet==='function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(_e){}
+  }catch(e){}
 }
 </script>
 
@@ -2803,6 +2831,9 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
     html = (html
         .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
         .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
+        .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
+        .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
+        .replace('__BUILD__', str(build))
     )
     return html
 
