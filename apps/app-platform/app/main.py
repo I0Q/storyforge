@@ -276,11 +276,13 @@ VOICES_BASE_CSS = (
     .sheet{will-change:transform;display:none;position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
     html.monOn .sheetBackdrop{display:block;}
     html.monOn .sheet{display:block;}
-    .sheetInner{max-width:920px;margin:0 auto;padding:12px;}
+    .sheetInner{max-width:920px;margin:0 auto;padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .sheetHandle{width:46px;height:5px;border-radius:999px;background:rgba(255,255,255,.18);margin:2px auto 10px auto;}
     .sheetTitle{font-weight:950;}
+    #monitorSheet button{touch-action:manipulation;}
 
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .meter{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;}
     .meter .k{color:var(--muted);font-size:12px;font-weight:900;}
     .meter .v{font-weight:950;margin-top:4px;}
     .bar{height:10px;background:#0a0f20;border:1px solid rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-top:8px;}
