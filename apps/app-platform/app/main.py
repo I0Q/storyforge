@@ -2976,7 +2976,14 @@ function genSampleText(){
 
   startAnim();
 
-  return jsonFetch('/api/voices/sample_text_random', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})})
+  // Safari sometimes surfaces generic "TypeError: Load failed" for network/proxy failures.
+  // Do a small retry to smooth over transient disconnects.
+  function runOnce(){
+    return jsonFetch('/api/voices/sample_text_random', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  }
+
+  return runOnce()
+    .catch(function(_e){ return new Promise(function(res){ setTimeout(res, 500); }).then(runOnce); })
     .then(function(j){
       stopAnim();
       if (!j || !j.ok || !j.text){
@@ -2989,7 +2996,7 @@ function genSampleText(){
     .catch(function(e){
       stopAnim();
       if (ta){ ta.value = origVal; ta.placeholder = origPh; }
-      if (out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>';
+      if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
     });
 }
 
@@ -4488,7 +4495,8 @@ def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
             'max_tokens': int(payload.get('max_tokens') or 90),
         }
 
-        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=60)
+        # First call to a cold model can take a while (download/compile).
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=120)
         r.raise_for_status()
         j = r.json()
         text = ''
