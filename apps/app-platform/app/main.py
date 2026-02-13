@@ -4478,21 +4478,20 @@ def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
     try:
         payload = payload or {}
         # Keep it short + TTS-friendly.
-        system = (
-            "You write short sample scripts for text-to-speech voice demos. "
-            "Return plain text only (no quotes, no markdown, no emojis)."
-        )
-        user = (
+        # NOTE: our vLLM chat endpoint for Gemma rejects "system" role.
+        # Put all instructions in the user message to stay compatible.
+        prompt = (
+            "Write a short sample script for a text-to-speech voice demo. "
             "Generate 1-2 sentences (<= 220 characters) that sound natural when spoken aloud. "
-            "Avoid numbers, URLs, and special characters."
+            "Avoid numbers, URLs, and special characters. "
+            "Return plain text only (no quotes, no markdown, no emojis)."
         )
         model = str(payload.get('model') or 'google/gemma-2-9b-it')
 
         req = {
             'model': model,
             'messages': [
-                {'role': 'system', 'content': system},
-                {'role': 'user', 'content': user},
+                {'role': 'user', 'content': prompt},
             ],
             'temperature': float(payload.get('temperature') or 0.9),
             'max_tokens': int(payload.get('max_tokens') or 90),
