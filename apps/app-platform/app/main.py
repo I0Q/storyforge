@@ -4467,7 +4467,7 @@ def api_ping():
 def api_metrics():
     try:
         # Keep this endpoint snappy; it is polled by the UI.
-        return _get('/v1/metrics', timeout_s=4.0)
+        return _get('/v1/metrics', timeout_s=12.0)
     except HTTPException as e:
         return {"ok": False, "error": e.detail}
     except Exception as e:
@@ -4480,7 +4480,7 @@ def api_metrics_stream():
         # Keep-alive + periodic samples. EventSource will auto-reconnect.
         while True:
             try:
-                m = _get('/v1/metrics', timeout_s=4.0)
+                m = _get('/v1/metrics', timeout_s=12.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception as e:
