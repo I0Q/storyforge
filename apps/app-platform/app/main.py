@@ -1122,9 +1122,16 @@ function renderJobs(jobs){
       + `</div>`
     ) : '';
 
+    const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
+    const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
+
+    const sfmlRow = isSample ? '' : (
+      `<div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`
+    );
+
     return `<div class='job' data-jobid='${escAttr(job.id||'')}' data-url='${escAttr(job.mp3_url||'')}' data-meta='${escAttr(job.meta_json||'')}'>
       <div class='row' style='justify-content:space-between;'>
-        <div class='title'>${job.title||job.id}</div>
+        <div class='title'>${escapeHtml(cardTitle)}</div>
         <div>${pill(job.state)}</div>
       </div>
       <div class='kvs'>
@@ -1133,7 +1140,7 @@ function renderJobs(jobs){
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>progress</div><div>${progText}${progBar}</div>
         <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
-        <div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        ${sfmlRow}
       </div>
       ${actions}
     </div>`;
