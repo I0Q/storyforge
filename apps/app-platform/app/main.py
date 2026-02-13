@@ -2289,7 +2289,7 @@ def api_voice_provider_engines():
     try:
         r = requests.get(
             GATEWAY_BASE + '/v1/engines',
-            timeout=6,
+            timeout=12,
             headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'},
         )
         if r.status_code != 200:
@@ -2311,7 +2311,7 @@ def api_voice_provider_presets():
     try:
         r = requests.get(
             GATEWAY_BASE + '/v1/voice-clips',
-            timeout=6,
+            timeout=20,
             headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'},
         )
         if r.status_code != 200:
@@ -3103,7 +3103,8 @@ function loadEngines(){
 }
 
 function loadPresets(){
-  return jsonFetch('/api/voice_provider/presets').then(function(j){
+  function runOnce(){ return jsonFetch('/api/voice_provider/presets'); }
+  return runOnce().catch(function(_e){ return new Promise(function(res){ setTimeout(res, 600); }).then(runOnce); }).then(function(j){
     var sel=$('clipPreset'); if(!sel) return;
     sel.innerHTML='';
 
