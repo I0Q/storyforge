@@ -1699,11 +1699,18 @@ function loadVoices(){
       var nm = v.display_name || v.id;
       var meta = [];
       if (v.engine) meta.push(v.engine);
-      if (v.voice_ref) meta.push(v.voice_ref);
+      // Prefer showing the saved playable sample URL (if present). Otherwise fall back to voice_ref.
+      if (v.sample_url) meta.push('sample');
+      else if (v.voice_ref) meta.push(v.voice_ref);
       var metaLine = meta.join(' • ');
       var en = (v.enabled!==false);
       var pill = en ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>";
-      var idEnc = encodeURIComponent(v.id);
+
+      var playBtn = '';
+      if (v.sample_url){
+        playBtn = "<button class='secondary' data-vid='" + idEnc + "' data-sample='" + escAttr(v.sample_url||'') + "' onclick='playVoiceEl(this)'>Play</button>";
+      }
+
       var card = "<div class='job'>"
         + "<div class='row' style='justify-content:space-between;'>"
         + "<div class='title'>" + escapeHtml(nm) + "</div>"
@@ -1711,13 +1718,15 @@ function loadVoices(){
         + "</div>"
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
-        + "<button class='secondary' data-vid='" + idEnc + "' onclick='playVoiceEl(this)'>Play</button>"
+        + playBtn
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
         + "</div>"
-        + "<audio id='aud-" + idEnc + "' class='" + (v.sample_url ? '' : 'hide') + "' controls style='width:100%;margin-top:10px' src='" + escAttr(v.sample_url||'') + "'></audio>"
+        + "<div id='audWrap-" + idEnc + "' class='hide' style='margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:14px;background:#0b1020'>"
+        + "<audio id='aud-" + idEnc + "' controls style='width:100%'></audio>"
+        + "</div>"
         + "</div>";
 
-      return "<div class='swipe voiceSwipe'>"
+      return "<div class='swipe voiceSwipe'>
         + "<div class='swipeInner'>"
         + "<div class='swipeMain'>" + card + "</div>"
         + "<div class='swipeKill'><button class='swipeDelBtn' type='button' data-vid='" + idEnc + "' onclick='deleteVoiceBtn(this)'>Delete</button></div>"
@@ -1818,23 +1827,16 @@ function editVoice(idEnc){
 function playVoiceEl(btn){
   try{
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
-    var id = decodeURIComponent(idEnc||'');
-    if (!id) return;
+    var sample = btn ? String(btn.getAttribute('data-sample')||'').trim() : '';
+    if (!idEnc || !sample) return;
+
+    var wrap = document.getElementById('audWrap-' + idEnc);
     var a = document.getElementById('aud-' + idEnc);
-    if (a && a.src){
+    if (wrap) wrap.classList.remove('hide');
+    if (a){
+      if (!a.src) a.src = sample;
       try{ a.play(); }catch(e){}
-      return;
     }
-    // If no sample yet, generate then play.
-    return fetchJsonAuthed('/api/voices/' + encodeURIComponent(id) + '/sample', {method:'POST'})
-      .then(function(j){
-        if (j && j.ok && j.sample_url){
-          var a2 = document.getElementById('aud-' + idEnc);
-          if (a2){ a2.src = j.sample_url; a2.classList.remove('hide'); try{ a2.play(); }catch(e){} }
-          return loadVoices();
-        }
-        alert((j && j.error) ? j.error : 'Play failed');
-      }).catch(function(e){ alert(String(e)); });
   }catch(e){}
 }
 
