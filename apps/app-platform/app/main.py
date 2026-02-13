@@ -480,10 +480,12 @@ function __sfEnsureBootBanner(){
     var t = document.getElementById('bootText');
     if (t) return t;
 
-    boot.innerHTML = "<span id='bootText'><strong>Build</strong>: " + window.__SF_BUILD + " • JS: ok</span>" +
-      "<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>" +
-      "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4\"/></svg>" +
-      "</button>";
+    boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} • JS: ok</span>` +
+      `<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>` +
+      `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">` +
+      `<path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>` +
+      `</svg>` +
+      `</button>`;
 
     return document.getElementById('bootText');
   }catch(e){
