@@ -503,6 +503,43 @@ function __sfTryBootBanner(n){
   }catch(e){}
 }
 
+// Copy helper (works even if the main JS bundle is broken)
+function __sfCopyText(txt){
+  try{
+    txt = String(txt||'');
+    if (!txt) return;
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).catch(function(){
+        try{
+          var ta=document.createElement('textarea');
+          ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          try{ document.execCommand('copy'); }catch(_e){}
+          ta.remove();
+        }catch(_e){}
+      });
+      return;
+    }
+  }catch(e){}
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try{ document.execCommand('copy'); }catch(_e){}
+    ta.remove();
+  }catch(e){}
+}
+
+function copyBoot(){
+  try{
+    var t = (document.getElementById('bootText') || document.getElementById('boot'));
+    var txt = t ? (t.textContent || '') : '';
+    __sfCopyText(txt);
+  }catch(e){}
+}
+
 try{
   // Kick once now + again after DOM ready to avoid "booting" getting stuck.
   __sfTryBootBanner(0);
