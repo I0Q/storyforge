@@ -425,7 +425,7 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
 
 DEBUG_BANNER_HTML = """
   <div id='boot' class='boot muted'>
-    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: ok</span>
+    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
     <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
@@ -477,7 +477,20 @@ window.addEventListener('unhandledrejection', function(_ev){
   __sfSetDebugInfo('promise error');
 });
 
-try{ __sfSetDebugInfo(''); }catch(e){}
+function __sfTryBootBanner(n){
+  try{
+    // If the banner HTML is rendered later in the page, we may run before #boot exists.
+    if (document.getElementById('bootText')){ __sfSetDebugInfo(window.__SF_LAST_ERR || ''); return; }
+    if ((n||0) >= 30) return; // ~3s max
+    setTimeout(function(){ __sfTryBootBanner((n||0)+1); }, 100);
+  }catch(e){}
+}
+
+try{
+  // Kick once now + again after DOM ready to avoid "booting" getting stuck.
+  __sfTryBootBanner(0);
+  document.addEventListener('DOMContentLoaded', function(){ __sfTryBootBanner(0); });
+}catch(e){}
 </script>
 """
 
