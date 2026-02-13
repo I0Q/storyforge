@@ -2467,14 +2467,14 @@ def voices_edit_page(voice_id: str, response: Response):
   </div>
 
   <div class='card'>
-    <div style='font-weight:950;margin-bottom:6px;'>Provider fields</div>
+    <div style='font-weight:950;margin-bottom:6px;'>Provider fields (read-only)</div>
 
     <div class='muted'>Engine</div>
-    <input id='engine' value='__ENG__' placeholder='xtts' disabled />
+    <div class='term' style='margin-top:8px;'>__ENG__</div>
 
     <div class='muted' style='margin-top:12px'>voice_ref</div>
-    <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <input id='voice_ref' value='__VREF__' placeholder='speaker_03' readonly style='flex:1;min-width:0' />
+    <div class='row' style='gap:10px;flex-wrap:nowrap;margin-top:8px'>
+      <div class='term' id='voice_ref' style='flex:1;min-width:0;overflow:auto;-webkit-overflow-scrolling:touch;'>__VREF__</div>
       <button class='copyBtn' type='button' onclick='copyVoiceRef()' aria-label='Copy voice ref' title='Copy voice ref'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
@@ -2483,7 +2483,7 @@ def voices_edit_page(voice_id: str, response: Response):
     </div>
 
     <div class='muted' style='margin-top:12px'>Sample text</div>
-    <textarea id='sample_text' placeholder='Hello…' readonly>__STXT__</textarea>
+    <div class='term' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
 
     <div class='row' style='margin-top:12px'>
       <button type='button' onclick='save()'>Save</button>
@@ -2495,7 +2495,7 @@ def voices_edit_page(voice_id: str, response: Response):
 <script>
 function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function $(id){ return document.getElementById(id); }
-function val(id){ var el=$(id); return el?String(el.value||''):''; }
+function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
 
 function save(){
