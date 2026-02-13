@@ -2779,6 +2779,9 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <input id='voiceName' placeholder='Luna' />
+    <div class='row' style='margin-top:10px;gap:10px'>
+      <button type='button' class='secondary' onclick='genVoiceName()'>Random voice name</button>
+    </div>
 
     <details style='margin-top:10px'>
       <summary style='cursor:pointer;font-weight:900;'>Advanced</summary>
@@ -2945,6 +2948,55 @@ function slugify(s){
   }catch(e){
     return 'voice';
   }
+}
+
+
+function genVoiceName(){
+  var out=$('out');
+  var el=$('voiceName');
+  var btn=null;
+  try{ btn = document.querySelector("button[onclick='genVoiceName()']"); }catch(e){}
+
+  var origVal = el ? String(el.value||'') : '';
+  var frames = ['Picking a color', 'Picking a color.', 'Picking a color..', 'Picking a color...'];
+  var i=0; var timer=null;
+  function startAnim(){
+    try{
+      if (el){ el.disabled=true; el.value = frames[0]; }
+      if (btn){ btn.disabled=true; }
+      timer = setInterval(function(){
+        try{ i=(i+1)%frames.length; if (el) el.value = frames[i]; }catch(e){}
+      }, 280);
+    }catch(e){}
+  }
+  function stopAnim(){
+    try{ if (timer) clearInterval(timer); }catch(e){}
+    timer=null;
+    try{ if (el) el.disabled=false; }catch(e){}
+    try{ if (btn) btn.disabled=false; }catch(e){}
+  }
+
+  startAnim();
+  function runOnce(){
+    return jsonFetch('/api/voices/random_name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  }
+
+  return runOnce()
+    .catch(function(_e){ return new Promise(function(res){ setTimeout(res, 500); }).then(runOnce); })
+    .then(function(j){
+      stopAnim();
+      if (!j || !j.ok || !j.name){
+        if (el) el.value = origVal;
+        throw new Error((j&&j.error)||'name_failed');
+      }
+      if (el) el.value = String(j.name||'').trim();
+      if (out) out.textContent='';
+    })
+    .catch(function(e){
+      stopAnim();
+      if (el) el.value = origVal;
+      if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
+    });
 }
 
 function genSampleText(){
@@ -4480,6 +4532,54 @@ def api_voices_delete(voice_id: str):
 
 
 
+
+
+@app.post('/api/voices/random_name')
+def api_voices_random_name(payload: dict[str, Any] | None = None):
+    # Generate a random voice display name (a color-ish name) via Tinybox LLM.
+    try:
+        payload = payload or {}
+        prompt = (
+            "Give a single creative color name suitable as a voice name. "
+            "Examples: Midnight Teal, Ember Rose, Arctic Blue. "
+            "Return ONLY the name, 1 to 3 words, letters and spaces only."
+        )
+        model = str(payload.get('model') or 'google/gemma-2-9b-it')
+        req = {
+            'model': model,
+            'messages': [
+                {'role': 'user', 'content': prompt},
+            ],
+            'temperature': float(payload.get('temperature') or 0.95),
+            'max_tokens': int(payload.get('max_tokens') or 20),
+        }
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=120)
+        r.raise_for_status()
+        j = r.json()
+        if isinstance(j, dict) and j.get('ok') is False:
+            raise RuntimeError(str(j.get('error') or 'llm_failed'))
+        name = ''
+        try:
+            ch0 = (((j or {}).get('choices') or [])[0] or {})
+            msg = ch0.get('message') or {}
+            name = str(msg.get('content') or ch0.get('text') or '')
+        except Exception:
+            name = ''
+        name = ' '.join(name.strip().split())
+        # sanitize to letters/spaces only
+        import re
+        name = re.sub(r"[^A-Za-z ]+", "", name).strip()
+        name = re.sub(r"\s+", " ", name).strip()
+        if not name:
+            raise RuntimeError('empty_name')
+        words = name.split(' ')
+        if len(words) > 3:
+            name = ' '.join(words[:3]).strip()
+        if len(name) > 32:
+            name = name[:32].rsplit(' ', 1)[0].strip() or name[:32]
+        return {'ok': True, 'name': name}
+    except Exception as e:
+        return {'ok': False, 'error': f'name_failed: {type(e).__name__}: {e}'}
 @app.post('/api/voices/sample_text_random')
 def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
     """Generate a random sample text using the Tinybox LLM via gateway (/v1/llm)."""
