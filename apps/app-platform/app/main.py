@@ -1716,7 +1716,7 @@ function loadVoices(){
       return "<div class='swipe voiceSwipe'>"
         + "<div class='swipeInner'>"
         + "<div class='swipeMain'>" + card + "</div>"
-        + "<div class='swipeKill'><button class='swipeDelBtn' type='button' onclick=\"deleteVoice('" + idEnc + "')\">Delete</button></div>"
+        + "<div class='swipeKill'><button class='swipeDelBtn' type='button' onclick='deleteVoice(" + idEnc + ")'>Delete</button></div>"
         + "</div>"
         + "</div>";
     }).join('');
