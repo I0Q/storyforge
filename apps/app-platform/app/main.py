@@ -261,6 +261,12 @@ VOICES_BASE_CSS = (
     .rowEnd{justify-content:flex-end;margin-left:auto;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
+
+    /* shared icon button (used by debug banner copy button, job url copy buttons, etc.) */
+    .copyBtn{border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;border-radius:10px;padding:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;}
+    .copyBtn:active{transform:translateY(1px);}
+    .copyBtn svg{display:block;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;}
+    .copyBtn:hover{background:rgba(255,255,255,0.06);}
     input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
     textarea{min-height:90px;}
     .hide{display:none;}
@@ -427,7 +433,7 @@ DEBUG_BANNER_HTML = """
   <div id='boot' class='boot muted'>
     <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
     <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
       </svg>
     </button>
