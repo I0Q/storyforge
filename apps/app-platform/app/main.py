@@ -3052,11 +3052,24 @@ function loadPresets(){
       sel.innerHTML = "<option value=''>No presets available</option>";
       return;
     }
+    function presetLabel(c){
+      try{
+        var nm = String((c&&c.name)||'').trim();
+        var male = {'awb':1,'bdl':1,'jmk':1,'ksp':1,'rms':1};
+        var female = {'clb':1,'slt':1};
+        if (nm && male[nm]) return nm + ' (male)';
+        if (nm && female[nm]) return nm + ' (female)';
+        return String((c&&c.name) || (c&&c.url) || (c&&c.path) || '');
+      }catch(e){
+        return String((c&&c.name) || (c&&c.url) || (c&&c.path) || '');
+      }
+    }
+
     for(var i=0;i<arr.length;i++){
       var c=arr[i]||{};
       var o=document.createElement('option');
       o.value=String(c.url||c.path||'');
-      o.textContent=String(c.name||c.url||c.path||'');
+      o.textContent=presetLabel(c);
       sel.appendChild(o);
     }
   });
