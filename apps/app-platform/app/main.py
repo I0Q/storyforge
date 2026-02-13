@@ -3056,9 +3056,14 @@ function loadPresets(){
     sel.innerHTML='';
 
     if (!j || j.ok===false){
-      sel.innerHTML = "<option value=''>No presets (error)</option>";
+      var msg = String((j&&j.error)?j.error:'unknown');
+      var st = (j&&j.status!=null) ? (' ' + String(j.status)) : '';
+      sel.innerHTML = "<option value=''>No presets (error"+st+")</option>";
       var out=$('out');
-      if (out) out.innerHTML = "<div class='err'>Presets failed: " + esc(String(j&&j.error?j.error:'unknown')) + "</div>";
+      if (out){
+        var body = (j&&j.body) ? ('\n' + String(j.body)) : '';
+        out.innerHTML = "<div class='err'>Presets failed: " + esc(msg) + (st?(' (HTTP '+esc(String(j.status))+')'):'') + "</div>";
+      }
       return;
     }
 
@@ -3295,6 +3300,8 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   try{ loadPresets(); }catch(e){}
   try{ setVis(); }catch(e){}
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
+  // Mark JS as running for the debug banner.
+  try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo(''); }catch(e){}
 }); }catch(e){}
 </script>
 
