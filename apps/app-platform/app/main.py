@@ -3208,6 +3208,9 @@ function setEngineUi(){
       if ($('clipPresetRow')) $('clipPresetRow').classList.add('hide');
       if ($('clipUploadRow')) $('clipUploadRow').classList.add('hide');
       if ($('clipUrlRow')) $('clipUrlRow').classList.add('hide');
+    } else {
+      // Ensure the correct inline clip control is visible (preset/upload/url)
+      try{ setVis(); }catch(e){}
     }
   }catch(e){}
 }
@@ -3527,7 +3530,7 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   try{ loadPresets(); }catch(e){}
   try{ setVis(); }catch(e){}
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
-  var eg=$('engineSel'); if(eg) eg.addEventListener('change', function(){ try{ setEngineUi(); }catch(e){} });
+  var eg=$('engineSel'); if(eg) eg.addEventListener('change', function(){ try{ setEngineUi(); }catch(e){}; try{ setVis(); }catch(e){} });
   var tg=$('tortoiseGender'); if(tg) tg.addEventListener('change', function(){ try{ loadTortoiseVoices(); }catch(e){} });
   try{ loadTortoiseVoices(); }catch(e){}
   try{ setEngineUi(); }catch(e){}
