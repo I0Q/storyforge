@@ -126,6 +126,14 @@ INDEX_BASE_CSS = base_css("""\
     .todoItem input{transform:scale(1.1);margin-right:10px;}
     .todoItem span{vertical-align:middle;}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+    /* swipe-delete pattern (voices + todos) */
+    .swipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .swipe::-webkit-scrollbar{display:none;}
+    .swipeInner{display:flex;min-width:100%;}
+    .swipeMain{min-width:100%;}
+    .swipeKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
+    .swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .rowEnd{justify-content:flex-end;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
@@ -1690,21 +1698,44 @@ function loadVoices(){
       var metaLine = meta.join(' • ');
       var en = (v.enabled!==false);
       var pill = en ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>";
-      return "<div class='job'>"
+      var idEnc = encodeURIComponent(v.id);
+      var card = "<div class='job'>"
         + "<div class='row' style='justify-content:space-between;'>"
         + "<div class='title'>" + escapeHtml(nm) + "</div>"
         + "<div>" + pill + "</div>"
         + "</div>"
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
         + "<div class='row' style='margin-top:10px'>"
-        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='playVoiceEl(this)'>Play</button>"
-        + "<button class='secondary' data-vid='" + encodeURIComponent(v.id) + "' onclick='goVoiceEdit(this)'>Edit</button>"
+        + "<button class='secondary' data-vid='" + idEnc + "' onclick='playVoiceEl(this)'>Play</button>"
+        + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
+        + "</div>"
+        + "</div>";
+
+      return "<div class='swipe voiceSwipe'>"
+        + "<div class='swipeInner'>"
+        + "<div class='swipeMain'>" + card + "</div>"
+        + "<div class='swipeKill'><button class='swipeDelBtn' type='button' onclick="deleteVoice('" + idEnc + "')">Delete</button></div>"
         + "</div>"
         + "</div>";
     }).join('');
   }).catch(function(e){
     if (el) el.innerHTML = "<div class='muted'>Error loading voices: " + escapeHtml(String(e)) + "</div>";
   });
+}
+
+function deleteVoice(idEnc){
+  try{
+    var id = decodeURIComponent(String(idEnc||''));
+    if (!id) return;
+    if (!confirm('Delete voice ' + id + '? This also deletes its clip from Spaces.')) return;
+    fetchJsonAuthed('/api/voices/' + encodeURIComponent(id), {method:'DELETE'})
+      .then(function(j){
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'delete_failed'); }
+        try{ toastSet('Deleted', 'ok', 1400); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+        return loadVoices();
+      })
+      .catch(function(e){ alert('Delete failed: ' + String(e)); });
+  }catch(e){}
 }
 
 function createVoice(){
@@ -4727,13 +4758,35 @@ def api_voices_disable(voice_id: str):
 def api_voices_delete(voice_id: str):
     try:
         voice_id = validate_voice_id(voice_id)
+        deleted_keys: list[str] = []
+
+        # Fetch voice first so we can delete any associated Spaces objects.
         conn = db_connect()
         try:
             db_init(conn)
+            v = get_voice_db(conn, voice_id)
             delete_voice_db(conn, voice_id)
         finally:
             conn.close()
-        return {'ok': True}
+
+        # Best-effort delete related objects in Spaces.
+        try:
+            from .spaces_upload import delete_public_url
+
+            for u in [
+                (v or {}).get('sample_url') or '',
+                (v or {}).get('voice_ref') or '',
+            ]:
+                try:
+                    k = delete_public_url(str(u))
+                    if k:
+                        deleted_keys.append(k)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        return {'ok': True, 'deleted_keys': deleted_keys}
     except Exception as e:
         return {'ok': False, 'error': f'delete_failed: {type(e).__name__}: {e}'}
 

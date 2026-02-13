@@ -29,17 +29,56 @@ def _client():
     )
 
 
+def _public_base() -> str:
+    bucket = _env("SPACES_BUCKET")
+    public_base = _env("SPACES_PUBLIC_BASE")  # e.g. https://storyforge-assets.nyc3.digitaloceanspaces.com
+    if public_base:
+        return public_base.rstrip("/")
+    region = _env("SPACES_REGION")
+    return f"https://{bucket}.{region}.digitaloceanspaces.com"
+
+
+def _key_from_public_url(url: str) -> str | None:
+    """If url points to our configured Spaces public base, return the object key."""
+    try:
+        url = str(url or "").strip()
+        if not url:
+            return None
+        # strip query
+        u = url.split("?", 1)[0]
+        base = _public_base()
+        if not u.startswith(base + "/"):
+            return None
+        key = u[len(base) + 1 :]
+        key = key.lstrip("/")
+        return key or None
+    except Exception:
+        return None
+
+
+def delete_public_url(url: str) -> str | None:
+    """Delete the object pointed to by a public URL if it belongs to our Spaces bucket.
+
+    Returns the deleted key, or None if the URL isn't ours or deletion couldn't be done.
+    """
+    if not spaces_enabled():
+        return None
+    key = _key_from_public_url(url)
+    if not key:
+        return None
+    bucket = _env("SPACES_BUCKET")
+    c = _client()
+    c.delete_object(Bucket=bucket, Key=key)
+    return key
+
+
 def upload_bytes(data: bytes, key_prefix: str, filename: str, content_type: str) -> Tuple[str, str]:
     """Upload bytes to Spaces. Returns (object_key, public_url)."""
     if not spaces_enabled():
         raise RuntimeError("spaces_not_configured")
 
     bucket = _env("SPACES_BUCKET")
-    public_base = _env("SPACES_PUBLIC_BASE")  # e.g. https://storyforge-assets.nyc3.digitaloceanspaces.com
-    if not public_base:
-        # Fall back to virtual-host style
-        region = _env("SPACES_REGION")
-        public_base = f"https://{bucket}.{region}.digitaloceanspaces.com"
+    public_base = _public_base()
 
     ext = ""
     if "." in (filename or ""):
