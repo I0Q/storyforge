@@ -4499,14 +4499,29 @@ def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
         r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=120)
         r.raise_for_status()
         j = r.json()
+
+        # Propagate structured gateway errors if present.
+        if isinstance(j, dict) and j.get('ok') is False:
+            raise RuntimeError(str(j.get('error') or 'llm_failed'))
+
         text = ''
         try:
-            text = str((((j or {}).get('choices') or [])[0] or {}).get('message') or {}).get('content') or ''
+            ch0 = (((j or {}).get('choices') or [])[0] or {})
+            msg = ch0.get('message') or {}
+            text = str(msg.get('content') or ch0.get('text') or '')
         except Exception:
             text = ''
+
         text = ' '.join(text.strip().split())
         if not text:
-            raise RuntimeError('empty_llm_output')
+            # Include a tiny hint for debugging without dumping secrets.
+            hint = ''
+            try:
+                if isinstance(j, dict):
+                    hint = f" keys={sorted(list(j.keys()))[:8]}"
+            except Exception:
+                hint = ''
+            raise RuntimeError('empty_llm_output' + hint)
         # hard cap
         if len(text) > 260:
             text = text[:260].rsplit(' ', 1)[0].strip() or text[:260]
