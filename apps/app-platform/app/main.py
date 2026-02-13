@@ -2930,9 +2930,18 @@ def voices_new_page(response: Response):
     </div>
 
     <div class='k'>Sample text</div>
-    <textarea id='sampleText' placeholder='Hello…'>Hello. This is a test sample for a new voice.</textarea>
-    <div class='row' style='margin-top:10px;gap:10px'>
-      <button type='button' class='secondary' onclick='genSampleText()'>Random sample text</button>
+    <div class='row' style='gap:10px;flex-wrap:nowrap'>
+      <textarea id='sampleText' placeholder='Hello…' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
+      <button type='button' class='copyBtn' onclick='genSampleText()' aria-label='Random sample text' title='Random sample text' style='align-self:stretch'>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          <path stroke="currentColor" fill="currentColor" d="M8.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M15.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M15.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M8.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M12 13a1 1 0 110-2 1 1 0 010 2z"/>
+        </svg>
+      </button>
     </div>
 
     <div class='row' style='margin-top:12px'>
