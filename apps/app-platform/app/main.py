@@ -1248,6 +1248,7 @@ function renderProc(m){
 function startMetricsStream(){
   if (!monitorEnabled) return;
   stopMetricsStream();
+  stopMetricsPoll();
   // SSE stream (server pushes metrics continuously)
   metricsES = new EventSource('/api/metrics/stream');
   metricsES.onmessage = (ev) => {
@@ -1300,6 +1301,7 @@ function setMonitorEnabled(on){
 
   if (!monitorEnabled){
     stopMetricsStream();
+    stopMetricsPoll();
     document.body.classList.add('monOff');
     if (dock) dock.classList.add('hide');
     if (backdrop) backdrop.classList.add('hide');
@@ -2422,6 +2424,32 @@ function stopMetricsStream(){
   }
 }
 
+var metricsPoll = null;
+function stopMetricsPoll(){
+  if (metricsPoll){
+    try{ clearInterval(metricsPoll); }catch(e){}
+    metricsPoll = null;
+  }
+}
+
+function startMetricsPoll(){
+  if (!monitorEnabled) return;
+  stopMetricsPoll();
+  metricsPoll = setInterval(function(){
+    try{
+      jsonFetch('/api/metrics').then(function(m){
+        lastMetrics = m;
+        if (m && m.ok===false){
+          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
+          return;
+        }
+        updateMonitorFromMetrics(m);
+      }).catch(function(_e){});
+    }catch(e){}
+  }, 2000);
+}
+
 function setBar(elId, pct){
   var el=document.getElementById(elId);
   if (!el) return;
@@ -2556,6 +2584,7 @@ function updateMonitorFromMetrics(m){
 function startMetricsStream(){
   if (!monitorEnabled) return;
   stopMetricsStream();
+  stopMetricsPoll();
   try{
     var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
     metricsES = new EventSource('/api/metrics/stream');
@@ -2574,6 +2603,7 @@ function startMetricsStream(){
     metricsES.onerror = function(_e){
       try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
       try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
+      try{ startMetricsPoll(); }catch(e){}
     };
   }catch(e){}
 }
@@ -2584,6 +2614,7 @@ function setMonitorEnabled(on){
   try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
   if (!monitorEnabled){
     stopMetricsStream();
+    stopMetricsPoll();
     try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
     return;
   }
@@ -3097,6 +3128,32 @@ function stopMetricsStream(){
   }
 }
 
+var metricsPoll = null;
+function stopMetricsPoll(){
+  if (metricsPoll){
+    try{ clearInterval(metricsPoll); }catch(e){}
+    metricsPoll = null;
+  }
+}
+
+function startMetricsPoll(){
+  if (!monitorEnabled) return;
+  stopMetricsPoll();
+  metricsPoll = setInterval(function(){
+    try{
+      jsonFetch('/api/metrics').then(function(m){
+        lastMetrics = m;
+        if (m && m.ok===false){
+          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
+          return;
+        }
+        updateMonitorFromMetrics(m);
+      }).catch(function(_e){});
+    }catch(e){}
+  }, 2000);
+}
+
 function setBar(elId, pct){
   var el=document.getElementById(elId);
   if (!el) return;
@@ -3231,6 +3288,7 @@ function updateMonitorFromMetrics(m){
 function startMetricsStream(){
   if (!monitorEnabled) return;
   stopMetricsStream();
+  stopMetricsPoll();
   try{
     var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
     metricsES = new EventSource('/api/metrics/stream');
@@ -3249,6 +3307,7 @@ function startMetricsStream(){
     metricsES.onerror = function(_e){
       try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
       try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
+      try{ startMetricsPoll(); }catch(e){}
     };
   }catch(e){}
 }
@@ -3259,6 +3318,7 @@ function setMonitorEnabled(on){
   try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
   if (!monitorEnabled){
     stopMetricsStream();
+    stopMetricsPoll();
     try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
     return;
   }
@@ -3702,6 +3762,32 @@ function stopMetricsStream(){
   }
 }
 
+var metricsPoll = null;
+function stopMetricsPoll(){
+  if (metricsPoll){
+    try{ clearInterval(metricsPoll); }catch(e){}
+    metricsPoll = null;
+  }
+}
+
+function startMetricsPoll(){
+  if (!monitorEnabled) return;
+  stopMetricsPoll();
+  metricsPoll = setInterval(function(){
+    try{
+      jsonFetch('/api/metrics').then(function(m){
+        lastMetrics = m;
+        if (m && m.ok===false){
+          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
+          return;
+        }
+        updateMonitorFromMetrics(m);
+      }).catch(function(_e){});
+    }catch(e){}
+  }, 2000);
+}
+
 function setBar(elId, pct){
   var el=document.getElementById(elId);
   if (!el) return;
@@ -3836,6 +3922,7 @@ function updateMonitorFromMetrics(m){
 function startMetricsStream(){
   if (!monitorEnabled) return;
   stopMetricsStream();
+  stopMetricsPoll();
   try{
     var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
     metricsES = new EventSource('/api/metrics/stream');
@@ -3854,6 +3941,7 @@ function startMetricsStream(){
     metricsES.onerror = function(_e){
       try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
       try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
+      try{ startMetricsPoll(); }catch(e){}
     };
   }catch(e){}
 }
@@ -3864,6 +3952,7 @@ function setMonitorEnabled(on){
   try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
   if (!monitorEnabled){
     stopMetricsStream();
+    stopMetricsPoll();
     try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
     return;
   }
