@@ -3061,7 +3061,6 @@ function loadPresets(){
       sel.innerHTML = "<option value=''>No presets (error"+st+")</option>";
       var out=$('out');
       if (out){
-        var body = (j&&j.body) ? ('\n' + String(j.body)) : '';
         out.innerHTML = "<div class='err'>Presets failed: " + esc(msg) + (st?(' (HTTP '+esc(String(j.status))+')'):'') + "</div>";
       }
       return;
