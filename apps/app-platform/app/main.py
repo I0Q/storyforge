@@ -500,6 +500,12 @@ window.addEventListener('unhandledrejection', function(_ev){
   __sfSetDebugInfo('promise error');
 });
 
+try{
+  document.addEventListener('DOMContentLoaded', function(){
+    try{ if (!window.__SF_LAST_ERR) __sfSetDebugInfo('ok'); }catch(e){}
+  });
+}catch(e){}
+
 function __sfTryBootBanner(n){
   try{
     // If the banner HTML is rendered later in the page, we may run before #boot exists.
@@ -3274,8 +3280,9 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   try{ setVis(); }catch(e){}
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
   // Mark JS as running for the debug banner.
-  try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo(''); }catch(e){}
+  try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
 }); }catch(e){}
+try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
 </script>
 
 
