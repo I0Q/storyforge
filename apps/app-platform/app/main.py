@@ -2563,11 +2563,17 @@ function startMetricsStream(){
       try{
         var m = JSON.parse(ev.data || '{}');
         lastMetrics = m;
+        if (m && m.ok===false){
+          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
+          return;
+        }
         updateMonitorFromMetrics(m);
       }catch(e){}
     };
     metricsES.onerror = function(_e){
       try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
     };
   }catch(e){}
 }
@@ -3232,11 +3238,17 @@ function startMetricsStream(){
       try{
         var m = JSON.parse(ev.data || '{}');
         lastMetrics = m;
+        if (m && m.ok===false){
+          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
+          return;
+        }
         updateMonitorFromMetrics(m);
       }catch(e){}
     };
     metricsES.onerror = function(_e){
       try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
     };
   }catch(e){}
 }
@@ -3831,11 +3843,17 @@ function startMetricsStream(){
       try{
         var m = JSON.parse(ev.data || '{}');
         lastMetrics = m;
+        if (m && m.ok===false){
+          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
+          return;
+        }
         updateMonitorFromMetrics(m);
       }catch(e){}
     };
     metricsES.onerror = function(_e){
       try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
+      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
     };
   }catch(e){}
 }
@@ -4125,9 +4143,9 @@ def api_metrics_stream():
                 m = _get('/v1/metrics', timeout_s=4.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
-            except Exception:
-                # Don't leak secrets; just emit a small error payload.
-                yield f"data: {json.dumps({'ok': False, 'error': 'metrics_failed'})}\n\n"
+            except Exception as e:
+                # Don't leak secrets; emit a small error payload.
+                yield f"data: {json.dumps({'ok': False, 'error': f'metrics_failed:{type(e).__name__}'})}\n\n"
             time.sleep(2.0)
 
     headers = {
