@@ -3015,13 +3015,19 @@ function loadEngines(){
     var sel=$('engineSel'); if(!sel) return;
     sel.innerHTML='';
     var arr=(j&&j.engines)||[];
-    if (!arr.length){ arr=['xtts','tortoise']; }
+    if (!arr.length){ arr=['tortoise','xtts']; }
     for(var i=0;i<arr.length;i++){
       var o=document.createElement('option');
       o.value=String(arr[i]);
       o.textContent=String(arr[i]);
       sel.appendChild(o);
     }
+    // default to tortoise if available
+    try{
+      var hasT = false;
+      for (var k=0;k<sel.options.length;k++){ if (String(sel.options[k].value)==='tortoise') { hasT=true; break; } }
+      if (hasT) sel.value = 'tortoise';
+    }catch(e){}
   });
 }
 
@@ -3029,7 +3035,19 @@ function loadPresets(){
   return jsonFetch('/api/voice_provider/presets').then(function(j){
     var sel=$('clipPreset'); if(!sel) return;
     sel.innerHTML='';
+
+    if (!j || j.ok===false){
+      sel.innerHTML = "<option value=''>No presets (error)</option>";
+      var out=$('out');
+      if (out) out.innerHTML = "<div class='err'>Presets failed: " + esc(String(j&&j.error?j.error:'unknown')) + "</div>";
+      return;
+    }
+
     var arr=(j&&j.clips)||[];
+    if (!arr.length){
+      sel.innerHTML = "<option value=''>No presets available</option>";
+      return;
+    }
     for(var i=0;i<arr.length;i++){
       var c=arr[i]||{};
       var o=document.createElement('option');
