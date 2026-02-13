@@ -2404,6 +2404,7 @@ def voices_edit_page(voice_id: str, response: Response):
     eng = esc(v.get('engine') or '')
     vref = esc(v.get('voice_ref') or '')
     stxt = esc(v.get('sample_text') or '')
+    surl = esc(v.get('sample_url') or '')
     enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
 
     html = """<!doctype html>
@@ -2481,6 +2482,7 @@ def voices_edit_page(voice_id: str, response: Response):
     </div>
     <div class='term' id='sample_text' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
     <audio id='audio' class='hide' controls style='width:100%;margin-top:10px'></audio>
+    <input id='sample_url' type='hidden' value='__SURL__' />
 
     <div class='muted' style='margin-top:12px'>voice_ref</div>
     <div class='fadeLine' style='margin-top:8px'>
@@ -2549,12 +2551,20 @@ function __copyText(txt){
 
 function playSample(){
   try{
+    var a=$('audio');
+    var su=$('sample_url');
+    var existing = su ? String(su.value||'').trim() : '';
+    if (existing){
+      if (a){ a.src=existing; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+      return;
+    }
+
     var out=$('out'); if(out) out.textContent='Generating sample…';
     fetch('/api/voices/__VID_RAW__/sample', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
       .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
       .then(function(j){
         if (!j || !j.ok || !j.sample_url){ throw new Error((j&&j.error)||'no_sample_url'); }
-        var a=$('audio');
+        try{ if (su) su.value = String(j.sample_url||''); }catch(e){}
         if (a){ a.src=String(j.sample_url||''); a.classList.remove('hide'); try{ a.play(); }catch(e){} }
         if(out) out.textContent='';
       })
@@ -2887,6 +2897,7 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__ENG__', eng)
         .replace('__VREF__', vref)
         .replace('__STXT__', stxt)
+        .replace('__SURL__', surl)
         .replace('__ENABLED__', enabled_checked)
         .replace('__VID_RAW__', voice_id)
     )
