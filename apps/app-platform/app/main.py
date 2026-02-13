@@ -2901,14 +2901,59 @@ function slugify(s){
 
 function genSampleText(){
   var out=$('out');
-  if(out) out.textContent='Generating sample text…';
+  var ta=$('sampleText');
+  var btn=null;
+  try{ btn = document.querySelector("button[onclick='genSampleText()']"); }catch(e){}
+
+  var origVal = ta ? String(ta.value||'') : '';
+  var origPh = ta ? String(ta.placeholder||'') : '';
+
+  // Put the loading animation in the textarea itself.
+  var frames = [
+    'Generating sample text',
+    'Generating sample text.',
+    'Generating sample text..',
+    'Generating sample text...',
+  ];
+  var i=0;
+  var timer=null;
+
+  function startAnim(){
+    try{
+      if (ta){ ta.disabled=true; ta.value = frames[0]; }
+      if (btn){ btn.disabled=true; }
+      timer = setInterval(function(){
+        try{
+          i = (i+1) % frames.length;
+          if (ta) ta.value = frames[i];
+        }catch(e){}
+      }, 350);
+    }catch(e){}
+  }
+  function stopAnim(){
+    try{ if (timer) clearInterval(timer); }catch(e){}
+    timer=null;
+    try{ if (ta){ ta.disabled=false; } }catch(e){}
+    try{ if (btn){ btn.disabled=false; } }catch(e){}
+  }
+
+  startAnim();
+
   return jsonFetch('/api/voices/sample_text_random', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})})
     .then(function(j){
-      if (!j || !j.ok || !j.text){ throw new Error((j&&j.error)||'sample_text_failed'); }
-      if ($('sampleText')) $('sampleText').value = String(j.text||'');
-      if(out) out.textContent='-';
+      stopAnim();
+      if (!j || !j.ok || !j.text){
+        if (ta){ ta.value = origVal; ta.placeholder = origPh; }
+        throw new Error((j&&j.error)||'sample_text_failed');
+      }
+      if (ta) ta.value = String(j.text||'');
+      if (out) out.textContent='';
     })
-    .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+    .catch(function(e){
+      stopAnim();
+      if (ta){ ta.value = origVal; ta.placeholder = origPh; }
+      if (out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>';
+    });
 }
 
 function trainAndSave(){
