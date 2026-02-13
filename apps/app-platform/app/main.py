@@ -2852,9 +2852,10 @@ def voices_new_page(response: Response):
     </div>
   </div>
 
+  __DEBUG_BANNER_HTML__
+
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Generate voice</div>
-    __DEBUG_BANNER_HTML__
 
     <div class='k'>Voice name</div>
     <input id='voiceName' placeholder='Luna' />
