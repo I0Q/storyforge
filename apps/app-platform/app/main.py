@@ -2284,11 +2284,13 @@ def api_upload_voice_clip(file: UploadFile = File(...)):
 @app.get('/api/voice_provider/engines')
 def api_voice_provider_engines():
     # Requires passphrase session auth (middleware).
+    if not GATEWAY_TOKEN:
+        return {'ok': False, 'error': 'gateway_token_missing'}
     try:
         r = requests.get(
             GATEWAY_BASE + '/v1/engines',
             timeout=6,
-            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None,
+            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'},
         )
         if r.status_code != 200:
             return {'ok': False, 'error': 'upstream_http', 'status': int(r.status_code)}
@@ -2304,11 +2306,13 @@ def api_voice_provider_engines():
 @app.get('/api/voice_provider/presets')
 def api_voice_provider_presets():
     # Requires passphrase session auth (middleware).
+    if not GATEWAY_TOKEN:
+        return {'ok': False, 'error': 'gateway_token_missing'}
     try:
         r = requests.get(
             GATEWAY_BASE + '/v1/voice-clips',
             timeout=6,
-            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None,
+            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'},
         )
         if r.status_code != 200:
             body = ''
