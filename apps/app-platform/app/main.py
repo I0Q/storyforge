@@ -2640,7 +2640,8 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
     )
     return html
-@app.get('/voices/new', response_class=HTMLResponse)
+
+
 @app.get('/settings/providers/new')
 def settings_new_provider_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -2675,6 +2676,7 @@ def settings_new_provider_page(response: Response):
     )
 
 
+@app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
     # Separate screen for generating/testing a voice before saving.
