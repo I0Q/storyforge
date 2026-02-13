@@ -2744,8 +2744,8 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice clip</div>
     <select id='clipMode'>
+      <option value='preset' selected>Choose preset</option>
       <option value='upload'>Upload</option>
-      <option value='preset'>Choose preset</option>
       <option value='url'>Paste URL</option>
     </select>
 
@@ -2755,7 +2755,6 @@ def voices_new_page(response: Response):
     </div>
     <div id='clipPresetRow' class='hide' style='margin-top:8px'>
       <select id='clipPreset'></select>
-      <div class='muted' style='margin-top:6px'>Presets come from Tinybox.</div>
     </div>
     <div id='clipUrlRow' class='hide' style='margin-top:8px'>
       <input id='clipUrl' placeholder='https://…/clip.wav' />
@@ -2771,7 +2770,7 @@ def voices_new_page(response: Response):
       <button type='button' onclick='trainAndSave()'>Generate</button>
     </div>
 
-    <div id='out' class='muted' style='margin-top:10px'>-</div>
+    <div id='out' class='muted' style='margin-top:10px'></div>
   </div>
 
 <script>
