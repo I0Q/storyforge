@@ -1714,6 +1714,7 @@ function loadVoices(){
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='playVoiceEl(this)'>Play</button>"
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
         + "</div>"
+        + "<audio id='aud-" + idEnc + "' class='" + (v.sample_url ? '' : 'hide') + "' controls style='width:100%;margin-top:10px' src='" + escAttr(v.sample_url||'') + "'></audio>"
         + "</div>";
 
       return "<div class='swipe voiceSwipe'>"
