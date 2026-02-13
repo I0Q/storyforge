@@ -2498,7 +2498,8 @@ def voices_edit_page(voice_id: str, response: Response):
       </button>
     </div>
 
-    <div class='row' style='margin-top:12px'>
+    <div class='row' style='margin-top:12px;justify-content:space-between'>
+      <button type='button' class='secondary' onclick='deleteThisVoice()' style='border-color: rgba(255,77,77,.35); color: var(--bad);'>Delete</button>
       <button type='button' onclick='save()'>Save</button>
     </div>
 
@@ -2510,6 +2511,24 @@ function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;
 function $(id){ return document.getElementById(id); }
 function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
+
+function deleteThisVoice(){
+  try{
+    if (!confirm('Delete this voice? This also deletes any associated sample/clip in Spaces.')) return;
+    var out=$('out'); if(out) out.textContent='Deleting…';
+    fetch('/api/voices/__VID_RAW__', {method:'DELETE', credentials:'include'})
+      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+      .then(function(j){
+        if (j && j.ok){
+          try{ toastSet('Deleted', 'ok', 1400); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+          window.location.href='/#tab-voices';
+          return;
+        }
+        if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'delete failed')+'</div>';
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
+  }catch(e){}
+}
 
 function save(){
   var out=$('out'); if(out) out.textContent='Saving…';
