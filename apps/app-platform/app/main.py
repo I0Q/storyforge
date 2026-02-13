@@ -3041,7 +3041,10 @@ def voices_new_page(response: Response):
     </div>
 
     <div class='k'>Engine</div>
-    <select id='engineSel'></select>
+    <select id='engineSel'>
+      <option value='tortoise' selected>tortoise</option>
+      <option value='xtts'>xtts</option>
+    </select>
 
     <div id='tortoiseBox' class='hide'>
       <div class='k'>Tortoise voice</div>
@@ -3212,6 +3215,9 @@ function setEngineUi(){
 function loadEngines(){
   return jsonFetch('/api/voice_provider/engines').then(function(j){
     var sel=$('engineSel'); if(!sel) return;
+    var prev = '';
+    try{ prev = String(sel.value||'').trim(); }catch(e){}
+
     sel.innerHTML='';
     var arr=(j&&j.engines)||[];
     if (!arr.length){ arr=['tortoise','xtts']; }
@@ -3221,12 +3227,18 @@ function loadEngines(){
       o.textContent=String(arr[i]);
       sel.appendChild(o);
     }
-    // default to tortoise if available
+    // default to tortoise if available; otherwise keep previous selection
     try{
       var hasT = false;
       for (var k=0;k<sel.options.length;k++){ if (String(sel.options[k].value)==='tortoise') { hasT=true; break; } }
       if (hasT) sel.value = 'tortoise';
+      else if (prev) sel.value = prev;
     }catch(e){}
+
+    // Force UI sync even if async timing is weird on iOS
+    try{ setEngineUi(); }catch(e){}
+    try{ setTimeout(function(){ try{ setEngineUi(); }catch(e){} }, 0); }catch(e){}
+    try{ setTimeout(function(){ try{ setEngineUi(); }catch(e){} }, 200); }catch(e){}
   });
 }
 
