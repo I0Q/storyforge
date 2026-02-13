@@ -1534,23 +1534,20 @@ function renderProviders(providers){
     "</div>";
 
     var body = "<div class='kvs provKvs' style='margin-top:10px'>"+
-      (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' /></div>") : "")+
+      (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' style='width:100%;min-width:0' /></div>") : "")+
       "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+" onchange='onProvMonitorToggle(this); event.stopPropagation();'/><span class='slider'></span></label></div>"+
 
-      "<div class='k'>Voice</div><div><div class='row' style='gap:10px;flex-wrap:nowrap'>"+
-        "<input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' style='flex:0 0 72px;min-width:0' />"+
-        "<div class='muted' style='min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'><code>xtts</code> • <code>tortoise</code></div>"+
-      "</div></div>"+
+      "<div class='k' style='font-weight:950'>Voice service</div><div class='muted'><code>xtts</code> • <code>tortoise</code></div>"+
+      "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' style='width:96px;max-width:100%;min-width:0' /></div>"+
 
-      "<div class='k'>LLM</div><div><div class='row' style='gap:10px;flex-wrap:nowrap'>"+
-        "<select data-pid='"+escAttr(id)+"' data-k='llm_model' style='flex:1;min-width:0'>"+
+      "<div class='k' style='font-weight:950'>LLM service</div><div class='muted'>Model + GPUs</div>"+
+      "<div class='k'>LLM GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"' placeholder='2' style='width:72px;max-width:100%;min-width:0' /></div>"+
+      "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model' style='width:220px;max-width:100%;min-width:0'>"+
           enabledModels.map(function(m){
             var sel = (String(m.id)===llmModel) ? 'selected' : '';
             return "<option value='"+escAttr(m.id)+"' "+sel+">"+escapeHtml(m.label)+"</option>";
           }).join('')+
-        "</select>"+
-        "<input data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"' placeholder='2' style='flex:0 0 52px;min-width:0' />"+
-      "</div></div>"+
+        "</select></div>"+
     "</div>";
 
     return "<div class='job'>" + header + "<div id='provBody_"+escAttr(id)+"' style='display:none'>" + body + "</div></div>";
