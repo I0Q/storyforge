@@ -636,12 +636,18 @@ def _h() -> dict[str, str]:
 
 def _get(path: str, timeout_s: float = 20.0) -> dict[str, Any]:
     r = requests.get(GATEWAY_BASE + path, headers=_h(), timeout=float(timeout_s))
-    r.raise_for_status()
+    # Normalize upstream failures into readable errors (don't leak headers/tokens).
+    if r.status_code >= 400:
+        txt = ""
+        try:
+            txt = (r.text or "")[:200]
+        except Exception:
+            txt = ""
+        raise HTTPException(status_code=502, detail={"error": "upstream_http", "status": int(r.status_code), "body": txt})
     try:
         return r.json()
     except Exception:
         # Avoid opaque 500s when the upstream returns non-JSON.
-        # (Don't include any auth headers/tokens; only surface a tiny body snippet.)
         txt = ""
         try:
             txt = (r.text or "")[:200]
@@ -2272,35 +2278,45 @@ def api_upload_voice_clip(file: UploadFile = File(...)):
 @app.get('/api/voice_provider/engines')
 def api_voice_provider_engines():
     # Requires passphrase session auth (middleware).
-    # Ask Tinybox provider; fallback.
     try:
         r = requests.get(
             GATEWAY_BASE + '/v1/engines',
-            timeout=4,
+            timeout=6,
             headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None,
         )
-        if r.status_code == 200:
-            j = r.json()
-            if isinstance(j, dict) and j.get('ok') and isinstance(j.get('engines'), list):
-                engs = [str(x) for x in (j.get('engines') or []) if str(x).strip()]
-                return {'ok': True, 'engines': engs or ['xtts', 'tortoise']}
-    except Exception:
-        pass
-    return {'ok': True, 'engines': ['xtts', 'tortoise']}
+        if r.status_code != 200:
+            return {'ok': False, 'error': 'upstream_http', 'status': int(r.status_code)}
+        j = r.json()
+        if isinstance(j, dict) and j.get('ok') and isinstance(j.get('engines'), list):
+            engs = [str(x) for x in (j.get('engines') or []) if str(x).strip()]
+            return {'ok': True, 'engines': engs or ['xtts', 'tortoise']}
+        return {'ok': False, 'error': 'bad_upstream_shape'}
+    except Exception as e:
+        return {'ok': False, 'error': f'engines_failed:{type(e).__name__}'}
 
 
 @app.get('/api/voice_provider/presets')
 def api_voice_provider_presets():
     # Requires passphrase session auth (middleware).
     try:
-        r = requests.get(GATEWAY_BASE + '/v1/voice-clips', timeout=4, headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None)
-        if r.status_code == 200:
-            j = r.json()
-            if isinstance(j, dict) and j.get('ok') and isinstance(j.get('clips'), list):
-                return {'ok': True, 'clips': j['clips']}
-    except Exception:
-        pass
-    return {'ok': True, 'clips': []}
+        r = requests.get(
+            GATEWAY_BASE + '/v1/voice-clips',
+            timeout=6,
+            headers={'Authorization': f'Bearer {GATEWAY_TOKEN}'} if GATEWAY_TOKEN else None,
+        )
+        if r.status_code != 200:
+            body = ''
+            try:
+                body = (r.text or '')[:200]
+            except Exception:
+                body = ''
+            return {'ok': False, 'error': 'upstream_http', 'status': int(r.status_code), 'body': body}
+        j = r.json()
+        if isinstance(j, dict) and j.get('ok') and isinstance(j.get('clips'), list):
+            return {'ok': True, 'clips': j['clips']}
+        return {'ok': False, 'error': 'bad_upstream_shape'}
+    except Exception as e:
+        return {'ok': False, 'error': f'presets_failed:{type(e).__name__}'}
 
 
 
