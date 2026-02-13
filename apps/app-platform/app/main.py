@@ -132,8 +132,8 @@ INDEX_BASE_CSS = base_css("""\
     .swipe::-webkit-scrollbar{display:none;}
     .swipeInner{display:flex;min-width:100%;}
     .swipeMain{min-width:100%;}
-    .swipeKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
-    .swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
+    .swipeKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;pointer-events:auto;}
+    .swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;pointer-events:auto;}
     .rowEnd{justify-content:flex-end;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
@@ -1716,13 +1716,20 @@ function loadVoices(){
       return "<div class='swipe voiceSwipe'>"
         + "<div class='swipeInner'>"
         + "<div class='swipeMain'>" + card + "</div>"
-        + "<div class='swipeKill'><button class='swipeDelBtn' type='button' onclick='deleteVoice(" + idEnc + ")'>Delete</button></div>"
+        + "<div class='swipeKill'><button class='swipeDelBtn' type='button' data-vid='" + idEnc + "' onclick='deleteVoiceBtn(this)'>Delete</button></div>"
         + "</div>"
         + "</div>";
     }).join('');
   }).catch(function(e){
     if (el) el.innerHTML = "<div class='muted'>Error loading voices: " + escapeHtml(String(e)) + "</div>";
   });
+}
+
+function deleteVoiceBtn(btn){
+  try{
+    var idEnc = btn ? String(btn.getAttribute('data-vid')||'') : '';
+    deleteVoice(idEnc);
+  }catch(e){}
 }
 
 function deleteVoice(idEnc){
