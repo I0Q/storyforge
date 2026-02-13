@@ -1696,6 +1696,7 @@ function loadVoices(){
 
     if (!el) return;
     el.innerHTML = voices.map(function(v){
+      var idEnc = encodeURIComponent(String(v.id||''));
       var nm = v.display_name || v.id;
       var meta = [];
       if (v.engine) meta.push(v.engine);
