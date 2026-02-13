@@ -2910,18 +2910,20 @@ def voices_new_page(response: Response):
     <select id='engineSel'></select>
 
     <div class='k'>Voice clip</div>
-    <select id='clipMode'>
-      <option value='preset' selected>Choose preset</option>
-      <option value='upload'>Upload</option>
-      <option value='url'>Paste URL</option>
-    </select>
+    <div class='row' style='gap:10px;flex-wrap:nowrap'>
+      <select id='clipMode' style='flex:0 0 160px'>
+        <option value='preset' selected>Choose preset</option>
+        <option value='upload'>Upload</option>
+        <option value='url'>Paste URL</option>
+      </select>
+      <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
+        <select id='clipPreset'></select>
+      </div>
+    </div>
 
     <div id='clipUploadRow' style='margin-top:8px'>
       <input id='clipFile' type='file' accept='audio/*' />
       <div class='muted' style='margin-top:6px'>Uploads to Spaces.</div>
-    </div>
-    <div id='clipPresetRow' class='hide' style='margin-top:8px'>
-      <select id='clipPreset'></select>
     </div>
     <div id='clipUrlRow' class='hide' style='margin-top:8px'>
       <input id='clipUrl' placeholder='https://…/clip.wav' />
