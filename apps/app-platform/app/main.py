@@ -1726,7 +1726,7 @@ function loadVoices(){
         + "</div>"
         + "</div>";
 
-      return "<div class='swipe voiceSwipe'>
+      return "<div class='swipe voiceSwipe'>"
         + "<div class='swipeInner'>"
         + "<div class='swipeMain'>" + card + "</div>"
         + "<div class='swipeKill'><button class='swipeDelBtn' type='button' data-vid='" + idEnc + "' onclick='deleteVoiceBtn(this)'>Delete</button></div>"
