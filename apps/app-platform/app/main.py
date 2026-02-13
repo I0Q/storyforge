@@ -393,6 +393,9 @@ MONITOR_HTML = """
 MONITOR_JS = """
 <script>
 let metricsES=null; let monitorEnabled=true; let lastMetrics=null;
+// Some pages include extra monitor helpers (poll fallback). Provide safe no-ops so missing helpers don't crash.
+try{ if (typeof window.stopMetricsPoll !== 'function') window.stopMetricsPoll = function(){}; }catch(e){}
+try{ if (typeof window.startMetricsPoll !== 'function') window.startMetricsPoll = function(){}; }catch(e){}
 function loadMonitorPref(){ try{ var v=localStorage.getItem('sf_monitor_enabled'); if(v===null) return true; return v==='1'; }catch(e){ return true; } }
 function saveMonitorPref(on){ try{ localStorage.setItem('sf_monitor_enabled', on?'1':'0'); }catch(e){} }
 function stopMetricsStream(){ if(metricsES){ try{ metricsES.close(); }catch(e){} metricsES=null; } }
