@@ -709,6 +709,7 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
+  __DEBUG_BANNER_BOOT_JS__
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
   // Emergency override: add ?mon=0 (or ?monitor=0 / ?monoff=1) to force monitor OFF even if the sheet is stuck.
@@ -790,14 +791,7 @@ def index(response: Response):
 
   </div>
 
-  <div id='boot' class='boot muted'>
-    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
-    <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
-      </svg>
-    </button>
-  </div>
+  __DEBUG_BANNER_HTML__
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
@@ -905,55 +899,6 @@ def index(response: Response):
     </div>
 
   </div>
-
-<script>
-// minimal boot script (runs even if the main app script has a syntax error)
-window.__SF_BUILD = '__BUILD__';
-window.__SF_BOOT_TS = Date.now();
-window.__SF_LAST_ERR = '';
-
-function __sfEnsureBootBanner(){
-  // Some code paths may accidentally set #boot.textContent (which nukes children).
-  // Ensure we always have a dedicated #bootText span + copy button.
-  try{
-    var boot = document.getElementById('boot');
-    if (!boot) return null;
-    var t = document.getElementById('bootText');
-    if (t) return t;
-
-    boot.innerHTML = "<span id='bootText'><strong>Build</strong>: " + window.__SF_BUILD + " • JS: ok</span>" +
-      "<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>" +
-      "<svg viewBox=\\\"0 0 24 24\\\" aria-hidden=\\\"true\\\"><path stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\" d=\\\"M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4\\\"/></svg>" +
-      "</button>";
-
-    return document.getElementById('bootText');
-  }catch(e){
-    return null;
-  }
-}
-
-function __sfSetDebugInfo(msg){
-  try{
-    window.__SF_LAST_ERR = msg || '';
-    var el=document.getElementById('dbgInfo');
-    if (el) el.textContent = 'Build: ' + window.__SF_BUILD + '\\nJS: ' + (window.__SF_LAST_ERR || '(none)');
-
-    var t = __sfEnsureBootBanner();
-    if (t) t.textContent = 'Build: ' + window.__SF_BUILD + ' • JS: ' + (window.__SF_LAST_ERR || 'ok');
-  }catch(e){}
-}
-
-window.addEventListener('error', function(ev){
-  var m = 'unknown';
-  try{ m = (ev && (ev.message||ev.type)) ? (ev.message||ev.type) : 'unknown'; }catch(_e){}
-  __sfSetDebugInfo('error: ' + m);
-});
-window.addEventListener('unhandledrejection', function(_ev){
-  __sfSetDebugInfo('promise error');
-});
-
-try{ __sfSetDebugInfo(''); }catch(e){}
-</script>
 
 <script>
 function getQueryParam(key){
@@ -2251,10 +2196,13 @@ try{
 
 </body>
 </html>"""
-    html = html.replace('__INDEX_BASE_CSS__', INDEX_BASE_CSS)
-
-
-    return html.replace("__BUILD__", str(build)).replace("__VOICE_SERVERS__", voice_servers_html)
+    return (html
+        .replace("__INDEX_BASE_CSS__", INDEX_BASE_CSS)
+        .replace("__DEBUG_BANNER_HTML__", DEBUG_BANNER_HTML)
+        .replace("__DEBUG_BANNER_BOOT_JS__", DEBUG_BANNER_BOOT_JS)
+        .replace("__BUILD__", str(build))
+        .replace("__VOICE_SERVERS__", voice_servers_html)
+    )
 
 
 
