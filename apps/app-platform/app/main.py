@@ -537,6 +537,12 @@ function copyBoot(){
     var t = (document.getElementById('bootText') || document.getElementById('boot'));
     var txt = t ? (t.textContent || '') : '';
     __sfCopyText(txt);
+    try{
+      if (typeof toastSet === 'function'){
+        toastSet('Copied', 'ok', 1200);
+        if (window.__sfToastInit) window.__sfToastInit();
+      }
+    }catch(_e){}
   }catch(e){}
 }
 
