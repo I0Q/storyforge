@@ -3060,24 +3060,26 @@ def voices_new_page(response: Response):
       </select>
     </div>
 
-    <div class='k'>Voice clip</div>
-    <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <select id='clipMode' style='flex:0 0 160px'>
-        <option value='preset' selected>Choose preset</option>
-        <option value='upload'>Upload</option>
-        <option value='url'>Paste URL</option>
-      </select>
+    <div id='clipBox'>
+      <div class='k'>Voice clip</div>
+      <div class='row' style='gap:10px;flex-wrap:nowrap'>
+        <select id='clipMode' style='flex:0 0 160px'>
+          <option value='preset' selected>Choose preset</option>
+          <option value='upload'>Upload</option>
+          <option value='url'>Paste URL</option>
+        </select>
 
-      <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
-        <select id='clipPreset'></select>
-      </div>
+        <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
+          <select id='clipPreset'></select>
+        </div>
 
-      <div id='clipUploadRow' class='hide' style='flex:1;min-width:0'>
-        <input id='clipFile' type='file' accept='audio/*' />
-      </div>
+        <div id='clipUploadRow' class='hide' style='flex:1;min-width:0'>
+          <input id='clipFile' type='file' accept='audio/*' />
+        </div>
 
-      <div id='clipUrlRow' class='hide' style='flex:1;min-width:0'>
-        <input id='clipUrl' placeholder='https://…/clip.wav' />
+        <div id='clipUrlRow' class='hide' style='flex:1;min-width:0'>
+          <input id='clipUrl' placeholder='https://…/clip.wav' />
+        </div>
       </div>
     </div>
 
@@ -3144,6 +3146,7 @@ try{
       var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
       if (!w) m.classList.remove('show');
     }catch(e){}
+    try{ setEngineUi(); }catch(e){}
   });
 }catch(e){}
 
@@ -3194,12 +3197,8 @@ function setEngineUi(){
   // Hide clip UI entirely when tortoise is selected
   try{
     var showClip = (eng!=='tortoise');
-    var cm = $('clipMode');
-    if (cm && cm.parentElement) cm.parentElement.classList.toggle('hide', !showClip);
-    var kEls = document.querySelectorAll('.k');
-    for (var i=0;i<kEls.length;i++){
-      if ((kEls[i].textContent||'').trim()==='Voice clip') kEls[i].classList.toggle('hide', !showClip);
-    }
+    var cb = $('clipBox');
+    if (cb) cb.classList.toggle('hide', !showClip);
     if (!showClip){
       if ($('clipPresetRow')) $('clipPresetRow').classList.add('hide');
       if ($('clipUploadRow')) $('clipUploadRow').classList.add('hide');
