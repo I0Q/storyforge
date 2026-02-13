@@ -2935,7 +2935,6 @@ def voices_new_page(response: Response):
         <input id='clipUrl' placeholder='https://…/clip.wav' />
       </div>
     </div>
-    <div id='clipUploadHelp' class='muted hide' style='margin-top:6px'>Uploads to Spaces.</div>
 
     <div class='k'>Sample text</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
@@ -3006,11 +3005,9 @@ try{
 function setVis(){
   var m=(($('clipMode')||{}).value||'upload');
   var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
-  var h=$('clipUploadHelp');
   if(u) u.classList.toggle('hide', m!=='upload');
   if(p) p.classList.toggle('hide', m!=='preset');
   if(r) r.classList.toggle('hide', m!=='url');
-  if(h) h.classList.toggle('hide', m!=='upload');
 }
 
 function loadEngines(){
