@@ -2917,13 +2917,6 @@ def voices_new_page(response: Response):
       <button type='button' class='secondary' onclick='genVoiceName()'>Random voice name</button>
     </div>
 
-    <details style='margin-top:10px'>
-      <summary style='cursor:pointer;font-weight:900;'>Advanced</summary>
-      <div class='k' style='margin-top:10px'>Roster id</div>
-      <input id='id' placeholder='luna' />
-      <div class='muted' style='margin-top:6px'>Optional. Auto-generated from the voice name.</div>
-    </details>
-
     <div class='k'>Engine</div>
     <select id='engineSel'></select>
 
