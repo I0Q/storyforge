@@ -3449,6 +3449,16 @@ function testSample(){
     payload.display_name = String(val('voiceName')||val('id')||'').trim() || 'Voice';
     payload.roster_id = String(val('id')||'').trim() || slugify(payload.display_name);
 
+    // If engine=tortoise, attach the selected tortoise settings (best-effort).
+    try{
+      if (engine==='tortoise'){
+        var ts = window.__SF_LAST_TORTOISE || {};
+        payload.tortoise_voice = String(ts.voice||'').trim();
+        payload.tortoise_gender = String(ts.gender||'').trim();
+        payload.tortoise_preset = String(ts.preset||'').trim();
+      }
+    }catch(_e){}
+
     return jsonFetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
         if (!j || !j.ok || !j.job_id){ if(out) out.innerHTML='<div class="err">'+esc((j&&j.error)||'tts_job_failed')+'</div>'; return; }
@@ -3461,12 +3471,19 @@ function testSample(){
 
   // If using tortoise, voice_ref is a built-in voice name (not a clip URL).
   if (engine==='tortoise'){
+    var tv = 'tom';
+    var tg = 'any';
+    var tp = 'standard';
     try{
-      payload.tortoise_voice = String((($('tortoiseVoice')||{}).value||'')).trim() || 'tom';
-      payload.tortoise_gender = String((($('tortoiseGender')||{}).value||'any')).trim() || 'any';
-      payload.tortoise_preset = String((($('tortoisePreset')||{}).value||'standard')).trim() || 'standard';
+      tv = String((($('tortoiseVoice')||{}).value||'')).trim() || 'tom';
+      tg = String((($('tortoiseGender')||{}).value||'any')).trim() || 'any';
+      tp = String((($('tortoisePreset')||{}).value||'standard')).trim() || 'standard';
     }catch(_e){}
-    return go(payload.tortoise_voice || 'tom').catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+    // Persist for later "Save to roster" from the job card.
+    try{ window.__SF_LAST_TORTOISE = {voice: tv, gender: tg, preset: tp}; }catch(_e){}
+
+    // Send selected voice now (Cloud -> Tinybox uses this as tortoise --ref)
+    return go(tv).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
   }
 
   // No trained voice_ref yet (xtts): derive from clip mode.
