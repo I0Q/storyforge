@@ -2735,7 +2735,6 @@ def voices_new_page(response: Response):
     <div class='top'>
       <div>
         <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
-        <div class='muted'>Pick an engine, provide a clip (upload / preset / URL), choose sample text, then generate. Save to roster from the job card.</div>
       </div>
       <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
