@@ -1530,7 +1530,6 @@ function renderProviders(providers){
     var header = "<div class='row provHead' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)' style='justify-content:space-between;cursor:pointer;'>"+
       "<div><div style='font-weight:950'>"+escapeHtml(name||kind||'Provider')+"</div><div class='muted'>"+escapeHtml(kind)+" • id: <code>"+escapeHtml(id)+"</code></div></div>"+
       "<div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>"+
-        "<button class='secondary' type='button' data-pid='"+escAttr(id)+"' onclick='removeProviderBtn(this); event.stopPropagation();'>Remove</button>"+
       "</div>"+
     "</div>";
 
@@ -1551,7 +1550,8 @@ function renderProviders(providers){
         "</select></div>"+
     "</div>";
 
-    return "<div class='job'>" + header + "<div id='provBody_"+escAttr(id)+"' style='display:none'>" + body + "</div></div>";
+    var isOpen = (idx === 0);
+    return "<div class='job'>" + header + "<div id='provBody_"+escAttr(id)+"' style='display:"+(isOpen?'block':'none')+"'>" + body + "</div></div>";
   }).join('');
 }
 
