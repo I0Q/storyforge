@@ -276,7 +276,7 @@ VOICES_BASE_CSS = (
     .sheet{will-change:transform;display:none;position:fixed;left:0;right:0;bottom:0;z-index:2001;background:var(--card);border-top:1px solid var(--line);border-top-left-radius:18px;border-top-right-radius:18px;max-height:78vh;box-shadow:0 -18px 60px rgba(0,0,0,.45);overflow:hidden;}
     html.monOn .sheetBackdrop{display:block;}
     html.monOn .sheet{display:block;}
-    .sheetInner{max-width:920px;margin:0 auto;padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+    .sheetInner{padding:12px 14px;max-height:78vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .sheetHandle{width:46px;height:5px;border-radius:999px;background:rgba(255,255,255,.18);margin:2px auto 10px auto;}
     .sheetTitle{font-weight:950;}
     #monitorSheet button{touch-action:manipulation;}
@@ -291,14 +291,14 @@ VOICES_BASE_CSS = (
     .bar.bad > div{background:linear-gradient(90deg,#ff4d4d,#ff2e83);}
     .bar.small{height:8px;margin-top:6px;}
 
-    .gpuGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    .gpuCard{border:1px solid rgba(255,255,255,0.10);border-radius:14px;background:#0b1020;padding:10px;}
-    .gpuHead{display:flex;justify-content:space-between;gap:10px;}
+    .gpuGrid{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;}
+    .gpuCard{background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:10px;min-width:0;}
+    .gpuHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
     .gpuHead .l{font-weight:950;}
     .gpuHead .r{color:var(--muted);font-size:12px;white-space:nowrap;}
-    .gpuRow{display:flex;justify-content:space-between;gap:10px;margin-top:8px;}
+    .gpuRow{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;}
     .gpuRow .k{color:var(--muted);font-size:12px;font-weight:900;}
-    .gpuRow .v{font-weight:950;}
+    .gpuRow .v{font-weight:950;font-size:13px;}
 
     @media (max-width:520px){
       .grid2{grid-template-columns:1fr;}
