@@ -3023,6 +3023,25 @@ def voices_new_page(response: Response):
     <div class='k'>Engine</div>
     <select id='engineSel'></select>
 
+    <div id='tortoiseBox' class='hide'>
+      <div class='k'>Tortoise voice</div>
+      <div class='row' style='gap:10px;flex-wrap:nowrap'>
+        <select id='tortoiseVoice' style='flex:1;min-width:0'></select>
+        <select id='tortoiseGender' style='flex:0 0 140px'>
+          <option value='any' selected>Any</option>
+          <option value='female'>Female</option>
+          <option value='male'>Male</option>
+        </select>
+      </div>
+      <div class='k'>Quality</div>
+      <select id='tortoisePreset'>
+        <option value='ultrafast'>ultrafast</option>
+        <option value='fast'>fast</option>
+        <option value='standard' selected>standard</option>
+        <option value='high_quality'>high_quality</option>
+      </select>
+    </div>
+
     <div class='k'>Voice clip</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <select id='clipMode' style='flex:0 0 160px'>
@@ -3116,6 +3135,59 @@ function setVis(){
   if(u) u.classList.toggle('hide', m!=='upload');
   if(p) p.classList.toggle('hide', m!=='preset');
   if(r) r.classList.toggle('hide', m!=='url');
+}
+
+// Tortoise built-in voices (from Tinybox tortoise install)
+var TORTOISE_VOICES = [
+  'angie','applejack','daniel','deniro','emma','freeman','geralt','halle','jlaw','lj','mol','myself','pat','pat2','rainbow','snakes','tim_reynolds','tom','weaver','william',
+  'train_atkins','train_daws','train_dotrice','train_dreams','train_empire','train_grace','train_kennard','train_lescault','train_mouse'
+];
+var TORTOISE_GENDER = {
+  'angie':'female','emma':'female','halle':'female','jlaw':'female','mol':'female','rainbow':'female','applejack':'female','train_grace':'female',
+  'daniel':'male','deniro':'male','freeman':'male','geralt':'male','lj':'male','myself':'male','pat':'male','pat2':'male','snakes':'male','tim_reynolds':'male','tom':'male','weaver':'male','william':'male',
+  'train_atkins':'male','train_daws':'male','train_dotrice':'male','train_dreams':'male','train_empire':'male','train_kennard':'male','train_lescault':'male','train_mouse':'male'
+};
+
+function loadTortoiseVoices(){
+  var sel=$('tortoiseVoice');
+  if(!sel) return;
+  var gsel=$('tortoiseGender');
+  var g = gsel ? String(gsel.value||'any') : 'any';
+  var voices = TORTOISE_VOICES.slice();
+  if (g==='female' || g==='male') voices = voices.filter(function(v){ return (TORTOISE_GENDER[v]||'any')===g; });
+  if (!voices.length) voices = TORTOISE_VOICES.slice();
+  var cur = '';
+  try{ cur = String(sel.value||'').trim(); }catch(e){}
+  sel.innerHTML='';
+  for (var i=0;i<voices.length;i++){
+    var o=document.createElement('option');
+    o.value=voices[i];
+    o.textContent=voices[i];
+    sel.appendChild(o);
+  }
+  if (cur){ try{ sel.value=cur; }catch(e){} }
+}
+
+function setEngineUi(){
+  var eng = String((($('engineSel')||{}).value||'')).trim();
+  var tb=$('tortoiseBox');
+  if (tb) tb.classList.toggle('hide', eng!=='tortoise');
+
+  // Hide clip UI entirely when tortoise is selected
+  try{
+    var showClip = (eng!=='tortoise');
+    var cm = $('clipMode');
+    if (cm && cm.parentElement) cm.parentElement.classList.toggle('hide', !showClip);
+    var kEls = document.querySelectorAll('.k');
+    for (var i=0;i<kEls.length;i++){
+      if ((kEls[i].textContent||'').trim()==='Voice clip') kEls[i].classList.toggle('hide', !showClip);
+    }
+    if (!showClip){
+      if ($('clipPresetRow')) $('clipPresetRow').classList.add('hide');
+      if ($('clipUploadRow')) $('clipUploadRow').classList.add('hide');
+      if ($('clipUrlRow')) $('clipUrlRow').classList.add('hide');
+    }
+  }catch(e){}
 }
 
 function loadEngines(){
@@ -3389,7 +3461,12 @@ function testSample(){
 
   // If using tortoise, voice_ref is a built-in voice name (not a clip URL).
   if (engine==='tortoise'){
-    return go('random').catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+    try{
+      payload.tortoise_voice = String((($('tortoiseVoice')||{}).value||'')).trim() || 'tom';
+      payload.tortoise_gender = String((($('tortoiseGender')||{}).value||'any')).trim() || 'any';
+      payload.tortoise_preset = String((($('tortoisePreset')||{}).value||'standard')).trim() || 'standard';
+    }catch(_e){}
+    return go(payload.tortoise_voice || 'tom').catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
   }
 
   // No trained voice_ref yet (xtts): derive from clip mode.
@@ -3402,8 +3479,14 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   try{ loadPresets(); }catch(e){}
   try{ setVis(); }catch(e){}
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
+  var eg=$('engineSel'); if(eg) eg.addEventListener('change', function(){ try{ setEngineUi(); }catch(e){} });
+  var tg=$('tortoiseGender'); if(tg) tg.addEventListener('change', function(){ try{ loadTortoiseVoices(); }catch(e){} });
+  try{ loadTortoiseVoices(); }catch(e){}
+  try{ setEngineUi(); }catch(e){}
+
   // Suggest a random voice name on first load (only if empty)
   try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
+
   // Mark JS as running for the debug banner.
   try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
 }); }catch(e){}
