@@ -2763,6 +2763,9 @@ def voices_new_page(response: Response):
 
     <div class='k'>Sample text</div>
     <textarea id='sampleText' placeholder='Hello…'>Hello. This is a test sample for a new voice.</textarea>
+    <div class='row' style='margin-top:10px;gap:10px'>
+      <button type='button' class='secondary' onclick='genSampleText()'>Random sample text</button>
+    </div>
 
     <div class='row' style='margin-top:12px'>
       <button type='button' onclick='trainAndSave()'>Generate</button>
@@ -2895,6 +2898,18 @@ function slugify(s){
   }catch(e){
     return 'voice';
   }
+}
+
+function genSampleText(){
+  var out=$('out');
+  if(out) out.textContent='Generating sample text…';
+  return jsonFetch('/api/voices/sample_text_random', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})})
+    .then(function(j){
+      if (!j || !j.ok || !j.text){ throw new Error((j&&j.error)||'sample_text_failed'); }
+      if ($('sampleText')) $('sampleText').value = String(j.text||'');
+      if(out) out.textContent='-';
+    })
+    .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
 
 function trainAndSave(){
@@ -4294,6 +4309,52 @@ def api_voices_delete(voice_id: str):
         return {'ok': False, 'error': f'delete_failed: {type(e).__name__}: {e}'}
 
 
+
+
+@app.post('/api/voices/sample_text_random')
+def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
+    """Generate a random sample text using the Tinybox LLM via gateway (/v1/llm)."""
+    try:
+        payload = payload or {}
+        # Keep it short + TTS-friendly.
+        system = (
+            "You write short sample scripts for text-to-speech voice demos. "
+            "Return plain text only (no quotes, no markdown, no emojis)."
+        )
+        user = (
+            "Generate 1-2 sentences (<= 220 characters) that sound natural when spoken aloud. "
+            "Avoid numbers, URLs, and special characters."
+        )
+        model = str(payload.get('model') or 'google/gemma-2-9b-it')
+
+        req = {
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content': system},
+                {'role': 'user', 'content': user},
+            ],
+            'temperature': float(payload.get('temperature') or 0.9),
+            'max_tokens': int(payload.get('max_tokens') or 90),
+        }
+
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=60)
+        r.raise_for_status()
+        j = r.json()
+        text = ''
+        try:
+            text = str((((j or {}).get('choices') or [])[0] or {}).get('message') or {}).get('content') or ''
+        except Exception:
+            text = ''
+        text = ' '.join(text.strip().split())
+        if not text:
+            raise RuntimeError('empty_llm_output')
+        # hard cap
+        if len(text) > 260:
+            text = text[:260].rsplit(' ', 1)[0].strip() or text[:260]
+
+        return {'ok': True, 'text': text}
+    except Exception as e:
+        return {'ok': False, 'error': f'sample_text_failed: {type(e).__name__}: {e}'}
 
 
 @app.post('/api/voices/{voice_id}/sample')
