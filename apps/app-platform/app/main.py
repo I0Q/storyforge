@@ -736,7 +736,35 @@ function __sfStartDeployWatch(){
     }
 
     tick();
-    setInterval(tick, 2500);
+
+    var intervalMs = 5000;
+    var idleHits = 0;
+    function schedule(){
+      try{
+        // Only poll deploy status when debug UI is enabled.
+        var dbg = true;
+        try{ dbg = (localStorage.getItem('sf_debug_ui') !== '0'); }catch(_e){}
+        if (!dbg) return;
+
+        setTimeout(function(){
+          try{
+            tick();
+            // If not deploying, back off heavily to avoid constant requests.
+            if (lastState !== 'deploying'){
+              idleHits += 1;
+              intervalMs = Math.min(60000, Math.max(15000, intervalMs));
+              // After a couple of idle confirmations, stop polling until reload.
+              if (idleHits >= 2) return;
+            }else{
+              idleHits = 0;
+              intervalMs = 5000;
+            }
+          }catch(_e){}
+          schedule();
+        }, intervalMs);
+      }catch(_e){}
+    }
+    schedule();
   }catch(e){}
 }
 
