@@ -2382,62 +2382,39 @@ function prodRenderSfml(sfml){
     function hilite(s){
       var raw = String(s||'');
       var t = raw.trim();
-      if (!t) return '';
 
       // comments
       if (t.startsWith('#')) return '<span class="tok-comment">'+esc(raw)+'</span>';
 
-      // Tokenize (no regex literals; Safari-safe)
-      function splitWs(str){
-        try{ return String(str||'').trim().split(' ').filter(Boolean); }catch(_e){ return []; }
-      }
-
-      // scene line
-      if (t.toLowerCase().startsWith('scene ')){
-        var rest = t.slice(5).trim();
-        var out = '<span class="tok-kw">scene</span> ';
-        // highlight known attrs
-        // id=... and title="..." (best-effort)
-        var parts = splitWs(rest);
-        out += parts.map(function(p){
-          var s2 = String(p||'');
-          if (s2.startsWith('id=')){
-            return '<span class="tok-attr">id</span>=' + '<span class="tok-id">'+esc(s2.slice(3))+'</span>';
-          }
-          if (s2.startsWith('title=')){
-            // title may have spaces; best-effort: keep token, still color
-            return '<span class="tok-attr">title</span>=' + '<span class="tok-str">'+esc(s2.slice(6))+'</span>';
-          }
-          return esc(s2);
-        }).join(' ');
-        return out;
-      }
-
-      // say line
+      // Highlight character id in: say <character_id> ...
+      // Do this BEFORE HTML escaping, to avoid brittle regex over HTML.
+      var sayChar = '';
       if (t.toLowerCase().startsWith('say ')){
-        var colon = t.indexOf(':');
-        var head = (colon>=0) ? t.slice(0, colon).trim() : t;
-        var text = (colon>=0) ? t.slice(colon+1).trim() : '';
-
-        var parts = splitWs(head);
-        var kw = parts[0] || 'say';
-        var charId = parts.length>1 ? parts[1] : '';
-        var voiceTok = '';
-        for (var i=2;i<parts.length;i++){
-          if (String(parts[i]||'').startsWith('voice=')) voiceTok = String(parts[i]||'');
-        }
-        var out = '<span class="tok-kw">'+esc(kw)+'</span>';
-        if (charId) out += ' <span class="tok-id">'+esc(charId)+'</span>';
-        if (voiceTok){
-          out += ' ' + '<span class="tok-attr">voice</span>=' + '<span class="tok-id">'+esc(voiceTok.slice(6))+'</span>';
-        }
-        out += ':';
-        if (text) out += ' ' + esc(text);
-        return out;
+        try{
+          var parts = t.split(/\s+/);
+          if (parts.length >= 2) sayChar = String(parts[1]||'');
+        }catch(_e){}
       }
 
-      // fallback
-      return esc(raw);
+      var x = esc(raw);
+
+      // keywords + attrs
+      x = x.replace(/\b(scene|say)\b/g, '<span class="tok-kw">$1</span>');
+      x = x.replace(/\b(voice|id|title)=/g, '<span class="tok-attr">$1</span>=');
+
+      // quoted strings
+      x = x.replace(/&quot;([^&]*)&quot;/g, '<span class="tok-str">&quot;$1&quot;</span>');
+
+      // character id token (best-effort)
+      if (sayChar){
+        var escId = esc(sayChar);
+        // replace only the first occurrence of the token after the highlighted 'say'
+        x = x.replace(/(<span class="tok-kw">say<\/span>\s+)/, '$1@@ID@@');
+        x = x.replace('@@ID@@'+escId, '@@ID@@<span class="tok-id">'+escId+'</span>');
+        x = x.replace('@@ID@@', '');
+      }
+
+      return x;
     }
 
     var html = '<div class="codeWrap">' + lines.map(function(ln, i){
