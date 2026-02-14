@@ -5626,11 +5626,23 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
 
         # Build prompt (no system role for gemma/vLLM)
         instr = (
-            "You are extracting story characters for a story library. "
-            "Return STRICT JSON only, no markdown. "
-            "Schema: {\"characters\": [{\"name\": str, \"role\": str, \"description\": str}]}. "
-            "Include only characters that matter to the plot. 2-8 characters. "
-            "Use short descriptions. Role examples: protagonist, antagonist, narrator, side character. "
+            "You are extracting story characters for a story library and recommending voice traits for each. "
+            "Return STRICT JSON only, no markdown, no commentary. "
+            "Schema: {\"characters\": ["
+            "{\"name\": str, \"role\": str, \"description\": str, "
+            " \"voice_traits\": {"
+            "   \"gender\": \"female|male|neutral|unknown\","
+            "   \"age\": \"child|teen|adult|elder|unknown\","
+            "   \"energy\": \"low|medium|high\","
+            "   \"pace\": \"slow|medium|fast\","
+            "   \"pitch\": \"low|medium|high\","
+            "   \"tone\": [str, ...],"
+            "   \"accent\": str,"
+            "   \"style_notes\": str"
+            " }}"
+            "]}. "
+            "Include only characters that matter to the plot (2-8), but ALWAYS include a Narrator entry with role=\"narrator\" for unassigned lines. "
+            "Use short descriptions and short style_notes. "
         )
 
         # Limit story to keep token usage bounded.
@@ -5689,6 +5701,13 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
         if not isinstance(chars, list):
             return {'ok': False, 'error': 'bad_characters_shape'}
 
+        def _clean_enum(v: Any, allowed: set[str], default: str) -> str:
+            try:
+                s = str(v or '').strip().lower()
+            except Exception:
+                s = ''
+            return s if s in allowed else default
+
         # Normalize
         out_chars: list[dict[str, Any]] = []
         for c in chars:
@@ -5699,7 +5718,47 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
                 continue
             role = str(c.get('role') or '').strip()[:60]
             desc = str(c.get('description') or '').strip()[:400]
-            out_chars.append({'name': name, 'role': role, 'description': desc})
+            vt = c.get('voice_traits') if isinstance(c.get('voice_traits'), dict) else {}
+            tone = []
+            if isinstance(vt, dict) and isinstance(vt.get('tone'), list):
+                tone = [str(x).strip() for x in (vt.get('tone') or []) if str(x).strip()]
+            tone = tone[:8]
+
+            voice_traits = {
+                'gender': _clean_enum(vt.get('gender'), {'female', 'male', 'neutral', 'unknown'}, 'unknown'),
+                'age': _clean_enum(vt.get('age'), {'child', 'teen', 'adult', 'elder', 'unknown'}, 'unknown'),
+                'energy': _clean_enum(vt.get('energy'), {'low', 'medium', 'high'}, 'medium'),
+                'pace': _clean_enum(vt.get('pace'), {'slow', 'medium', 'fast'}, 'medium'),
+                'pitch': _clean_enum(vt.get('pitch'), {'low', 'medium', 'high'}, 'medium'),
+                'tone': tone,
+                'accent': str(vt.get('accent') or '').strip()[:80],
+                'style_notes': str(vt.get('style_notes') or '').strip()[:240],
+            }
+
+            out_chars.append({'name': name, 'role': role, 'description': desc, 'voice_traits': voice_traits})
+
+        # Ensure narrator exists
+        has_narr = any(str(c.get('role') or '').strip().lower() == 'narrator' for c in out_chars)
+        if not has_narr:
+            out_chars.insert(
+                0,
+                {
+                    'name': 'Narrator',
+                    'role': 'narrator',
+                    'description': 'Narrates lines not spoken by any character.',
+                    'voice_traits': {
+                        'gender': 'unknown',
+                        'age': 'adult',
+                        'energy': 'medium',
+                        'pace': 'medium',
+                        'pitch': 'medium',
+                        'tone': ['clear', 'storytelling'],
+                        'accent': '',
+                        'style_notes': 'Clear, neutral storytelling voice.',
+                    },
+                },
+            )
+
         out_chars = out_chars[:12]
 
         conn = db_connect()
