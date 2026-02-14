@@ -5745,6 +5745,7 @@ def api_voices_analyze_metadata(voice_id: str):
 def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Suggest a voice roster assignment for each character in a story."""
     try:
+        import re
         story_id = str((payload or {}).get('story_id') or '').strip()
         if not story_id:
             return {'ok': False, 'error': 'missing_story_id'}
