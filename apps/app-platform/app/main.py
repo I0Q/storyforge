@@ -2546,9 +2546,8 @@ function prodRenderSfml(sfml){
                 // cast mapping: "  Name: voice_id"
                 { token: ['text','variable','punctuation.operator','text','constant.language'],
                   regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
-                // scene header: scene scene-1 "Title":
-                { token: ['keyword','text','constant.numeric','text','string','text'],
-                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(.*)$' },
+                // scene keyword (keep it simple/robust)
+                { token: ['text','keyword'], regex: '^(\\s*)(scene)(?=\\s)' },
                 { token: 'string', regex: '"(?:[^"\\\\]|\\\\.)*"' },
                 // speaker tags
                 { token: 'variable.parameter', regex: '\\[[^\\]]+\\]' },
