@@ -5633,16 +5633,13 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
             " \"voice_traits\": {"
             "   \"gender\": \"female|male|neutral|unknown\","
             "   \"age\": \"child|teen|adult|elder|unknown\","
-            "   \"energy\": \"low|medium|high\","
-            "   \"pace\": \"slow|medium|fast\","
             "   \"pitch\": \"low|medium|high\","
             "   \"tone\": [str, ...],"
-            "   \"accent\": str,"
-            "   \"style_notes\": str"
+            "   \"accent\": str"
             " }}"
             "]}. "
             "Include only characters that matter to the plot (2-8), but ALWAYS include a Narrator entry with role=\"narrator\" for unassigned lines. "
-            "Use short descriptions and short style_notes. "
+            "Use short descriptions. "
         )
 
         # Limit story to keep token usage bounded.
@@ -5747,7 +5744,7 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
                             'role': 'user',
                             'content': (
                                 "Convert the following into STRICT JSON only (no markdown). "
-                                "It MUST match schema {\"characters\":[{\"name\":str,\"role\":str,\"description\":str,\"voice_traits\":{\"gender\":str,\"age\":str,\"energy\":str,\"pace\":str,\"pitch\":str,\"tone\":[str],\"accent\":str,\"style_notes\":str}}]}. "
+                                "It MUST match schema {\"characters\":[{\"name\":str,\"role\":str,\"description\":str,\"voice_traits\":{\"gender\":str,\"age\":str,\"pitch\":str,\"tone\":[str],\"accent\":str}}]}. "
                                 "Use double quotes everywhere. Do not include trailing commas.\n\n"
                                 + raw0
                             ),
@@ -5805,12 +5802,9 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
             voice_traits = {
                 'gender': _clean_enum(vt.get('gender'), {'female', 'male', 'neutral', 'unknown'}, 'unknown'),
                 'age': _clean_enum(vt.get('age'), {'child', 'teen', 'adult', 'elder', 'unknown'}, 'unknown'),
-                'energy': _clean_enum(vt.get('energy'), {'low', 'medium', 'high'}, 'medium'),
-                'pace': _clean_enum(vt.get('pace'), {'slow', 'medium', 'fast'}, 'medium'),
                 'pitch': _clean_enum(vt.get('pitch'), {'low', 'medium', 'high'}, 'medium'),
                 'tone': tone,
                 'accent': str(vt.get('accent') or '').strip()[:80],
-                'style_notes': str(vt.get('style_notes') or '').strip()[:240],
             }
 
             out_chars.append({'name': name, 'role': role, 'description': desc, 'voice_traits': voice_traits})
@@ -5827,12 +5821,9 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
                     'voice_traits': {
                         'gender': 'unknown',
                         'age': 'adult',
-                        'energy': 'medium',
-                        'pace': 'medium',
                         'pitch': 'medium',
                         'tone': ['clear', 'storytelling'],
                         'accent': '',
-                        'style_notes': 'Clear, neutral storytelling voice.',
                     },
                 },
             )
