@@ -1073,12 +1073,16 @@ function fetchJsonAuthed(url, opts){
       window.location.href = '/login';
       throw new Error('unauthorized');
     }
-    if (!r.ok){
-      return r.text().then(function(t){
+    return r.text().then(function(t){
+      if (!r.ok){
         throw new Error('HTTP ' + r.status + ' ' + (t || '').slice(0,200));
-      });
-    }
-    return r.json();
+      }
+      try{
+        return JSON.parse(t || 'null');
+      }catch(e){
+        return {ok:false, error:'bad_json', status:r.status, body:(t||'').slice(0,300)};
+      }
+    });
   });
 }
 
