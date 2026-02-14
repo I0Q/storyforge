@@ -2438,7 +2438,7 @@ function prodLoadCasting(storyId){
       window.__SF_PROD.roster = j.roster || [];
       window.__SF_PROD.assignments = (j.assignments||[]).map(function(a){ return {character:String(a.character||''), voice_id:String(a.voice_id||''), reason:String(a.reason||''), _editing:false}; });
       window.__SF_PROD.saved = !!j.saved;
-      if (out && j.saved) out.textContent='Casting loaded.';
+      if (out) out.textContent='';
       prodRenderAssignments();
 
       // Load persisted SFML (if any)
@@ -2544,14 +2544,14 @@ function prodRenderAssignments(){
 
       var body = '';
       if (editing){
-        body += "<div class='muted' style='margin-top:8px'>Voice</div>";
-        body += "<div class='row' style='gap:10px;flex-wrap:nowrap;margin-top:6px'>"
+        body += "<div class='row' style='gap:10px;flex-wrap:nowrap;align-items:center;margin-top:10px'>"
+          + "<div class='muted' style='flex:0 0 auto'>played by</div>"
           + "<span class='swatch' style='background:"+escAttr(voiceHex)+"'></span>"
           + "<select style='flex:1;min-width:0' onchange='prodSetVoice("+idx+", this.value)'>" + optList(vid) + "</select>"
           + "</div>";
       }else{
-        body += "<div class='muted' style='margin-top:8px'>Voice</div>";
-        body += "<div class='row' style='gap:10px;flex-wrap:nowrap;margin-top:6px'>"
+        body += "<div class='row' style='gap:10px;flex-wrap:nowrap;align-items:center;margin-top:10px'>"
+          + "<div class='muted' style='flex:0 0 auto'>played by</div>"
           + "<span class='swatch' style='background:"+escAttr(voiceHex)+"'></span>"
           + "<div style='min-width:0'>"+escapeHtml(voiceName||'—')+"</div>"
           + "</div>";
