@@ -65,6 +65,21 @@ if not VOICE_SERVERS:
     ]
 
 app = FastAPI(title=APP_NAME, version="0.1")
+
+
+# Cache hardening: avoid stale HTML/JS during rapid iteration (Cloudflare/Safari).
+@app.middleware("http")
+async def _no_store_cache_mw(request: Request, call_next):
+    resp = await call_next(request)
+    try:
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    except Exception:
+        pass
+    return resp
+
+
 register_passphrase_auth(app)
 register_library_pages(app)
 register_library_viewer(app)
