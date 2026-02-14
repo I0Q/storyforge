@@ -320,6 +320,7 @@
         if (
           it === 'insertText' ||
           it === 'insertLineBreak' ||
+          it === 'insertParagraph' ||
           it === 'deleteContentBackward' ||
           it === 'deleteContentForward' ||
           it === 'insertFromPaste'
@@ -331,7 +332,7 @@
           var end = sel.end;
           var caret = start;
 
-          if (it === 'insertLineBreak'){
+          if (it === 'insertLineBreak' || it === 'insertParagraph'){
             caret = applyEdit('\n', start, end);
           }else if (it === 'insertText'){
             caret = applyEdit(String(ev.data || ''), start, end);
