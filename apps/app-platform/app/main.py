@@ -1379,7 +1379,7 @@ function loadHistory(reset){
   if (__SF_JOBS_LOADING || __SF_JOBS_DONE) return Promise.resolve();
   __SF_JOBS_LOADING = true;
 
-  var url = '/api/history?limit=30';
+  var url = '/api/history?limit=20';
   if (__SF_JOBS_NEXT_BEFORE){ url += '&before=' + encodeURIComponent(String(__SF_JOBS_NEXT_BEFORE)); }
 
   return fetchJsonAuthed(url).then(function(j){
@@ -5626,7 +5626,7 @@ def api_library_story_delete(story_id: str):
 
 
 @app.get('/api/history')
-def api_history(limit: int = 30, before: int | None = None):
+def api_history(limit: int = 20, before: int | None = None):
     """Job history (paged).
 
     - limit: page size
