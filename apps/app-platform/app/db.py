@@ -3,13 +3,60 @@ from __future__ import annotations
 import os
 
 
+_DB_POOL = None
+
+
+class _PooledConn:
+    def __init__(self, pool, conn):
+        self._pool = pool
+        self._conn = conn
+        self._closed = False
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def close(self):
+        # Return to pool (do not close the underlying TCP connection)
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+
+
 def db_connect():
+    """Get a DB connection.
+
+    Uses a small ThreadedConnectionPool by default to avoid exhausting managed Postgres
+    connection limits (StoryForge uses many short-lived connections in jobs).
+    """
     import psycopg2
+    from psycopg2.pool import ThreadedConnectionPool
+
+    global _DB_POOL
 
     dsn = os.environ.get('DATABASE_URL', '').strip()
     if not dsn:
         raise RuntimeError('DATABASE_URL not set')
-    return psycopg2.connect(dsn, connect_timeout=5)
+
+    # Pool size is intentionally small to cap concurrent connections.
+    try:
+        maxconn = int(os.environ.get('SF_DB_POOL_MAX', '6') or '6')
+    except Exception:
+        maxconn = 6
+    if maxconn < 2:
+        maxconn = 2
+
+    if _DB_POOL is None:
+        _DB_POOL = ThreadedConnectionPool(1, maxconn, dsn=dsn, connect_timeout=5)
+
+    conn = _DB_POOL.getconn()
+    return _PooledConn(_DB_POOL, conn)
 
 
 def db_init(conn) -> None:
