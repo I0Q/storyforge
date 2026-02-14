@@ -1753,25 +1753,6 @@ function reloadProviders(){
 
 function saveProviders(){
   var arr = collectProvidersFromUI();
-
-  // Guardrails: require at least 1 GPU selected for Voice + LLM.
-  try{
-    for (var i=0;i<(arr||[]).length;i++){
-      var p = arr[i]||{};
-      var title = (p.name||p.kind||p.id||'Provider');
-      var vg = Array.isArray(p.voice_gpus) ? p.voice_gpus : [];
-      var lg = Array.isArray(p.llm_gpus) ? p.llm_gpus : [];
-      if (!vg.length){
-        try{ toastSet('Pick at least 1 Voice GPU ('+title+')', 'bad', 2200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-        return;
-      }
-      if (!lg.length){
-        try{ toastSet('Pick at least 1 LLM GPU ('+title+')', 'bad', 2200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-        return;
-      }
-    }
-  }catch(e){}
-
   return fetchJsonAuthed('/api/settings/providers', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({providers: arr})})
     .then(function(j){
       if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
