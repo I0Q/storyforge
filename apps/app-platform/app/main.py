@@ -2424,6 +2424,30 @@ function prodRenderSfml(sfml){
       if (!t) return '';
       if (t.startsWith('#')) return span('tok-c', esc(s));
 
+      // cast delimiters
+      if (t.toUpperCase()==='<<CAST>>' || t.toUpperCase()==='<<ENDCAST>>'){
+        return span('tok-kw', esc(t));
+      }
+
+      // scene tag chevrons
+      if (t.toUpperCase().startsWith('<<SCENE')){
+        // e.g. <<SCENE id=scene-1 title="Intro">>
+        var out = span('tok-kw', '<<SCENE>>');
+        var body = t;
+        if (body.startsWith('<<')) body = body.slice(2);
+        if (body.endsWith('>>')) body = body.slice(0, -2);
+        var parts = body.split(' ').filter(Boolean);
+        for (var i=0;i<parts.length;i++){
+          var p=String(parts[i]||'');
+          if (p.toLowerCase()==='scene') continue;
+          out += ' ';
+          if (p.startsWith('id=')) out += span('tok-a','id')+'='+span('tok-id',esc(p.slice(3)));
+          else if (p.startsWith('title=')) out += span('tok-a','title')+'='+span('tok-s',esc(p.slice(6)));
+          else out += esc(p);
+        }
+        return out;
+      }
+
       // voice mapping: voice [Name] = voice_id
       if (t.toLowerCase().startsWith('voice ')){
         // best-effort parse: voice [Name] = id
@@ -2444,7 +2468,7 @@ function prodRenderSfml(sfml){
         return span('tok-kw','voice') + ' ' + esc(t.slice(5));
       }
 
-      // scene
+      // legacy scene (keep supported)
       if (t.toLowerCase().startsWith('scene ')){
         var rest = t.slice(5).trim();
         var parts = rest.split(' ').filter(Boolean);
@@ -6394,10 +6418,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
-                'First emit a casting block at the top with one line per character: voice [Name] = voice_id',
-                'Then emit scenes using: scene id=scene-1 title="..."',
+                'Casting must be at the top inside a delimited block: <<CAST>> ... <<ENDCAST>>.',
+                'Inside the cast block, one line per character: voice [Name] = voice_id',
+                'Scenes must use chevron tags: <<SCENE id=scene-1 title="...">>',
                 'For story lines, use speaker lines: [Name] text',
-                'Every [Name] used in the body MUST have a corresponding voice [Name] mapping at the top.',
+                'Every [Name] used in the body MUST have a corresponding voice [Name] mapping in the cast block.',
                 'Always include narrator as: voice [Narrator] = <voice_id> and use [Narrator] lines.',
                 'Do not invent voice ids; only use voice ids from casting_map values.',
                 'Keep each speaker line to a single line; split long paragraphs into multiple lines.',
@@ -6407,10 +6432,12 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             ],
             'example': (
                 '# SFML v0\n'
+                '<<CAST>>\n'
                 'voice [Narrator] = indigo-dawn\n'
                 'voice [Maris] = lunar-violet\n'
+                '<<ENDCAST>>\n'
                 '\n'
-                'scene id=scene-1 title="Intro"\n'
+                '<<SCENE id=scene-1 title="Intro">>\n'
                 '\n'
                 '[Narrator] The lighthouse stood silent on the cliff.\n'
                 '[Maris] I can hear the sea breathing below.\n'
@@ -6448,6 +6475,24 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         # Cap size
         if len(txt) > 20000:
             txt = txt[:20000]
+
+        # Persist SFML into the story record (overwrite on regenerate)
+        try:
+            now = int(time.time())
+            conn2 = db_connect()
+            try:
+                db_init(conn2)
+                cur2 = conn2.cursor()
+                cur2.execute(
+                    'UPDATE sf_stories SET sfml_text=%s, updated_at=%s WHERE id=%s',
+                    (txt, now, story_id),
+                )
+                conn2.commit()
+            finally:
+                conn2.close()
+        except Exception:
+            # best-effort; do not fail generation
+            pass
 
         return {'ok': True, 'sfml': txt}
     except Exception as e:

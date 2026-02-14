@@ -47,12 +47,23 @@ SFML v0 supports these directives/line types:
 
 ---
 
-## 3) Casting (`voice` lines)
+## 3) Casting block
 
 ### Purpose
 Define the voice roster id to use for each character. This makes an exported SFML file **self-contained** (no DB lookups needed to know casting).
 
-### Syntax
+### Delimiters
+Casting must appear inside a clearly delimited block:
+
+```
+<<CAST>>
+...
+<<ENDCAST>>
+```
+
+### Mapping line syntax
+Inside the casting block, one line per character:
+
 ```
 voice [<Character>] = <voice_id>
 ```
@@ -71,12 +82,18 @@ voice [Ocean] = solar-sands
 
 ---
 
-## 4) `scene` directive
+## 4) Scenes
 
 ### Syntax
+Scenes are declared using a chevron-tag line:
+
 ```
-scene id=<scene_id> title="<title>"
+<<SCENE id=<scene_id> title="<title>">>
 ```
+
+### Notes
+- `<title>` is optional.
+- Scenes appear in order.
 
 ### Required attributes
 - `id` (string)
@@ -120,10 +137,12 @@ A valid SFML file must include:
 Example:
 ```
 # SFML v0
+<<CAST>>
 voice [Narrator] = indigo-dawn
 voice [Maris] = lunar-violet
+<<ENDCAST>>
 
-scene id=scene-1 title="Intro"
+<<SCENE id=scene-1 title="Intro">>
 
 [Narrator] The lighthouse stood silent on the cliff.
 [Maris] I can hear the sea breathing below.

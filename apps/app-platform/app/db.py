@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS sf_stories (
   title TEXT NOT NULL,
   story_md TEXT NOT NULL DEFAULT '',
   characters JSONB NOT NULL DEFAULT '[]'::jsonb,
+  sfml_text TEXT NOT NULL DEFAULT '',
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
@@ -117,6 +118,18 @@ CREATE TABLE IF NOT EXISTS sf_stories (
         pass
     try:
         cur.execute("ALTER TABLE sf_stories DROP COLUMN IF EXISTS tags")
+    except Exception:
+        pass
+
+    # Migrations: add SFML storage
+    try:
+        cur.execute("ALTER TABLE sf_stories ADD COLUMN IF NOT EXISTS sfml_text TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+
+    # Migrations: add SFML storage
+    try:
+        cur.execute("ALTER TABLE sf_stories ADD COLUMN IF NOT EXISTS sfml_text TEXT NOT NULL DEFAULT ''")
     except Exception:
         pass
 
