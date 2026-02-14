@@ -596,7 +596,21 @@ function __sfEnsureBootBanner(){
     var boot = document.getElementById('boot');
     if (!boot) return null;
     var t = document.getElementById('bootText');
-    if (t) return t;
+    if (t){
+      // If server rendered bootText but not the deploy bar, inject it.
+      try{
+        var dep = document.getElementById('bootDeploy');
+        if (!dep){
+          t.insertAdjacentHTML('afterend',
+            "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:160px; margin-left:12px'>"+
+              "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
+              "<div class='updateTrack' style='margin-top:6px'><div class='updateProg'></div></div>"+
+            "</div>"
+          );
+        }
+      }catch(_e){}
+      return t;
+    }
 
     boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} • JS: ok</span>` +
       `<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:160px; margin-left:12px'>` +
