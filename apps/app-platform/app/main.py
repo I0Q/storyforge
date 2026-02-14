@@ -46,6 +46,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi import Response
 
 APP_NAME = "storyforge"
+APP_BUILD = int(os.environ.get("SF_BUILD", "0") or 0) or int(time.time())
 
 GATEWAY_BASE = os.environ.get("GATEWAY_BASE", "http://10.108.0.3:8791").rstrip("/")
 GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
@@ -139,6 +140,14 @@ INDEX_BASE_CSS = base_css("""\
     .tabs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
     .tab{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;cursor:pointer}
     .tab.active{background:var(--card);}
+
+    /* non-blocking deploy/update bar */
+    .updateBar{margin-top:8px;border:1px dashed rgba(168,179,216,.28);background:rgba(7,11,22,.28);border-radius:14px;padding:10px 12px;}
+    .updateBar.hide{display:none;}
+    .updateTrack{height:8px;border-radius:999px;border:1px solid rgba(36,48,94,.75);background:#0b1020;overflow:hidden;margin-top:8px;}
+    .updateProg{height:100%;width:35%;background:linear-gradient(90deg, rgba(74,163,255,.15), rgba(74,163,255,.95), rgba(74,163,255,.15));background-size:200% 100%;animation:sfIndet 1.2s linear infinite;}
+    @keyframes sfIndet{0%{transform:translateX(-60%);}100%{transform:translateX(260%);}}
+
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
     .todoItem{display:block;margin:6px 0;line-height:1.35;}
     .todoItem input{transform:scale(1.1);margin-right:10px;}
@@ -743,7 +752,7 @@ def _get(path: str, timeout_s: float = 20.0) -> dict[str, Any]:
 
 @app.get("/", response_class=HTMLResponse)
 def index(response: Response):
-    build = int(time.time())
+    build = APP_BUILD
     # iOS Safari can be aggressive about caching; keep the UI fresh.
     response.headers["Cache-Control"] = "no-store"
 
@@ -835,6 +844,11 @@ def index(response: Response):
   <div class='top'>
     <div>
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
+      <div id='updateBar' class='updateBar hide'>
+        <div class='muted' style='font-weight:950'>Updating StoryForge…</div>
+        <div class='updateTrack'><div id='updateProg' class='updateProg'></div></div>
+        <div id='updateSub' class='muted'>Reconnecting…</div>
+      </div>
 
     </div>
     <div class='row rowEnd'>
@@ -1151,6 +1165,8 @@ function copyFromAttr(el){
   }
 }
 
+window.__SF_LAST_API_FAIL = 0;
+
 function fetchJsonAuthed(url, opts){
   return fetch(url, opts).then(function(r){
     if (r.status === 401){
@@ -1159,14 +1175,19 @@ function fetchJsonAuthed(url, opts){
     }
     return r.text().then(function(t){
       if (!r.ok){
+        try{ window.__SF_LAST_API_FAIL = Date.now(); }catch(_e){}
         throw new Error('HTTP ' + r.status + ' ' + (t || '').slice(0,200));
       }
       try{
         return JSON.parse(t || 'null');
       }catch(e){
+        try{ window.__SF_LAST_API_FAIL = Date.now(); }catch(_e){}
         return {ok:false, error:'bad_json', status:r.status, body:(t||'').slice(0,300)};
       }
     });
+  }).catch(function(e){
+    try{ window.__SF_LAST_API_FAIL = Date.now(); }catch(_e){}
+    throw e;
   });
 }
 
@@ -2857,8 +2878,62 @@ try{
   if (__bootText) __bootText.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
 }catch(_e){}
 
+function setUpdateBar(on, msg){
+  try{
+    var bar=document.getElementById('updateBar');
+    var sub=document.getElementById('updateSub');
+    if (!bar) return;
+    if (on){
+      bar.classList.remove('hide');
+      if (sub) sub.textContent = msg || 'Reconnecting…';
+    }else{
+      bar.classList.add('hide');
+    }
+  }catch(e){}
+}
+
+function startUpdateWatch(){
+  try{
+    var cur = String(window.__SF_BUILD||'');
+
+    function tick(){
+      // Show a non-blocking updating bar when the app is temporarily failing.
+      try{
+        var lastFail = Number(window.__SF_LAST_API_FAIL||0);
+        if (lastFail && (Date.now()-lastFail) < 15000) setUpdateBar(true, 'Updating… reconnecting');
+        else setUpdateBar(false, '');
+      }catch(_e){}
+
+      // Poll build. If changed, auto-reload with ?v=<new>.
+      fetch('/api/build', {cache:'no-store'}).then(function(r){
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        return r.json();
+      }).then(function(j){
+        if (!j || !j.ok || !j.build) return;
+        var srv = String(j.build||'');
+        if (srv && cur && srv !== cur){
+          setUpdateBar(true, 'Update deployed. Reloading…');
+          try{
+            var u = new URL(window.location.href);
+            u.searchParams.set('v', srv);
+            window.location.replace(u.toString());
+          }catch(_e){
+            window.location.reload();
+          }
+        }
+      }).catch(function(_e){
+        try{ window.__SF_LAST_API_FAIL = Date.now(); }catch(__e){}
+        setUpdateBar(true, 'Updating… reconnecting');
+      });
+    }
+
+    tick();
+    setInterval(tick, 5000);
+  }catch(e){}
+}
+
 var initTab = getTabFromHash() || getQueryParam('tab');
-if (initTab==='library' || initTab==='history' || initTab==='voices' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
+if (initTab==='library' || initTab==='history' || initTab==='voices' || initTab==='production' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
 
 refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
@@ -2870,6 +2945,7 @@ loadVoices();
 // Jobs SSE will only run while jobs are in state=running.
 try{ startJobsStream(); }catch(e){}
 reloadProviders();
+try{ startUpdateWatch(); }catch(e){}
 
 try{
   var __bootText2 = __sfEnsureBootBanner();
@@ -3070,7 +3146,7 @@ def voices_root(response: Response):
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    build = int(time.time())
+    build = APP_BUILD
     try:
         voice_id = validate_voice_id(voice_id)
         conn = db_connect()
@@ -3798,7 +3874,7 @@ def settings_new_provider_page(response: Response):
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
-    build = int(time.time())
+    build = APP_BUILD
     # Separate screen for generating/testing a voice before saving.
     html = '''<!doctype html>
 <html>
@@ -5681,6 +5757,12 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
 
 
 
+
+
+@app.get('/api/build')
+def api_build():
+    """Public build/version endpoint for non-blocking deploy UX."""
+    return {'ok': True, 'build': int(APP_BUILD)}
 
 
 @app.get('/api/voices')
