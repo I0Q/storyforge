@@ -40,10 +40,10 @@ VIEWER_EXTRA_CSS = """
 ./* swipe-delete */
 .swipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .swipe::-webkit-scrollbar{display:none;}
-.swipeInner{display:flex;min-width:100%;}
-.swipeMain{min-width:100%;}
-.swipeKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;pointer-events:auto;}
-.swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;pointer-events:auto;}
+.swipeInner{display:flex;min-width:calc(100% + 96px);}
+.swipeMain{flex:0 0 100%;min-width:100%;}
+.swipeKill{flex:0 0 96px;display:flex;align-items:center;justify-content:center;padding-left:10px;pointer-events:auto;}
+.swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;pointer-events:auto;width:78px;}
 
 .charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}
 .charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
