@@ -1691,7 +1691,7 @@ function renderProviders(providers){
       "<div class='provSection'>Voice service</div>"+
       "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
       "<div class='k'>CPU threads</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_threads' value='"+escAttr(String(p.voice_threads||16))+"' placeholder='16' style='width:96px;max-width:100%;min-width:0' /></div>"+
-      "<div class='k'>Split min chars</div><div><input data-pid='"+escAttr(id)+"' data-k='tortoise_split_min_text' value='"+escAttr(String(p.tortoise_split_min_text||480))+"' placeholder='480' style='width:96px;max-width:100%;min-width:0' /></div>"+
+      "<div class='k'>Split min chars</div><div><input data-pid='"+escAttr(id)+"' data-k='tortoise_split_min_text' value='"+escAttr(String(p.tortoise_split_min_text||100))+"' placeholder='100' style='width:96px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>Voice GPUs</div><div>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"'/>"+
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
@@ -5549,7 +5549,7 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                     'voice_enabled': bool(p.get('voice_enabled', False)),
                     'voice_gpus': _ints(p.get('voice_gpus') or []),
                     'voice_threads': int(p.get('voice_threads') or 16) if str(p.get('voice_threads') or '').strip() else 16,
-                    'tortoise_split_min_text': int(p.get('tortoise_split_min_text') or 480) if str(p.get('tortoise_split_min_text') or '').strip() else 480,
+                    'tortoise_split_min_text': int(p.get('tortoise_split_min_text') or 100) if str(p.get('tortoise_split_min_text') or '').strip() else 100,
                     'llm_enabled': bool(p.get('llm_enabled', False)),
                     'llm_model': str(p.get('llm_model') or '').strip(),
                     'llm_gpus': _ints(p.get('llm_gpus') or []),
@@ -5912,9 +5912,9 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                         split_min_text = 480
                         threads = 16
                         try:
-                            split_min_text = int((p or {}).get('tortoise_split_min_text') or 480)
+                            split_min_text = int((p or {}).get('tortoise_split_min_text') or 100)
                         except Exception:
-                            split_min_text = 480
+                            split_min_text = 100
                         try:
                             threads = int((p or {}).get('tortoise_threads') or (p or {}).get('voice_threads') or 16)
                         except Exception:
