@@ -179,6 +179,9 @@ INDEX_BASE_CSS = base_css("""\
     .provKvs input,.provKvs select{max-width:100%;display:block;}
     .provSection{grid-column:1 / -1;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);font-weight:950;}
     .provHint{grid-column:1 / -1;color:var(--muted);font-size:12px;margin-top:-2px;}
+    .gpuChip{border:1px solid rgba(255,255,255,0.10);background:transparent;color:var(--muted);}
+    .gpuChip.on{border-color:rgba(74,163,255,0.55);color:var(--text);background:rgba(74,163,255,0.12);}
+    .gpuChip.claimed{opacity:0.55;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
@@ -1518,99 +1521,113 @@ function parseGpuList(s){
   }
 }
 
-function onGpuToggle(cb){
+// --- GPU chips (rewrite): pure JS state + event delegation ---
+window.__SF_GPU_STATE = window.__SF_GPU_STATE || {};
+
+function _gpuUniqSorted(a){
   try{
-    if (!cb) return;
-    // disabled check removed
-    var pid = String(cb.getAttribute('data-pid')||'');
-    if (!pid) return;
-
-    function selList(roleName){
-      var list=[];
-      var els=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="'+roleName+'"]');
-      for (var i=0;i<els.length;i++){
-        if (els[i].checked){
-          var n=parseInt(String(els[i].getAttribute('data-gpu')||''),10);
-          if (!isNaN(n)) list.push(n);
-        }
-      }
-      list.sort(function(a,b){return a-b;});
-      var u=[];
-      for (var j=0;j<list.length;j++){ if (u.indexOf(list[j])<0) u.push(list[j]); }
-      return u;
+    var m={}, out=[];
+    a = Array.isArray(a) ? a : [];
+    for (var i=0;i<a.length;i++){
+      var n=parseInt(String(a[i]),10);
+      if (isNaN(n)) continue;
+      if (!m[n]){ m[n]=1; out.push(n); }
     }
+    out.sort(function(x,y){return x-y;});
+    return out;
+  }catch(e){
+    return [];
+  }
+}
 
-    // Last-click wins: if you check a Voice GPU that's currently selected for LLM,
-    // automatically uncheck it from LLM (and vice versa via the reservation pass below).
-    try{
-      var roleNow = String(cb.getAttribute('data-role')||'');
-      var gpuNow = parseInt(String(cb.getAttribute('data-gpu')||''),10);
-      if (!isNaN(gpuNow) && cb.checked){
-        if (roleNow==='voice'){
-          var llmPeer = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="llm"][data-gpu="'+gpuNow+'"]');
-          if (llmPeer) llmPeer.checked = false;
-        } else if (roleNow==='llm'){
-          var vPeer = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="voice"][data-gpu="'+gpuNow+'"]');
-          if (vPeer) vPeer.checked = false;
-        }
-      }
-    }catch(e){}
+function _gpuGet(pid){
+  var st = (window.__SF_GPU_STATE && window.__SF_GPU_STATE[pid]) ? window.__SF_GPU_STATE[pid] : null;
+  if (!st){ st = {voice:[], llm:[]}; window.__SF_GPU_STATE[pid]=st; }
+  st.voice = _gpuUniqSorted(st.voice);
+  st.llm = _gpuUniqSorted(st.llm);
+  return st;
+}
 
-    // Enforce exclusivity and last-click-wins.
-    var roleNow = '';
-    var gpuNow = NaN;
-    try{ roleNow = String(cb.getAttribute('data-role')||''); }catch(e){}
-    try{ gpuNow = parseInt(String(cb.getAttribute('data-gpu')||''),10); }catch(e){}
+function _gpuSetFromProvider(pid, voiceArr, llmArr){
+  var st = _gpuGet(pid);
+  st.voice = _gpuUniqSorted(voiceArr);
+  st.llm = _gpuUniqSorted(llmArr);
+  // enforce exclusivity: if overlap exists, keep voice and drop from llm
+  for (var i=0;i<st.voice.length;i++){
+    var n=st.voice[i];
+    var j=st.llm.indexOf(n);
+    if (j>=0) st.llm.splice(j,1);
+  }
+}
 
-    // If overlap exists (shouldn't), resolve deterministically.
-    var llm = selList('llm');
-    var v = selList('voice');
-    if (!isNaN(gpuNow)){
-      var inV = (v.indexOf(gpuNow)>=0);
-      var inL = (llm.indexOf(gpuNow)>=0);
-      if (inV && inL){
-        if (roleNow==='voice'){
-          var llmPeer2 = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="llm"][data-gpu="'+gpuNow+'"]');
-          if (llmPeer2) llmPeer2.checked = false;
-        } else if (roleNow==='llm'){
-          var vPeer2 = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="voice"][data-gpu="'+gpuNow+'"]');
-          if (vPeer2) vPeer2.checked = false;
-        }
-      }
-    }
-
-    // Update visual claim state (fade if claimed on the other side).
-    llm = selList('llm');
-    v = selList('voice');
-
-    var voiceEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="voice"]');
-    for (var k=0;k<voiceEls.length;k++){
-      var n2=parseInt(String(voiceEls[k].getAttribute('data-gpu')||''),10);
-      var claimed = (llm.indexOf(n2)>=0);
-      try{
-        var lab = voiceEls[k].parentElement;
-        if (lab) lab.style.opacity = claimed ? '0.55' : '1';
-      }catch(e){}
-    }
-
-    var llmEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="llm"]');
-    for (var q=0;q<llmEls.length;q++){
-      var n3=parseInt(String(llmEls[q].getAttribute('data-gpu')||''),10);
-      var claimed2 = (v.indexOf(n3)>=0);
-      try{
-        var lab2 = llmEls[q].parentElement;
-        if (lab2) lab2.style.opacity = claimed2 ? '0.55' : '1';
-      }catch(e){}
-    }
-
-    // Recompute after potential unchecks
-    llm = selList('llm');
-    v = selList('voice');
-
+function _gpuWriteHidden(pid){
+  try{
+    var st=_gpuGet(pid);
     var vHidden=document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="voice_gpus"]');
-    if (vHidden) vHidden.value = v.join(',');
+    if (vHidden) vHidden.value = st.voice.join(',');
     var lHidden=document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="llm_gpus"]');
-    if (lHidden) lHidden.value = llm.join(',');
+    if (lHidden) lHidden.value = st.llm.join(',');
+  }catch(e){}
+}
+
+function _gpuRenderPid(pid){
+  try{
+    var st=_gpuGet(pid);
+    var chips=document.querySelectorAll('.gpuChip[data-pid="'+pid+'"]');
+    for (var i=0;i<chips.length;i++){
+      var role=String(chips[i].getAttribute('data-role')||'');
+      var n=parseInt(String(chips[i].getAttribute('data-gpu')||''),10);
+      if (isNaN(n)) continue;
+      var on = (role==='voice') ? (st.voice.indexOf(n)>=0) : (st.llm.indexOf(n)>=0);
+      var claimedOther = (role==='voice') ? (st.llm.indexOf(n)>=0) : (st.voice.indexOf(n)>=0);
+      chips[i].classList.toggle('on', !!on);
+      chips[i].classList.toggle('claimed', !!claimedOther);
+    }
+    _gpuWriteHidden(pid);
+  }catch(e){}
+}
+
+function gpuToggle(pid, role, n){
+  try{
+    var st=_gpuGet(pid);
+    role = String(role||'');
+    n = parseInt(String(n||''),10);
+    if (isNaN(n)) return;
+    var mine = (role==='llm') ? st.llm : st.voice;
+    var other = (role==='llm') ? st.voice : st.llm;
+
+    var idx = mine.indexOf(n);
+    if (idx>=0){
+      // uncheck
+      mine.splice(idx,1);
+    } else {
+      // check + last-click-wins: remove from other
+      mine.push(n);
+      var j = other.indexOf(n);
+      if (j>=0) other.splice(j,1);
+    }
+    st.voice=_gpuUniqSorted(st.voice);
+    st.llm=_gpuUniqSorted(st.llm);
+    _gpuRenderPid(pid);
+  }catch(e){}
+}
+
+function initGpuChips(){
+  try{
+    if (window.__SF_GPU_CHIPS_INIT) return;
+    window.__SF_GPU_CHIPS_INIT = true;
+    document.addEventListener('click', function(ev){
+      try{
+        var t = ev.target;
+        var chip = t && t.closest ? t.closest('.gpuChip') : null;
+        if (!chip) return;
+        ev.preventDefault();
+        var pid=String(chip.getAttribute('data-pid')||'');
+        var role=String(chip.getAttribute('data-role')||'');
+        var n=chip.getAttribute('data-gpu');
+        gpuToggle(pid, role, n);
+      }catch(e){}
+    }, {passive:false});
   }catch(e){}
 }
 
@@ -1638,6 +1655,8 @@ function renderProviders(providers){
   ];
 
   el.innerHTML = providers.map(function(p, idx){
+    // GPU chips init (event delegation)
+    try{ initGpuChips(); }catch(e){}
     var id = __provId(p) || ('p'+idx);
     var kind = String(p.kind||'');
     var name = String(p.name||'');
@@ -1650,6 +1669,8 @@ function renderProviders(providers){
 
     var voiceG = Array.isArray(p.voice_gpus) ? p.voice_gpus : [0,1];
     var llmG = Array.isArray(p.llm_gpus) ? p.llm_gpus : [2];
+    // init state store (single source of truth)
+    try{ _gpuSetFromProvider(id, voiceG, llmG); }catch(e){}
     var llmModel = String(p.llm_model || 'google/gemma-2-9b-it');
 
     var header = "<div class='row provHead' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)' style='justify-content:space-between;cursor:pointer;'>"+
@@ -1670,8 +1691,8 @@ function renderProviders(providers){
           [0,1,2,3].map(function(n){
             var on = (voiceG.indexOf(n)>=0);
             var claimed = (llmG.indexOf(n)>=0);
-            var op = claimed ? 0.55 : 1;
-            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
+            var cls = 'pill gpuChip' + (on ? ' on' : '') + (claimed ? ' claimed' : '');
+            return "<button type='button' class='"+cls+"' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"'>GPU "+n+"</button>";
           }).join('')+
         "</div>"+
       "</div>"+
@@ -1683,7 +1704,9 @@ function renderProviders(providers){
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
           [0,1,2,3].map(function(n){
             var on = (llmG.indexOf(n)>=0);
-            return "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
+            var claimed = (voiceG.indexOf(n)>=0);
+            var cls = 'pill gpuChip' + (on ? ' on' : '') + (claimed ? ' claimed' : '');
+            return "<button type='button' class='"+cls+"' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"'>GPU "+n+"</button>";
           }).join('')+
         "</div>"+
       "</div>"+
