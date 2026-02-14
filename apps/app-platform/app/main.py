@@ -1531,9 +1531,32 @@ function onGpuToggle(cb){
       }
     }catch(e){}
 
-    // Update visual claim state (no disabling; last-click-wins via peer-uncheck above).
+    // Enforce exclusivity and last-click-wins.
+    var roleNow = '';
+    var gpuNow = NaN;
+    try{ roleNow = String(cb.getAttribute('data-role')||''); }catch(e){}
+    try{ gpuNow = parseInt(String(cb.getAttribute('data-gpu')||''),10); }catch(e){}
+
+    // If overlap exists (shouldn't), resolve deterministically.
     var llm = selList('llm');
     var v = selList('voice');
+    if (!isNaN(gpuNow)){
+      var inV = (v.indexOf(gpuNow)>=0);
+      var inL = (llm.indexOf(gpuNow)>=0);
+      if (inV && inL){
+        if (roleNow==='voice'){
+          var llmPeer2 = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="llm"][data-gpu="'+gpuNow+'"]');
+          if (llmPeer2) llmPeer2.checked = false;
+        } else if (roleNow==='llm'){
+          var vPeer2 = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="voice"][data-gpu="'+gpuNow+'"]');
+          if (vPeer2) vPeer2.checked = false;
+        }
+      }
+    }
+
+    // Update visual claim state (fade if claimed on the other side).
+    llm = selList('llm');
+    v = selList('voice');
 
     var voiceEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="voice"]');
     for (var k=0;k<voiceEls.length;k++){
@@ -1623,7 +1646,7 @@ function renderProviders(providers){
             var on = (voiceG.indexOf(n)>=0);
             var claimed = (llmG.indexOf(n)>=0);
             var op = claimed ? 0.55 : 1;
-            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this); event.stopPropagation();' style='display:none'/>GPU "+n+"</label>";
+            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
           }).join('')+
         "</div>"+
       "</div>"+
@@ -1635,7 +1658,7 @@ function renderProviders(providers){
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
           [0,1,2,3].map(function(n){
             var on = (llmG.indexOf(n)>=0);
-            return "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this); event.stopPropagation();' style='display:none'/>GPU "+n+"</label>";
+            return "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
           }).join('')+
         "</div>"+
       "</div>"+
