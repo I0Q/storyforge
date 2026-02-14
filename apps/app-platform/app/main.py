@@ -182,6 +182,11 @@ INDEX_BASE_CSS = base_css("""\
     .gpuChip{border:1px solid rgba(255,255,255,0.10);background:transparent;color:var(--muted);}
     .gpuChip.on{border-color:rgba(74,163,255,0.55);color:var(--text);background:rgba(74,163,255,0.12);}
     .gpuChip.claimed{opacity:0.55;}
+
+    /* inline checkbox pills */
+    .checkLine{display:flex;align-items:center;gap:8px;}
+    .checkLine input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
+    .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
@@ -1725,10 +1730,10 @@ function renderProviders(providers){
 
       "<div class='provSection'>Voice service</div>"+
       "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
-      "<div class='k'>Enabled engines</div><div>"+
+      "<div class='k'>Enabled engines</div><div class='checkLine'>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_engines' value='"+escAttr(voiceEng.join(','))+"'/>"+
-        "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='xtts' "+(voiceEng.indexOf('xtts')>=0?'checked':'')+" onchange='onEngineToggle(this)' style='margin-right:6px'/>xtts</label>"+
-        "<label class='pill' style='cursor:pointer;user-select:none;margin-left:8px'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='tortoise' "+(voiceEng.indexOf('tortoise')>=0?'checked':'')+" onchange='onEngineToggle(this)' style='margin-right:6px'/>tortoise</label>"+
+        "<label class='checkPill'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='xtts' "+(voiceEng.indexOf('xtts')>=0?'checked':'')+" onchange='onEngineToggle(this)'/>xtts</label>"+
+        "<label class='checkPill'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='tortoise' "+(voiceEng.indexOf('tortoise')>=0?'checked':'')+" onchange='onEngineToggle(this)'/>tortoise</label>"+
       "</div>"+
       "<div class='k'>Max threads / process</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_threads' value='"+escAttr(String(p.voice_threads||16))+"' placeholder='16' style='width:96px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>Split min chars</div><div><input data-pid='"+escAttr(id)+"' data-k='tortoise_split_min_text' value='"+escAttr(String(p.tortoise_split_min_text||100))+"' placeholder='100' style='width:96px;max-width:100%;min-width:0' /></div>"+
