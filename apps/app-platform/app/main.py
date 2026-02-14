@@ -2235,6 +2235,21 @@ function prodLoadCasting(storyId){
       window.__SF_PROD.saved = !!j.saved;
       if (out && j.saved) out.textContent='Casting loaded.';
       prodRenderAssignments();
+
+      // Load persisted SFML (if any)
+      try{
+        fetchJsonAuthed('/api/library/story/'+encodeURIComponent(sid)).then(function(j2){
+          try{
+            var st = (j2 && j2.ok) ? (j2.story||{}) : {};
+            var sfml = String(st.sfml_text||'');
+            if (sfml){
+              window.__SF_PROD.sfml = sfml;
+              prodRenderSfml(sfml);
+            }
+          }catch(_e){}
+        }).catch(function(_e){});
+      }catch(_e){}
+
     }).catch(function(_e){});
   }catch(e){}
 }

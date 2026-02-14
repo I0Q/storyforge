@@ -82,7 +82,7 @@ def get_story_db(conn, story_id: str) -> dict[str, Any]:
     except Exception:
         pass
     cur.execute(
-        "SELECT id,title,story_md,characters,created_at,updated_at FROM sf_stories WHERE id=%s",
+        "SELECT id,title,story_md,characters,sfml_text,created_at,updated_at FROM sf_stories WHERE id=%s",
         (story_id,),
     )
     r = cur.fetchone()
@@ -104,8 +104,9 @@ def get_story_db(conn, story_id: str) -> dict[str, Any]:
         },
         "characters": chars or [],
         "story_md": r[2] or "",
-        "created_at": r[4],
-        "updated_at": r[5],
+        "sfml_text": r[4] or "",
+        "created_at": r[5],
+        "updated_at": r[6],
     }
 
 
@@ -125,8 +126,8 @@ def upsert_story_db(
 
     cur.execute(
         """
-INSERT INTO sf_stories (id,title,story_md,characters,created_at,updated_at)
-VALUES (%s,%s,%s,%s::jsonb,%s,%s)
+INSERT INTO sf_stories (id,title,story_md,characters,sfml_text,created_at,updated_at)
+VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s)
 ON CONFLICT (id) DO UPDATE SET
   title=EXCLUDED.title,
   story_md=EXCLUDED.story_md,
@@ -138,6 +139,7 @@ ON CONFLICT (id) DO UPDATE SET
             title,
             story_md or "",
             json.dumps(characters or []),
+            '',
             now,
             now,
         ),
