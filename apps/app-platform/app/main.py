@@ -6164,18 +6164,23 @@ def api_metrics():
 
 
 @app.get('/api/metrics/stream')
-def api_metrics_stream():
-    def gen():
-        # Keep-alive + periodic samples. EventSource will auto-reconnect.
+async def api_metrics_stream():
+    """SSE stream for metrics.
+
+    IMPORTANT: this must be async to avoid exhausting worker threads.
+    """
+
+    async def gen():
+        import asyncio
+
         while True:
             try:
                 m = _get('/v1/metrics', timeout_s=12.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception as e:
-                # Don't leak secrets; emit a small error payload.
                 yield f"data: {json.dumps({'ok': False, 'error': f'metrics_failed:{type(e).__name__}'})}\n\n"
-            time.sleep(2.0)
+            await asyncio.sleep(2.0)
 
     headers = {
         'Cache-Control': 'no-store',
@@ -6185,9 +6190,15 @@ def api_metrics_stream():
 
 
 @app.get('/api/jobs/stream')
-def api_jobs_stream():
-    def gen():
-        # Live jobs stream for progress bars.
+async def api_jobs_stream():
+    """SSE stream for jobs.
+
+    IMPORTANT: async to avoid threadpool exhaustion.
+    """
+
+    async def gen():
+        import asyncio
+
         while True:
             try:
                 conn = db_connect()
@@ -6200,7 +6211,7 @@ def api_jobs_stream():
                 yield f"data: {data}\n\n"
             except Exception:
                 yield f"data: {json.dumps({'ok': False, 'error': 'jobs_failed'})}\n\n"
-            time.sleep(1.5)
+            await asyncio.sleep(1.5)
 
     headers = {
         'Cache-Control': 'no-store',
