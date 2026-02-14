@@ -148,6 +148,13 @@ def register_passphrase_auth(app: FastAPI) -> None:
             if dtok and got and hmac.compare_digest(got, dtok):
                 return await call_next(request)
 
+        # Allow debug endpoints when deploy token is provided.
+        if request.url.path.startswith('/api/debug/'):
+            dtok = (os.environ.get('SF_DEPLOY_TOKEN') or '').strip()
+            got = (request.headers.get('x-sf-deploy-token') or '').strip()
+            if dtok and got and hmac.compare_digest(got, dtok):
+                return await call_next(request)
+
         # Allow worker APIs (jobs + SFML fetch + voice roster) when token is provided.
         if request.url.path.startswith('/api/jobs') or request.url.path.startswith('/api/production/sfml') or request.url.path.startswith('/api/voices'):
             # 1) dedicated job token
