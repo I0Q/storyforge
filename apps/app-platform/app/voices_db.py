@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS sf_voices (
   engine TEXT NOT NULL DEFAULT '',
   voice_ref TEXT NOT NULL DEFAULT '',
   display_name TEXT NOT NULL DEFAULT '',
+  color_hex TEXT NOT NULL DEFAULT '',
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   sample_text TEXT NOT NULL DEFAULT '',
   sample_url TEXT NOT NULL DEFAULT '',
@@ -45,6 +46,11 @@ CREATE TABLE IF NOT EXISTS sf_voices (
 );
 """
     )
+    # Best-effort migration for older installs
+    try:
+        cur.execute("ALTER TABLE sf_voices ADD COLUMN IF NOT EXISTS color_hex TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
     conn.commit()
 
 
@@ -56,7 +62,7 @@ def list_voices_db(conn, limit: int = 500) -> list[dict[str, Any]]:
         pass
 
     cur.execute(
-        "SELECT id,engine,voice_ref,display_name,enabled,sample_text,sample_url,voice_traits_json,updated_at "
+        "SELECT id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,updated_at "
         "FROM sf_voices ORDER BY updated_at DESC LIMIT %s",
         (int(limit),),
     )
@@ -69,11 +75,12 @@ def list_voices_db(conn, limit: int = 500) -> list[dict[str, Any]]:
                 "engine": r[1] or "",
                 "voice_ref": r[2] or "",
                 "display_name": r[3] or "",
-                "enabled": bool(r[4]),
-                "sample_text": r[5] or "",
-                "sample_url": r[6] or "",
-                "voice_traits_json": r[7] or "",
-                "updated_at": r[8],
+                "color_hex": r[4] or "",
+                "enabled": bool(r[5]),
+                "sample_text": r[6] or "",
+                "sample_url": r[7] or "",
+                "voice_traits_json": r[8] or "",
+                "updated_at": r[9],
             }
         )
     return out
@@ -87,7 +94,7 @@ def get_voice_db(conn, voice_id: str) -> dict[str, Any]:
         pass
 
     cur.execute(
-        "SELECT id,engine,voice_ref,display_name,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at "
+        "SELECT id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at "
         "FROM sf_voices WHERE id=%s",
         (voice_id,),
     )
@@ -99,12 +106,13 @@ def get_voice_db(conn, voice_id: str) -> dict[str, Any]:
         "engine": r[1] or "",
         "voice_ref": r[2] or "",
         "display_name": r[3] or "",
-        "enabled": bool(r[4]),
-        "sample_text": r[5] or "",
-        "sample_url": r[6] or "",
-        "voice_traits_json": r[7] or "",
-        "created_at": r[8],
-        "updated_at": r[9],
+        "color_hex": r[4] or "",
+        "enabled": bool(r[5]),
+        "sample_text": r[6] or "",
+        "sample_url": r[7] or "",
+        "voice_traits_json": r[8] or "",
+        "created_at": r[9],
+        "updated_at": r[10],
     }
 
 
@@ -114,6 +122,7 @@ def upsert_voice_db(
     engine: str,
     voice_ref: str,
     display_name: str,
+    color_hex: str,
     enabled: bool,
     sample_text: str = "",
     sample_url: str = "",
@@ -127,12 +136,13 @@ def upsert_voice_db(
 
     cur.execute(
         """
-INSERT INTO sf_voices (id,engine,voice_ref,display_name,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+INSERT INTO sf_voices (id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON CONFLICT (id) DO UPDATE SET
   engine=EXCLUDED.engine,
   voice_ref=EXCLUDED.voice_ref,
   display_name=EXCLUDED.display_name,
+  color_hex=EXCLUDED.color_hex,
   enabled=EXCLUDED.enabled,
   sample_text=EXCLUDED.sample_text,
   sample_url=EXCLUDED.sample_url,
@@ -144,6 +154,7 @@ ON CONFLICT (id) DO UPDATE SET
             str(engine or ""),
             str(voice_ref or ""),
             str(display_name or ""),
+            str(color_hex or ""),
             bool(enabled),
             str(sample_text or ""),
             str(sample_url or ""),

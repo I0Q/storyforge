@@ -1477,6 +1477,7 @@ function saveJobToRoster(jobId){
     var payload={
       id: rid,
       display_name: String(meta.display_name||rid),
+      color_hex: String(meta.color_hex||''),
       engine: String(meta.engine||''),
       voice_ref: String(meta.voice_ref||meta.voice||''),
       sample_text: String(meta.sample_text||meta.text||''),
@@ -1868,37 +1869,7 @@ function escAttr(s){
   }
 }
 
-function voiceColorHex(name){
-  // Deterministic: tries to match a named color word in the voice name.
-  // Fallback: hash -> pleasant HSL.
-  try{
-    var s = String(name||'').toLowerCase();
-    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
-    var map = {
-      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
-      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
-      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
-      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
-      ivory:'#f5f5dc', gold:'#facc15'
-    };
-
-    for (var i=words.length-1; i>=0; i--){
-      var w = words[i];
-      if (map[w]) return map[w];
-      if (w.length>1 && w.charAt(w.length-1)==='s'){
-        var w2 = w.slice(0,-1);
-        if (map[w2]) return map[w2];
-      }
-    }
-
-    var h=0;
-    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
-    var hue = Math.abs(h) % 360;
-    return 'hsl(' + hue + ', 70%, 55%)';
-  }catch(e){
-    return '#64748b';
-  }
-}
+// voiceColorHex removed; color swatches are server-provided.
 
 function parseGpuList(s){
   try{
@@ -2742,7 +2713,7 @@ function loadVoices(){
         playBtn = "<button class='secondary' data-vid='" + idEnc + "' data-sample='" + escAttr(v.sample_url||'') + "' onclick='playVoiceEl(this)'>Play</button>";
       }
 
-      var sw = voiceColorHex(nm);
+      var sw = String(v.color_hex||'').trim() || '#64748b';
       var swHtml = "<span class='swatch' title='" + escAttr(nm) + "' style='background:" + escAttr(sw) + "'></span>";
 
       var card = "<div class='job'>"
@@ -3453,6 +3424,7 @@ def voices_edit_page(voice_id: str, response: Response):
 
     vid = esc(voice_id)
     dn = esc(v.get('display_name') or '')
+    chex = esc(v.get('color_hex') or '')
     eng = esc(v.get('engine') or '')
     vref = esc(v.get('voice_ref') or '')
     stxt = esc(v.get('sample_text') or '')
@@ -3514,8 +3486,10 @@ def voices_edit_page(voice_id: str, response: Response):
 
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='editSwatch' class='swatch' title='Color swatch' style='background:#64748b'></span>
-      <input id='display_name' value='__DN__' style='flex:1;min-width:0' oninput='updateEditSwatch()' />
+      <span id='editSwatch' class='swatch' title='Color swatch' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
+      <input id='color_hex' type='hidden' value='__CHEX__' />
+      <input id='colorPick' type='color' class='hide' value='__CHEX__' onchange='setEditColorHex(this.value)' />
+      <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -3607,41 +3581,29 @@ function $(id){ return document.getElementById(id); }
 function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
 
-function voiceColorHex(name){
-  try{
-    var s = String(name||'').toLowerCase();
-    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
-    var map = {
-      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
-      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
-      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
-      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
-      ivory:'#f5f5dc', gold:'#facc15'
-    };
-    for (var i=words.length-1; i>=0; i--){
-      var w = words[i];
-      if (map[w]) return map[w];
-      if (w.length>1 && w.charAt(w.length-1)==='s'){
-        var w2 = w.slice(0,-1);
-        if (map[w2]) return map[w2];
-      }
-    }
-    var h=0;
-    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
-    var hue = Math.abs(h) % 360;
-    return 'hsl(' + hue + ', 70%, 55%)';
-  }catch(e){
-    return '#64748b';
-  }
-}
+// Swatch uses server-provided hex (no client-side color naming logic)
 
 function updateEditSwatch(){
   try{
-    var el=$('display_name');
     var sw=$('editSwatch');
-    if (!el || !sw) return;
-    sw.style.background = voiceColorHex(String(el.value||''));
+    var hx=$('color_hex');
+    if (!sw || !hx) return;
+    sw.style.background = String(hx.value||'').trim() || '#64748b';
   }catch(e){}
+}
+
+function setEditColorHex(h){
+  try{
+    var hx=$('color_hex');
+    var pk=$('colorPick');
+    if (hx) hx.value = String(h||'').trim();
+    if (pk) pk.value = String(h||'').trim() || '#64748b';
+    updateEditSwatch();
+  }catch(e){}
+}
+
+function openColorPick(){
+  try{ var pk=$('colorPick'); if (pk) pk.click(); }catch(e){}
 }
 
 function genEditVoiceName(){
@@ -3655,7 +3617,7 @@ function genEditVoiceName(){
     .then(function(j){
       if (!j || !j.ok || !j.name) throw new Error((j&&j.error)||'name_failed');
       el.value = String(j.name||'').trim();
-      updateEditSwatch();
+      setEditColorHex(String(j.color_hex||'').trim());
       if (out) out.textContent='';
     })
     .catch(function(e){ el.value = orig; if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
@@ -3783,6 +3745,7 @@ function save(){
   var out=$('out'); if(out) out.textContent='Saving…';
   var payload={
     display_name: val('display_name'),
+    color_hex: val('color_hex'),
     enabled: chk('enabled')
   };
   fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
@@ -4178,6 +4141,7 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
     html = (html
         .replace('__VID__', vid)
         .replace('__DN__', dn)
+        .replace('__CHEX__', chex or '#64748b')
         .replace('__ENG__', eng)
         .replace('__VREF__', vref)
         .replace('__STXT__', stxt)
@@ -4289,7 +4253,8 @@ def voices_new_page(response: Response):
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='voiceSwatch' class='swatch' title='Color swatch' style='background:#64748b'></span>
-      <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' oninput='updateVoiceSwatch()' />
+      <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
+      <input id='voiceColorHex' type='hidden' value='' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -4416,12 +4381,12 @@ function voiceColorHex(name){
   }
 }
 
-function updateVoiceSwatch(){
+function setVoiceSwatchHex(hex){
   try{
-    var el=document.getElementById('voiceName');
+    var hx=document.getElementById('voiceColorHex');
     var sw=document.getElementById('voiceSwatch');
-    if (!el || !sw) return;
-    sw.style.background = voiceColorHex(String(el.value||''));
+    if (hx) hx.value = String(hex||'').trim();
+    if (sw) sw.style.background = String(hex||'').trim() || '#64748b';
   }catch(e){}
 }
 
@@ -4687,7 +4652,7 @@ function genVoiceName(){
         throw new Error((j&&j.error)||'name_failed');
       }
       if (el) el.value = String(j.name||'').trim();
-      try{ updateVoiceSwatch(); }catch(e){}
+      try{ setVoiceSwatchHex(String(j.color_hex||'').trim()); }catch(e){}
       if (out) out.textContent='';
     })
     .catch(function(e){
@@ -4800,6 +4765,7 @@ function testSample(){
     // Run as a job so progress is visible on the Jobs/History tab.
     // Provide some metadata so the completed job can offer "Save to roster".
     payload.display_name = String(val('voiceName')||val('id')||'').trim() || 'Voice';
+    payload.color_hex = String(val('voiceColorHex')||'').trim();
     payload.roster_id = String(val('id')||'').trim() || slugify(payload.display_name);
 
     // If engine=tortoise, attach the selected tortoise settings (best-effort).
@@ -4858,7 +4824,6 @@ try{ document.addEventListener('DOMContentLoaded', function(){
 
   // Suggest a random voice name on first load (only if empty)
   try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
-  try{ updateVoiceSwatch(); }catch(e){}
 
   // Mark JS as running for the debug banner.
   try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
@@ -6291,6 +6256,7 @@ def api_voices_create(payload: dict[str, Any]):
         engine = str(payload.get('engine') or '')
         voice_ref = str(payload.get('voice_ref') or '')
         display_name = str(payload.get('display_name') or payload.get('name') or voice_id)
+        color_hex = str(payload.get('color_hex') or '').strip()
         enabled = bool(payload.get('enabled', True))
         sample_text = str(payload.get('sample_text') or '')
         sample_url = str(payload.get('sample_url') or '')
@@ -6310,7 +6276,7 @@ def api_voices_create(payload: dict[str, Any]):
         conn = db_connect()
         try:
             db_init(conn)
-            upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, enabled, sample_text, sample_url)
+            upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, color_hex, enabled, sample_text, sample_url)
         finally:
             conn.close()
 
@@ -6921,10 +6887,11 @@ def api_voices_update(voice_id: str, payload: dict[str, Any]):
             engine = str(payload.get('engine') if 'engine' in payload else existing.get('engine') or '')
             voice_ref = str(payload.get('voice_ref') if 'voice_ref' in payload else existing.get('voice_ref') or '')
             display_name = str(payload.get('display_name') if 'display_name' in payload else existing.get('display_name') or voice_id)
+            color_hex = str(payload.get('color_hex') if 'color_hex' in payload else existing.get('color_hex') or '')
             enabled = bool(payload.get('enabled') if 'enabled' in payload else existing.get('enabled', True))
             sample_text = str(payload.get('sample_text') if 'sample_text' in payload else existing.get('sample_text') or '')
             sample_url = str(payload.get('sample_url') if 'sample_url' in payload else existing.get('sample_url') or '')
-            upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, enabled, sample_text, sample_url)
+            upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, color_hex, enabled, sample_text, sample_url)
         finally:
             conn.close()
         return {'ok': True}
@@ -6994,9 +6961,13 @@ def api_voices_random_name(payload: dict[str, Any] | None = None):
     try:
         payload = payload or {}
         prompt = (
-            "Give a single creative color name suitable as a voice name. "
-            "Examples: Midnight Teal, Ember Rose, Arctic Blue. "
-            "Return ONLY the name, 1 to 3 words, letters and spaces only."
+            "You are generating a voice name and a matching color swatch. "
+            "Return ONLY strict JSON with keys: name, color_hex. "
+            "Rules: "
+            "- name: 1-3 words, letters/spaces only (no punctuation). "
+            "- color_hex: a hex color in the form #RRGGBB. "
+            "- The name should include a real color word that matches the hex (e.g. 'Amber', 'Violet', 'Slate', 'Teal', 'Ruby', 'Gold', 'Ivory', 'Navy'). "
+            "Example output: {\"name\":\"Midnight Teal\",\"color_hex\":\"#0ea5a6\"}"
         )
         model = str(payload.get('model') or 'google/gemma-2-9b-it')
         req = {
@@ -7012,16 +6983,32 @@ def api_voices_random_name(payload: dict[str, Any] | None = None):
         j = r.json()
         if isinstance(j, dict) and j.get('ok') is False:
             raise RuntimeError(str(j.get('error') or 'llm_failed'))
-        name = ''
+        out = ''
         try:
             ch0 = (((j or {}).get('choices') or [])[0] or {})
             msg = ch0.get('message') or {}
-            name = str(msg.get('content') or ch0.get('text') or '')
+            out = str(msg.get('content') or ch0.get('text') or '')
         except Exception:
-            name = ''
-        name = ' '.join(name.strip().split())
-        # sanitize to letters/spaces only
+            out = ''
+        out = out.strip()
+
         import re
+
+        # Parse JSON (best-effort) and sanitize.
+        name = ''
+        color_hex = ''
+        try:
+            obj = json.loads(out)
+            if isinstance(obj, dict):
+                name = str(obj.get('name') or '').strip()
+                color_hex = str(obj.get('color_hex') or '').strip()
+        except Exception:
+            # Fallback: try to extract fields
+            name = ''
+            color_hex = ''
+
+        # sanitize name to letters/spaces only
+        name = ' '.join(name.strip().split())
         name = re.sub(r"[^A-Za-z ]+", "", name).strip()
         name = re.sub(r"\s+", " ", name).strip()
         if not name:
@@ -7031,7 +7018,13 @@ def api_voices_random_name(payload: dict[str, Any] | None = None):
             name = ' '.join(words[:3]).strip()
         if len(name) > 32:
             name = name[:32].rsplit(' ', 1)[0].strip() or name[:32]
-        return {'ok': True, 'name': name}
+
+        # sanitize/validate color
+        m = re.match(r"^#[0-9a-fA-F]{6}$", color_hex or '')
+        if not m:
+            color_hex = '#64748b'
+
+        return {'ok': True, 'name': name, 'color_hex': color_hex}
     except Exception as e:
         return {'ok': False, 'error': f'name_failed: {type(e).__name__}: {e}'}
 @app.post('/api/voices/sample_text_random')
