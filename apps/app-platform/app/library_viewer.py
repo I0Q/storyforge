@@ -37,14 +37,15 @@ VIEWER_EXTRA_CSS = """
 .pill.ml6{margin-left:6px;}
 .desc.mt4{margin-top:4px;}
 
-./* swipe-delete (reimplemented): absolute delete button, translateX main */
-.charRow{position:relative;overflow:hidden;margin-top:8px;border-radius:14px;width:100%;}
-.charDel{position:absolute;right:0;top:0;bottom:0;width:92px;display:flex;align-items:center;justify-content:center;background:transparent;z-index:1;}
-.charDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;width:78px;}
-.charMain{position:relative;z-index:2;width:100%;transform:translateX(0px);transition:transform .14s ease;will-change:transform;}
-.charRow.open .charMain{transform:translateX(-92px);} /* reveal delete */
+/* swipe-delete (from scratch, using proven scroll-swipe pattern) */
+.swipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-top:8px;border-radius:14px;}
+.swipe::-webkit-scrollbar{display:none;}
+.swipeInner{display:flex;min-width:100%;}
+.swipeMain{min-width:100%;}
+.swipeKill{flex:0 0 96px;display:flex;align-items:center;justify-content:center;padding-left:10px;pointer-events:auto;}
+.swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;pointer-events:auto;width:78px;}
 
-.charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;width:100%;box-sizing:border-box;}
+.charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;width:100%;box-sizing:border-box;margin-top:0;}
 .charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
 .charCard .cname{font-weight:950}
 .charCard .cbody{min-width:0}
@@ -127,16 +128,19 @@ def register_library_viewer(app: FastAPI) -> None:
                 else ""
             )
             char_cards.append(
-                "<div class='charRow' data-idx='" + str(idx) + "'>"
-                "<div class='charDel'><button class='charDelBtn' type='button' onclick=\"deleteCharBtn(event, " + str(idx) + ")\">Delete</button></div>"
-                "<div class='charMain'>"
+                "<div class='swipe'>"
+                "<div class='swipeInner'>"
+                "<div class='swipeMain'>"
                 "<div class='charCard' onclick=\"openCharEdit(" + str(idx) + ")\">"
                 f"<div class='sw' style='background:{color}'></div>"
                 "<div class='cbody'>"
                 f"<div class='cname'>{html.escape(nm)}{pill}</div>"
                 f"{desc_html}"
                 "</div></div>"
-                "</div></div></div>"
+                "</div>"
+                "<div class='swipeKill'><button class='swipeDelBtn' type='button' onclick=\"deleteCharBtn(event, " + str(idx) + ")\">Delete</button></div>"
+                "</div>"
+                "</div>"
             )
 
         chars_html = (
@@ -216,77 +220,8 @@ function deleteCharBtn(ev, idx){{
 }}
 
 function initCharSwipe(){{
-  try{{
-    if (window.__SF_CHAR_SWIPE_INIT) return;
-    window.__SF_CHAR_SWIPE_INIT = true;
-
-    function closeAll(except){{
-      try{{
-        var rows=document.querySelectorAll('.charRow.open');
-        for (var i=0;i<rows.length;i++){{
-          if (except && rows[i]===except) continue;
-          rows[i].classList.remove('open');
-          var m=rows[i].querySelector('.charMain');
-          if (m) m.style.transform='translateX(0px)';
-        }}
-      }}catch(e){{}}
-    }}
-
-    document.addEventListener('touchstart', function(ev){{
-      try{{
-        var row = ev.target && ev.target.closest ? ev.target.closest('.charRow') : null;
-        if (!row) return;
-        if (ev.target && ev.target.closest && ev.target.closest('.charDel')) return;
-        closeAll(row);
-        row.__sx = ev.touches[0].clientX;
-        row.__dx = 0;
-        row.__swiping = true;
-        var m=row.querySelector('.charMain');
-        if (m) m.style.transition='none';
-      }}catch(e){{}}
-    }}, {{passive:true}});
-
-    document.addEventListener('touchmove', function(ev){{
-      try{{
-        var row = ev.target && ev.target.closest ? ev.target.closest('.charRow') : null;
-        if (!row || !row.__swiping) return;
-        var m=row.querySelector('.charMain');
-        if (!m) return;
-        var x = ev.touches[0].clientX;
-        var dx = x - (row.__sx||x);
-        if (dx > 0) dx = dx * 0.2;
-        if (dx < -92) dx = -92;
-        row.__dx = dx;
-        m.style.transform='translateX(' + dx + 'px)';
-      }}catch(e){{}}
-    }}, {{passive:true}});
-
-    document.addEventListener('touchend', function(ev){{
-      try{{
-        var row = ev.target && ev.target.closest ? ev.target.closest('.charRow') : null;
-        if (!row || !row.__swiping) return;
-        row.__swiping = false;
-        var m=row.querySelector('.charMain');
-        if (m) m.style.transition='transform .14s ease';
-        var dx = row.__dx || 0;
-        if (dx <= -46){{
-          row.classList.add('open');
-          if (m) m.style.transform='translateX(-92px)';
-        }} else {{
-          row.classList.remove('open');
-          if (m) m.style.transform='translateX(0px)';
-        }}
-      }}catch(e){{}}
-    }}, {{passive:true}});
-
-    document.addEventListener('click', function(ev){{
-      try{{
-        if (ev.target && ev.target.closest && ev.target.closest('.charDel')) return;
-        closeAll(null);
-      }}catch(e){{}}
-    }}, true);
-
-  }}catch(e){{}}
+  // Scroll-swipe needs no JS; keep stub for backward-compat.
+  try{{ window.__SF_CHAR_SWIPE_INIT = true; }}catch(e){{}}
 }}
 
 function saveCharEdit(){{
