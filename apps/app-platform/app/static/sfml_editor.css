@@ -1,0 +1,43 @@
+/* StoryForge SFML Editor (standalone, no deps)
+   - Designed for iOS Safari compatibility (ES5-friendly JS)
+*/
+
+.sfmlEditorRoot{
+  display:grid;
+  grid-template-columns:44px 1fr;
+  gap:12px;
+  padding:10px 12px;
+}
+
+.sfmlEditorGutter{
+  color:rgba(168,179,216,0.55);
+  text-align:right;
+  user-select:none;
+  white-space:pre;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  font-size:12px;
+  line-height:1.35;
+}
+
+.sfmlEditorPane{
+  outline:none;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  min-height:45vh;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  font-size:12px;
+  line-height:1.35;
+}
+
+.sfmlLine{display:block;}
+
+/* tokens */
+.sfmlTokBase{color:var(--text);}
+.sfmlTokComment{color:rgba(168,179,216,0.55)}
+.sfmlTokKw{color:#7dd3fc;font-weight:900}
+.sfmlTokStr{color:#f9a8d4}
+.sfmlTokId{color:#fbbf24}
+.sfmlTokVoice{color:#a78bfa;font-weight:900}
+
+.sfmlEditorPane::selection{background:rgba(74,163,255,0.28);}

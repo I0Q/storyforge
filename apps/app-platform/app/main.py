@@ -12,6 +12,7 @@ import html as pyhtml
 
 import requests
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 
 from .auth import register_passphrase_auth
 from .ui_refactor_shared import base_css
@@ -69,6 +70,13 @@ if not VOICE_SERVERS:
     ]
 
 app = FastAPI(title=APP_NAME, version="0.1")
+
+# Static assets (local, no CDN)
+try:
+    _static_dir = Path(__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+except Exception:
+    pass
 
 
 # Cache hardening: avoid stale HTML/JS during rapid iteration (Cloudflare/Safari).
@@ -833,7 +841,8 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
-  <!-- Ace removed: custom SFML editor to be implemented -->
+  <link rel="stylesheet" href="/static/sfml_editor.css?v=1" />
+  <script src="/static/sfml_editor.js?v=1"></script>
   __DEBUG_BANNER_BOOT_JS__
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
@@ -2531,36 +2540,40 @@ function prodRenderSfml(sfml){
     // Lightweight editor for now (no Ace). Next step: custom highlighting.
     if (!box.__sfmlInited){
       box.__sfmlInited = true;
-      box.innerHTML = "<textarea id='sfmlText' class='code' spellcheck='false' autocapitalize='none' autocomplete='off' autocorrect='off' style='width:100%;min-height:45vh;'></textarea>";
+      box.innerHTML = "<div id='sfmlEdHost'></div>";
 
-      var ta = document.getElementById('sfmlText');
-      window.__SF_SFML_SAVE_T = null;
+      var host = document.getElementById('sfmlEdHost');
+      window.__SF_SFML_ED = null;
 
-      function queueSave(){
-        try{ if (window.__SF_SFML_SAVE_T) clearTimeout(window.__SF_SFML_SAVE_T); }catch(_e){}
-        window.__SF_SFML_SAVE_T = setTimeout(function(){
-          try{
-            var v = String(ta.value||'');
-            window.__SF_PROD.sfml = v;
-            prodSfmlSaveNow(v);
-          }catch(_e){}
-        }, 2000);
+      try{
+        if (window.SFMLEditor && host){
+          window.__SF_SFML_ED = window.SFMLEditor.create(host, {
+            debounceMs: 2000,
+            onSave: function(v){
+              try{ window.__SF_PROD.sfml = String(v||''); }catch(_e){}
+              try{ prodSfmlSaveNow(v); }catch(_e){}
+            },
+            onBlurSave: function(v){
+              try{ window.__SF_PROD.sfml = String(v||''); }catch(_e){}
+              try{ prodSfmlSaveNow(v); }catch(_e){}
+            }
+          });
+        }else{
+          host.innerHTML = "<textarea id='sfmlText' class='code' spellcheck='false' autocapitalize='none' autocomplete='off' autocorrect='off' style='width:100%;min-height:45vh;'></textarea>";
+        }
+      }catch(_e){
+        try{ host.innerHTML = "<textarea id='sfmlText' class='code' spellcheck='false' autocapitalize='none' autocomplete='off' autocorrect='off' style='width:100%;min-height:45vh;'></textarea>"; }catch(__e){}
       }
-
-      ta.addEventListener('input', function(){ queueSave(); });
-      ta.addEventListener('blur', function(){
-        try{
-          var v = String(ta.value||'');
-          window.__SF_PROD.sfml = v;
-          prodSfmlSaveNow(v);
-        }catch(_e){}
-      });
     }
 
-    var ta2 = document.getElementById('sfmlText');
-    if (ta2 && String(ta2.value||'') !== raw){
-      ta2.value = raw;
-    }
+    try{
+      if (window.__SF_SFML_ED && typeof window.__SF_SFML_ED.setValue === 'function'){
+        window.__SF_SFML_ED.setValue(raw);
+      }else{
+        var ta2 = document.getElementById('sfmlText');
+        if (ta2 && String(ta2.value||'') !== raw) ta2.value = raw;
+      }
+    }catch(_e){}
 
   }catch(e){}
 }
