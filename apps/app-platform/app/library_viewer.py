@@ -38,13 +38,13 @@ VIEWER_EXTRA_CSS = """
 .desc.mt4{margin-top:4px;}
 
 ./* swipe-delete (reimplemented): absolute delete button, translateX main */
-.charRow{position:relative;overflow:hidden;margin-top:8px;border-radius:14px;}
-.charDel{position:absolute;right:0;top:0;bottom:0;width:92px;display:flex;align-items:center;justify-content:center;background:transparent;}
+.charRow{position:relative;overflow:hidden;margin-top:8px;border-radius:14px;width:100%;}
+.charDel{position:absolute;right:0;top:0;bottom:0;width:92px;display:flex;align-items:center;justify-content:center;background:transparent;z-index:1;}
 .charDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;width:78px;}
-.charMain{transform:translateX(0px);transition:transform .14s ease;will-change:transform;}
+.charMain{position:relative;z-index:2;width:100%;transform:translateX(0px);transition:transform .14s ease;will-change:transform;}
 .charRow.open .charMain{transform:translateX(-92px);} /* reveal delete */
 
-.charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;}
+.charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;width:100%;box-sizing:border-box;}
 .charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
 .charCard .cname{font-weight:950}
 .charCard .cbody{min-width:0}
