@@ -602,9 +602,12 @@ function __sfEnsureBootBanner(){
         var dep = document.getElementById('bootDeploy');
         if (!dep){
           t.insertAdjacentHTML('afterend',
-            "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:160px; margin-left:12px'>"+
+            "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>"+
               "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
-              "<div class='updateTrack' style='margin-top:6px'><div class='updateProg'></div></div>"+
+              "<div class='updateTrack' style='margin-top:6px;position:relative'>"+
+                "<div class='updateProg'></div>"+
+                "<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>"+
+              "</div>"+
             "</div>"
           );
         }
@@ -613,9 +616,12 @@ function __sfEnsureBootBanner(){
     }
 
     boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} • JS: ok</span>` +
-      `<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:160px; margin-left:12px'>` +
+      `<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>` +
         `<div class='muted' style='font-weight:950'>StoryForge updating…</div>` +
-        `<div class='updateTrack' style='margin-top:6px'><div class='updateProg'></div></div>` +
+        `<div class='updateTrack' style='margin-top:6px;position:relative'>` +
+          `<div class='updateProg'></div>` +
+          `<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>` +
+        `</div>` +
       `</div>` +
       `<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>` +
       `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">` +
@@ -637,6 +643,31 @@ function __sfSetDebugInfo(msg){
   }catch(e){}
 }
 
+window.__SF_DEPLOY_T0 = 0;
+window.__SF_DEPLOY_TIMER = null;
+
+function __sfFmtDur(sec){
+  try{
+    sec = Math.max(0, sec|0);
+    var m = Math.floor(sec/60);
+    var s = sec%60;
+    return String(m) + ':' + (s<10?('0'+String(s)):String(s));
+  }catch(e){
+    return '0:00';
+  }
+}
+
+function __sfDeployTimerTick(){
+  try{
+    var t = document.getElementById('bootDeployTimer');
+    if (!t) return;
+    var t0 = Number(window.__SF_DEPLOY_T0||0);
+    if (!t0) { t.textContent = '0:00'; return; }
+    var sec = Math.floor((Date.now()-t0)/1000);
+    t.textContent = __sfFmtDur(sec);
+  }catch(e){}
+}
+
 function __sfSetDeployBar(on, msg){
   try{
     var el = document.getElementById('bootDeploy');
@@ -646,8 +677,16 @@ function __sfSetDeployBar(on, msg){
       if (msg){
         try{ el.querySelector('.muted').textContent = String(msg||'Deploying…'); }catch(_e){}
       }
+      if (!window.__SF_DEPLOY_T0) window.__SF_DEPLOY_T0 = Date.now();
+      try{ __sfDeployTimerTick(); }catch(_e){}
+      if (!window.__SF_DEPLOY_TIMER){
+        window.__SF_DEPLOY_TIMER = setInterval(__sfDeployTimerTick, 1000);
+      }
     }else{
       el.classList.add('hide');
+      window.__SF_DEPLOY_T0 = 0;
+      try{ if (window.__SF_DEPLOY_TIMER) clearInterval(window.__SF_DEPLOY_TIMER); }catch(_e){}
+      window.__SF_DEPLOY_TIMER = null;
     }
   }catch(e){}
 }
