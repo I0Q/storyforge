@@ -593,7 +593,7 @@ function __sfEnsureBootBanner(){
 
     boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} • JS: ok</span>` +
       `<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:160px; margin-left:12px'>` +
-        `<div class='muted' style='font-weight:950'>Deploying…</div>` +
+        `<div class='muted' style='font-weight:950'>StoryForge updating…</div>` +
         `<div class='updateTrack' style='margin-top:6px'><div class='updateProg'></div></div>` +
       `</div>` +
       `<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>` +
@@ -632,15 +632,29 @@ function __sfSetDeployBar(on, msg){
 }
 
 function __sfStartDeployWatch(){
-  // Debug-only: show a progress bar when the deploy pipeline toggles deploy state.
+  // Show a progress bar during deployments. Full-width bar is always visible when deploying.
+  // Debug boot bar only shows when debug UI is enabled.
   try{
     var dbg = null;
     try{ dbg = localStorage.getItem('sf_debug_ui'); }catch(e){}
     var debugOn = (dbg===null || dbg==='' || dbg==='1');
-    if (!debugOn) return;
 
     var lastUpdated = 0;
     var lastState = '';
+
+    function setTopBar(on, msg){
+      try{
+        var bar=document.getElementById('updateBar');
+        var sub=document.getElementById('updateSub');
+        if (!bar) return;
+        if (on){
+          bar.classList.remove('hide');
+          if (sub) sub.textContent = msg || 'Deploying…';
+        }else{
+          bar.classList.add('hide');
+        }
+      }catch(_e){}
+    }
 
     function tick(){
       fetch('/api/deploy/status', {cache:'no-store'}).then(function(r){
@@ -652,19 +666,27 @@ function __sfStartDeployWatch(){
         var msg = String(j.message||'');
         var upd = Number(j.updated_at||0);
 
-        if (st === 'deploying') __sfSetDeployBar(true, msg || 'Deploying…');
-        else __sfSetDeployBar(false, '');
+        if (st === 'deploying'){
+          setTopBar(true, msg || 'Deploying…');
+          if (debugOn) __sfSetDeployBar(true, msg || 'StoryForge updating…');
+          else __sfSetDeployBar(false, '');
+        }else{
+          setTopBar(false, '');
+          __sfSetDeployBar(false, '');
+        }
 
         // If we just finished a deploy, reload once to pick up new build.
         if (lastState === 'deploying' && st !== 'deploying'){
           try{
             if (upd && upd !== lastUpdated){
+              setTopBar(true, 'Deploy complete. Refreshing…');
               setTimeout(function(){
                 try{ window.location.reload(); }catch(_e){}
-              }, 400);
+              }, 450);
             }
           }catch(_e){}
         }
+
         lastUpdated = upd || lastUpdated;
         lastState = st;
       }).catch(function(_e){
@@ -673,7 +695,7 @@ function __sfStartDeployWatch(){
     }
 
     tick();
-    setInterval(tick, 3000);
+    setInterval(tick, 2500);
   }catch(e){}
 }
 
@@ -956,7 +978,11 @@ def index(response: Response):
   <div class='top'>
     <div>
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
-      <!-- deploy/update bar removed -->
+      <div id='updateBar' class='updateBar hide'>
+        <div class='muted' style='font-weight:950'>StoryForge updating…</div>
+        <div class='updateTrack'><div id='updateProg' class='updateProg'></div></div>
+        <div id='updateSub' class='muted'>Deploying…</div>
+      </div>
     </div>
     <div class='row rowEnd'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
