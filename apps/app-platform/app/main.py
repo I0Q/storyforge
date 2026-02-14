@@ -1526,6 +1526,38 @@ function parseGpuList(s){
   }
 }
 
+
+function onEngineToggle(cb){
+  try{
+    if (!cb) return;
+    var pid = String(cb.getAttribute('data-pid')||'');
+    var eng = String(cb.getAttribute('data-engine')||'');
+    if (!pid || !eng) return;
+
+    var hidden = document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="voice_engines"]');
+    var cur = [];
+    try{ cur = parseGpuList(hidden ? hidden.value : '').map(String); }catch(e){ cur=[]; }
+    // parseGpuList returns ints; we want strings; fallback:
+    if (!cur.length){
+      try{ cur = String(hidden ? hidden.value : '').split(',').map(function(x){return String(x||'').trim();}).filter(Boolean); }catch(e){ cur=[]; }
+    }
+
+    var on = !!cb.checked;
+    var i = cur.indexOf(eng);
+    if (on && i<0) cur.push(eng);
+    if (!on && i>=0) cur.splice(i,1);
+
+    // Guardrail: require at least one engine selected
+    if (!cur.length){
+      cb.checked = true;
+      try{ toastSet('Pick at least 1 voice engine', 'bad', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+      return;
+    }
+
+    if (hidden) hidden.value = cur.join(',');
+  }catch(e){}
+}
+
 // --- GPU chips (rewrite): pure JS state + event delegation ---
 window.__SF_GPU_STATE = window.__SF_GPU_STATE || {};
 
@@ -1670,6 +1702,9 @@ function renderProviders(providers){
     var voiceOn = !!(p.voice_enabled);
     var llmOn = !!(p.llm_enabled);
 
+    var voiceEng = Array.isArray(p.voice_engines) ? p.voice_engines : ['xtts','tortoise'];
+
+
     var gatewayBase = String(p.gateway_base || '');
 
     var voiceG = Array.isArray(p.voice_gpus) ? p.voice_gpus : [0,1];
@@ -1690,7 +1725,12 @@ function renderProviders(providers){
 
       "<div class='provSection'>Voice service</div>"+
       "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
-      "<div class='k'>CPU threads</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_threads' value='"+escAttr(String(p.voice_threads||16))+"' placeholder='16' style='width:96px;max-width:100%;min-width:0' /></div>"+
+      "<div class='k'>Enabled engines</div><div>"+
+        "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_engines' value='"+escAttr(voiceEng.join(','))+"'/>"+
+        "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='xtts' "+(voiceEng.indexOf('xtts')>=0?'checked':'')+" onchange='onEngineToggle(this)' style='margin-right:6px'/>xtts</label>"+
+        "<label class='pill' style='cursor:pointer;user-select:none;margin-left:8px'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='tortoise' "+(voiceEng.indexOf('tortoise')>=0?'checked':'')+" onchange='onEngineToggle(this)' style='margin-right:6px'/>tortoise</label>"+
+      "</div>"+
+      "<div class='k'>Max threads / process</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_threads' value='"+escAttr(String(p.voice_threads||16))+"' placeholder='16' style='width:96px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>Split min chars</div><div><input data-pid='"+escAttr(id)+"' data-k='tortoise_split_min_text' value='"+escAttr(String(p.tortoise_split_min_text||100))+"' placeholder='100' style='width:96px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>Voice GPUs</div><div>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"'/>"+
@@ -1789,6 +1829,8 @@ function collectProvidersFromUI(){
       p[k] = !!el.checked;
     } else if (k==='voice_gpus' || k==='llm_gpus'){
       p[k] = parseGpuList(el.value);
+    } else if (k==='voice_engines'){
+      try{ p[k] = String(el.value||'').split(',').map(function(x){return String(x||'').trim();}).filter(Boolean); }catch(e){ p[k]=[]; }
     } else if (k==='voice_threads' || k==='tortoise_split_min_text'){
       var n = parseInt(String(el.value||'').trim(),10);
       if (isNaN(n)) n = 0;
@@ -2514,6 +2556,15 @@ def api_voice_provider_engines():
         j = r.json()
         if isinstance(j, dict) and j.get('ok') and isinstance(j.get('engines'), list):
             engs = [str(x) for x in (j.get('engines') or []) if str(x).strip()]
+            # Apply provider engine allowlist if set (Tinybox provider).
+            try:
+                p = _get_tinybox_provider() or {}
+                allow = p.get('voice_engines') if isinstance(p, dict) else None
+                if isinstance(allow, list) and allow:
+                    allow2 = {str(x).strip() for x in allow if str(x).strip()}
+                    engs = [e for e in engs if e in allow2]
+            except Exception:
+                pass
             return {'ok': True, 'engines': engs or ['xtts', 'tortoise']}
         return {'ok': False, 'error': 'bad_upstream_shape'}
     except Exception as e:
@@ -5547,6 +5598,7 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                     'gateway_base': str(p.get('gateway_base') or '').strip()[:200],
                     'monitoring_enabled': bool(p.get('monitoring_enabled', False)),
                     'voice_enabled': bool(p.get('voice_enabled', False)),
+                    'voice_engines': [str(x).strip() for x in (p.get('voice_engines') or []) if str(x).strip() in ('xtts', 'tortoise')],
                     'voice_gpus': _ints(p.get('voice_gpus') or []),
                     'voice_threads': int(p.get('voice_threads') or 16) if str(p.get('voice_threads') or '').strip() else 16,
                     'tortoise_split_min_text': int(p.get('tortoise_split_min_text') or 100) if str(p.get('tortoise_split_min_text') or '').strip() else 100,
