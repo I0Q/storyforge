@@ -159,8 +159,9 @@ INDEX_BASE_CSS = base_css("""\
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin-top:8px;font-size:13px;}
     .kvs > div{min-width:0;align-self:center;}
+    .kvs > div:nth-child(2n){width:100%;}
     .provKvs .k{padding-top:2px;}
-    .provKvs input,.provKvs select{max-width:100%;}
+    .provKvs input,.provKvs select{max-width:100%;display:block;}
     .provSection{grid-column:1 / -1;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);font-weight:950;}
     .provHint{grid-column:1 / -1;color:var(--muted);font-size:12px;margin-top:-2px;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
