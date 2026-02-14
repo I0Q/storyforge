@@ -1020,7 +1020,6 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
           <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
-          <button type='button' id='prodSaveBtn' onclick='prodSaveCasting()' disabled>Save casting</button>
         </div>
       </div>
 
@@ -2329,7 +2328,7 @@ function prodSetSfmlBusy(on, title, sub){
 function prodRenderAssignments(){
   try{
     var box=document.getElementById('prodAssignments');
-    var saveBtn=document.getElementById('prodSaveBtn');
+    var saveBtn=null;
     var step3=document.getElementById('prodStep3Btn');
     if (!box) return;
 
@@ -2390,9 +2389,7 @@ function prodRenderAssignments(){
       box.innerHTML = assigns.map(cardFor).join("");
     }
 
-    // Save enabled when we have assignments and not saved.
-    var canSave = (!!(st.story_id) && assigns.length);
-    try{ if (saveBtn) saveBtn.disabled = (!canSave); }catch(_e){}
+    // Step 3 enabled when casting is saved.
     try{ if (step3) step3.disabled = (!st.saved); }catch(_e){}
   }catch(e){}
 }
@@ -2403,20 +2400,33 @@ function prodEditAssign(i){
 function prodCancelEdit(i){
   try{ window.__SF_PROD.assignments[i]._editing=false; prodRenderAssignments(); }catch(e){}
 }
+window.__SF_CAST_SAVE_T = null;
+
+function prodCastAutosaveArm(){
+  try{
+    if (window.__SF_CAST_SAVE_T) clearTimeout(window.__SF_CAST_SAVE_T);
+    window.__SF_CAST_SAVE_T = setTimeout(function(){
+      try{ prodSaveCasting(true); }catch(_e){}
+    }, 900);
+  }catch(e){}
+}
+
 function prodSetVoice(i, voiceId){
-  try{ window.__SF_PROD.assignments[i].voice_id = String(voiceId||''); window.__SF_PROD.saved=false; }catch(e){}
+  try{
+    window.__SF_PROD.assignments[i].voice_id = String(voiceId||'');
+    window.__SF_PROD.saved=false;
+    prodCastAutosaveArm();
+  }catch(e){}
 }
 
 function prodSuggestCasting(){
   try{
     var sel=document.getElementById('prodStorySel');
     var out=document.getElementById('prodOut');
-    var saveBtn=document.getElementById('prodSaveBtn');
     var storyId = sel ? String(sel.value||'').trim() : '';
     if (!storyId){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
     prodSetBusy(true, 'Suggesting casting…', 'Asking the LLM to match voices to characters');
     if (out) out.textContent='';
-    if (saveBtn) saveBtn.disabled = true;
 
     fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
       .then(function(j){
@@ -2430,21 +2440,24 @@ function prodSuggestCasting(){
         });
         window.__SF_PROD.saved = false;
         prodRenderAssignments();
+        // Autosave immediately after new suggestion
+        try{ prodSaveCasting(true); }catch(_e){}
       })
       .catch(function(e){ prodSetBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
-function prodSaveCasting(){
+function prodSaveCasting(silent){
   try{
+    silent = !!silent;
     var out=document.getElementById('prodOut');
     var box=document.getElementById('prodSfmlBox');
     var st = window.__SF_PROD || {};
-    if (!st.story_id) { if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+    if (!st.story_id) { if(out && !silent) out.innerHTML='<div class="err">Pick a story</div>'; return; }
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
-    if (!assigns.length){ if(out) out.innerHTML='<div class="err">No assignments</div>'; return; }
+    if (!assigns.length){ if(out && !silent) out.innerHTML='<div class="err">No assignments</div>'; return; }
 
-    prodSetBusy(true, 'Saving casting…', 'Persisting your casting choices');
+    prodSetBusy(true, 'Saving casting…', 'Autosaving your casting choices');
     if (out) out.textContent='';
     var payload = { story_id: String(st.story_id), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
 
@@ -2452,15 +2465,13 @@ function prodSaveCasting(){
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
         prodSetBusy(false);
-        if (out) out.textContent='Saved.';
+        if (out && !silent) out.textContent='Saved.';
         window.__SF_PROD.saved = true;
         window.__SF_PROD.sfml = '';
-        // exit edit mode
-        try{ window.__SF_PROD.assignments.forEach(function(a){ a._editing=false; }); }catch(_e){}
         try{ if (box){ box.classList.add('hide'); box.innerHTML=''; } }catch(_e){}
         prodRenderAssignments();
       })
-      .catch(function(e){ prodSetBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+      .catch(function(e){ prodSetBusy(false); if(out && !silent) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
