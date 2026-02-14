@@ -1715,7 +1715,9 @@ function renderProviders(providers){
             var sel = (String(m.id)===llmModel) ? 'selected' : '';
             return "<option value='"+escAttr(m.id)+"' "+sel+">"+escapeHtml(m.label)+"</option>";
           }).join('')+
-        "</select></div>"+
+        "</select>"+
+        "<div id='llmReload_"+escAttr(id)+"' class='muted hide' style='margin-top:8px'>Reloading LLM…</div>"+
+      "</div>"+
     "</div>";
 
     var isOpen = (idx === 0);
@@ -1794,6 +1796,24 @@ function reloadProviders(){
     if (!j || !j.ok){ if(el) el.innerHTML="<div class='muted'>Error: "+escapeHtml((j&&j.error)||'unknown')+"</div>"; return; }
     window.__SF_PROVIDERS = (j.providers || []);
     renderProviders(window.__SF_PROVIDERS);
+
+    // show reloading hint if set
+    try{
+      var raw = sessionStorage.getItem('sf_llm_reloading') || '';
+      if (raw){
+        var st = JSON.parse(raw);
+        if (st && st.ts && (Date.now() - st.ts) < 180000){
+          // only applies to the first provider card for now
+          var provId = (j.providers && j.providers[0] && j.providers[0].id) ? String(j.providers[0].id) : '';
+          if (provId){
+            var el2 = document.getElementById('llmReload_'+provId);
+            if (el2) el2.classList.remove('hide');
+          }
+        } else {
+          sessionStorage.removeItem('sf_llm_reloading');
+        }
+      }
+    }catch(e){}
   }).catch(function(e){ if(el) el.innerHTML="<div class='muted'>Load failed: "+escapeHtml(String(e))+"</div>"; });
 }
 
@@ -1803,6 +1823,16 @@ function saveProviders(){
     .then(function(j){
       if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
       try{ toastSet('Saved', 'ok', 1200); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+
+      // If LLM was reconfigured, show a persistent hint (vLLM restart + model load can take 30-120s).
+      try{
+        if (j && j.llm_reconfigure && j.llm_reconfigure.ok){
+          var g = (j.llm_reconfigure.gpus||[]).join(',');
+          try{ sessionStorage.setItem('sf_llm_reloading', JSON.stringify({ts:Date.now(), gpus:g})); }catch(e){}
+          try{ toastSet('Reloading LLM on GPU(s) '+g+'… (may take ~1–2 min)', 'info', 2600); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+        }
+      }catch(e){}
+
       return reloadProviders();
     })
     .catch(function(e){ alert('Save failed: '+String(e)); });
@@ -5545,6 +5575,7 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
             prev_llm_gpus = []
 
         # If LLM GPUs changed, trigger vLLM reconfigure+restart on Tinybox.
+        llm_reconf: dict[str, Any] | None = None
         try:
             if sorted(set(prev_llm_gpus)) != sorted(set(next_llm_gpus)) and next_llm_gpus:
                 r = requests.post(
@@ -5555,13 +5586,16 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                 )
                 # best-effort; don't fail settings save on restart issues
                 try:
-                    _ = r.json()
+                    llm_reconf = r.json()
                 except Exception:
-                    _ = None
-        except Exception:
-            pass
+                    llm_reconf = {'ok': False, 'error': 'bad_json'}
+        except Exception as e:
+            llm_reconf = {'ok': False, 'error': f'reconfigure_failed: {type(e).__name__}: {str(e)[:120]}'}
 
-        return {'ok': True}
+        out = {'ok': True}
+        if llm_reconf is not None:
+            out['llm_reconfigure'] = llm_reconf
+        return out
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
