@@ -60,11 +60,32 @@
   }
 
   function getTextFromEditor(ed){
-    // innerText keeps line breaks
+    // Prefer a stored model; DOM is just a view.
     var t = '';
     try{ t = ed && ed.innerText ? String(ed.innerText) : ''; }catch(e){ t = ''; }
     t = normalizeNewlines(t);
     return t;
+  }
+
+  function getSelOffsets(root){
+    try{
+      var sel = window.getSelection ? window.getSelection() : null;
+      if (!sel || sel.rangeCount === 0) return {start:0,end:0};
+      var r = sel.getRangeAt(0);
+      var pre1 = r.cloneRange();
+      pre1.selectNodeContents(root);
+      pre1.setEnd(r.startContainer, r.startOffset);
+      var start = pre1.toString().length;
+
+      var pre2 = r.cloneRange();
+      pre2.selectNodeContents(root);
+      pre2.setEnd(r.endContainer, r.endOffset);
+      var end = pre2.toString().length;
+
+      return {start:start,end:end};
+    }catch(e){
+      return {start:0,end:0};
+    }
   }
 
   function isBlockHeaderLine(trimmed){
@@ -171,6 +192,7 @@
     this.opts = opts;
     this._t = null;
     this._lastSaved = null;
+    this._value = '';
 
     var root = document.createElement('div');
     root.className = 'sfmlEditorRoot';
@@ -193,12 +215,21 @@
 
     var self = this;
 
-    function rerenderFromDom(){
-      var caret = getCaretOffset(ed);
-      var txt = getTextFromEditor(ed);
+    function rerenderFromValue(caret){
+      var txt = String(self._value || '');
       render(ed, txt);
-      setCaretByOffset(ed, caret);
+      setCaretByOffset(ed, caret == null ? 0 : caret);
       return txt;
+    }
+
+    function applyEdit(insertText, delStart, delEnd){
+      var v = String(self._value || '');
+      delStart = Math.max(0, Math.min(v.length, delStart|0));
+      delEnd = Math.max(0, Math.min(v.length, delEnd|0));
+      if (delEnd < delStart){ var tmp = delStart; delStart = delEnd; delEnd = tmp; }
+      insertText = String(insertText == null ? '' : insertText);
+      self._value = v.slice(0, delStart) + insertText + v.slice(delEnd);
+      return delStart + insertText.length;
     }
 
     function queueSave(){
@@ -214,11 +245,61 @@
       }, (opts.debounceMs != null) ? opts.debounceMs : 2000);
     }
 
-    ed.addEventListener('input', function(){
-      rerenderFromDom();
-      queueSave();
+    // Model-driven editing: intercept beforeinput so the browser doesn't mutate our highlighted DOM.
+    ed.addEventListener('beforeinput', function(ev){
+      try{
+        ev = ev || window.event;
+        if (!ev) return;
+        if (ev.isComposing) return; // let IME handle composition
+
+        var it = String(ev.inputType || '');
+        if (!it) return;
+
+        // We handle the common editing operations.
+        if (
+          it === 'insertText' ||
+          it === 'insertLineBreak' ||
+          it === 'deleteContentBackward' ||
+          it === 'deleteContentForward' ||
+          it === 'insertFromPaste'
+        ){
+          ev.preventDefault();
+
+          var sel = getSelOffsets(ed);
+          var start = sel.start;
+          var end = sel.end;
+          var caret = start;
+
+          if (it === 'insertLineBreak'){
+            caret = applyEdit('\n', start, end);
+          }else if (it === 'insertText'){
+            caret = applyEdit(String(ev.data || ''), start, end);
+          }else if (it === 'insertFromPaste'){
+            var txt = '';
+            try{ txt = ev.clipboardData ? String(ev.clipboardData.getData('text/plain') || '') : ''; }catch(_e){ txt=''; }
+            caret = applyEdit(txt, start, end);
+          }else if (it === 'deleteContentBackward'){
+            if (start !== end){
+              caret = applyEdit('', start, end);
+            }else if (start > 0){
+              caret = applyEdit('', start-1, start);
+            }
+          }else if (it === 'deleteContentForward'){
+            var v = String(self._value || '');
+            if (start !== end){
+              caret = applyEdit('', start, end);
+            }else if (start < v.length){
+              caret = applyEdit('', start, start+1);
+            }
+          }
+
+          rerenderFromValue(caret);
+          queueSave();
+        }
+      }catch(_e){}
     });
 
+    // On focus loss, flush save.
     ed.addEventListener('blur', function(){
       try{
         var v2 = self.getValue();
@@ -229,40 +310,18 @@
         if (typeof opts.onBlurSave === 'function') opts.onBlurSave(v2);
       }catch(_e){}
     });
-
-    ed.addEventListener('keydown', function(ev){
-      try{
-        ev = ev || window.event;
-        if (!ev) return;
-
-        if (ev.key === 'Tab'){
-          ev.preventDefault();
-          // insert two spaces
-          if (document.execCommand) document.execCommand('insertText', false, '  ');
-          return;
-        }
-
-        if (ev.key === 'Enter'){
-          // iOS Safari can be flaky inserting new block nodes in a highlighted contenteditable.
-          // Force a literal newline, then our input handler will re-render into line DIVs.
-          ev.preventDefault();
-          if (document.execCommand) {
-            // insertText is more reliable than insertHTML
-            document.execCommand('insertText', false, '\n');
-          }
-          return;
-        }
-      }catch(_e){}
-    });
   }
 
   Editor.prototype.setValue = function(text){
     text = normalizeNewlines(text);
+    this._value = text;
     render(this.ed, text);
+    // put caret at end on initial set
+    try{ setCaretByOffset(this.ed, text.length); }catch(_e){}
   };
 
   Editor.prototype.getValue = function(){
-    return getTextFromEditor(this.ed);
+    return String(this._value || '');
   };
 
   Editor.prototype.destroy = function(){

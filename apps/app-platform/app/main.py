@@ -907,8 +907,8 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
-  <link rel="stylesheet" href="/static/sfml_editor.css?v=2" />
-  <script src="/static/sfml_editor.js?v=2"></script>
+  <link rel="stylesheet" href="/static/sfml_editor.css?v=3" />
+  <script src="/static/sfml_editor.js?v=3"></script>
   __DEBUG_BANNER_BOOT_JS__
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
