@@ -2774,6 +2774,16 @@ def voices_edit_page(voice_id: str, response: Response):
     </div>
     <div class='term' id='sample_text' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
     <audio id='audio' class='hide' controls style='width:100%;margin-top:10px'></audio>
+
+    <div class='muted' style='margin-top:12px'>sample_url</div>
+    <div class='fadeLine' style='margin-top:8px'>
+      <div class='fadeText' id='sample_url_text' title='__SURL__'>__SURL__</div>
+      <button class='copyBtn' type='button' onclick='copySampleUrl()' aria-label='Copy sample url' title='Copy sample url'>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
+        </svg>
+      </button>
+    </div>
     <input id='sample_url' type='hidden' value='__SURL__' />
 
     <div class='muted' style='margin-top:12px'>voice_ref</div>
@@ -2870,6 +2880,15 @@ function __copyText(txt){
   }catch(e){}
 }
 
+function copySampleUrl(){
+  try{
+    var su=$('sample_url');
+    var txt = su ? String(su.value||'').trim() : '';
+    __copyText(txt);
+    try{ if (typeof toastSet === 'function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(e){}
+  }catch(e){}
+}
+
 function playSample(){
   try{
     var a=$('audio');
@@ -2886,6 +2905,7 @@ function playSample(){
       .then(function(j){
         if (!j || !j.ok || !j.sample_url){ throw new Error((j&&j.error)||'no_sample_url'); }
         try{ if (su) su.value = String(j.sample_url||''); }catch(e){}
+        try{ var t=$('sample_url_text'); if (t) { t.textContent = String(j.sample_url||''); t.title = String(j.sample_url||''); } }catch(e){}
         if (a){ a.src=String(j.sample_url||''); a.classList.remove('hide'); try{ a.play(); }catch(e){} }
         if(out) out.textContent='';
       })
