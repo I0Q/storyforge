@@ -1043,6 +1043,12 @@ def index(response: Response):
         </div>
       </div>
 
+      <div id='prodSfmlBusy' class='updateBar hide' style='margin-top:10px'>
+        <div class='muted' style='font-weight:950' id='prodSfmlBusyTitle'>Working…</div>
+        <div class='updateTrack'><div class='updateProg'></div></div>
+        <div id='prodSfmlBusySub' class='muted'>Please wait</div>
+      </div>
+
       <div class='muted' style='margin-top:8px'>Edit inline (autosaves on pause/blur).</div>
       <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;'></div>
     </div>
@@ -2303,6 +2309,22 @@ function prodSetBusy(on, title, sub){
   }catch(e){}
 }
 
+function prodSetSfmlBusy(on, title, sub){
+  try{
+    var box=document.getElementById('prodSfmlBusy');
+    var t=document.getElementById('prodSfmlBusyTitle');
+    var s=document.getElementById('prodSfmlBusySub');
+    if (!box) return;
+    if (on){
+      box.classList.remove('hide');
+      if (t) t.textContent = title || 'Working…';
+      if (s) s.textContent = sub || 'Please wait';
+    }else{
+      box.classList.add('hide');
+    }
+  }catch(e){}
+}
+
 
 function prodRenderAssignments(){
   try{
@@ -2450,17 +2472,17 @@ function prodGenerateSfml(){
     var sid = String(st.story_id||'').trim();
     if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
 
-    prodSetBusy(true, 'Generating SFML…', 'Asking the LLM to produce a full script');
+    prodSetSfmlBusy(true, 'Generating SFML…', 'Asking the LLM to produce a full script');
     if (out) out.textContent='';
     fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
       .then(function(j){
         if (!j || !j.ok || !j.sfml){ throw new Error((j&&j.error)||'sfml_failed'); }
-        prodSetBusy(false);
+        prodSetSfmlBusy(false);
         window.__SF_PROD.sfml = String(j.sfml||'');
         if (out) out.textContent='';
         prodRenderSfml(window.__SF_PROD.sfml);
       })
-      .catch(function(e){ prodSetBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+      .catch(function(e){ prodSetSfmlBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
