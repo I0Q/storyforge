@@ -406,6 +406,18 @@ VOICE_EDIT_EXTRA_CSS = base_css("""\
     .chip.age-elder{border-color:rgba(255,160,80,0.45);background:rgba(255,160,80,0.14);}
     details.rawBox summary{cursor:pointer;color:var(--muted);}
 
+    /* SFML code viewer */
+    .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;overflow:auto;}
+    .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
+    .codeLine{display:grid;grid-template-columns:48px 1fr;gap:12px;padding:2px 12px;}
+    .codeLn{color:rgba(168,179,216,0.55);text-align:right;user-select:none;}
+    .codeTxt{white-space:pre;}
+    .tok-comment{color:rgba(168,179,216,0.55)}
+    .tok-kw{color:#7dd3fc;font-weight:900}
+    .tok-attr{color:#a78bfa;font-weight:900}
+    .tok-str{color:#f9a8d4}
+    .tok-id{color:#fbbf24}
+
 """)
 
 VOICE_NEW_EXTRA_CSS = base_css("""\
@@ -972,9 +984,12 @@ def index(response: Response):
       <div id='prodAssignments' style='margin-top:10px'></div>
 
       <div class='muted' style='margin-top:14px'>3) Generate markup</div>
-      <div class='row' style='margin-top:8px;justify-content:flex-end'>
-        <button type='button' id='prodStep3Btn' disabled onclick='alert("Step 3 not implemented yet")'>Generate markup</button>
+      <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+        <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate markup</button>
+        <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
       </div>
+
+      <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px'></div>
     </div>
   </div>
 
@@ -2301,6 +2316,7 @@ function prodSuggestCasting(){
 function prodSaveCasting(){
   try{
     var out=document.getElementById('prodOut');
+    var box=document.getElementById('prodSfmlBox');
     var st = window.__SF_PROD || {};
     if (!st.story_id) { if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
@@ -2316,9 +2332,73 @@ function prodSaveCasting(){
         window.__SF_PROD.saved = true;
         // exit edit mode
         try{ window.__SF_PROD.assignments.forEach(function(a){ a._editing=false; }); }catch(_e){}
+        // clear old SFML on new save
+        try{ window.__SF_PROD.sfml = ''; }catch(_e){}
+        try{ if (box){ box.classList.add('hide'); box.innerHTML=''; } }catch(_e){}
         prodRenderAssignments();
       })
       .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodGenerateSfml(){
+  try{
+    var out=document.getElementById('prodOut');
+    var box=document.getElementById('prodSfmlBox');
+    var st = window.__SF_PROD || {};
+    if (!st.saved){ if(out) out.innerHTML='<div class="err">Save casting first</div>'; return; }
+    var sid = String(st.story_id||'').trim();
+    if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+
+    if (out) out.textContent='Generating SFML…';
+    fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
+      .then(function(j){
+        if (!j || !j.ok || !j.sfml){ throw new Error((j&&j.error)||'sfml_failed'); }
+        window.__SF_PROD.sfml = String(j.sfml||'');
+        if (out) out.textContent='';
+        prodRenderSfml(window.__SF_PROD.sfml);
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodCopySfml(){
+  try{
+    var txt = String((window.__SF_PROD||{}).sfml || '');
+    if (!txt){ alert('No SFML yet.'); return; }
+    copyToClipboard(txt);
+    try{ toastShowNow('Copied SFML', 'ok', 1500); }catch(_e){}
+  }catch(e){}
+}
+
+function prodRenderSfml(sfml){
+  try{
+    var box=document.getElementById('prodSfmlBox');
+    if (!box) return;
+    var lines = String(sfml||'').replace(/\r\n/g,'\n').split('\n');
+
+    function esc(s){ return escapeHtml(String(s||'')); }
+
+    function hilite(s){
+      var x = esc(s);
+      // comments
+      if (x.trim().startsWith('#')) return '<span class="tok-comment">'+x+'</span>';
+      // keywords + attrs
+      x = x.replace(/\b(scene|say)\b/g, '<span class="tok-kw">$1</span>');
+      x = x.replace(/\b(voice|id|title)=/g, '<span class="tok-attr">$1</span>=');
+      // quoted strings
+      x = x.replace(/&quot;([^&]*)&quot;/g, '<span class="tok-str">&quot;$1&quot;</span>');
+      // ids after say
+      x = x.replace(/(<span class=\"tok-kw\">say<\/span>\s+)([a-zA-Z0-9_\-]+)/, '$1<span class="tok-id">$2</span>');
+      return x;
+    }
+
+    var html = '<div class="codeWrap">' + lines.map(function(ln, i){
+      return '<div class="codeLine"><div class="codeLn">'+String(i+1)+'</div><div class="codeTxt">'+hilite(ln)+'</div></div>';
+    }).join('') + '</div>';
+
+    box.innerHTML = html;
+    box.classList.remove('hide');
   }catch(e){}
 }
 
@@ -6108,6 +6188,132 @@ DO UPDATE SET casting=EXCLUDED.casting, updated_at=EXCLUDED.updated_at
         return {'ok': True}
     except Exception as e:
         return {'ok': False, 'error': f'casting_save_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/production/sfml_generate')
+def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Generate SFML from story + saved casting.
+
+    SFML v0 (StoryForge Markup Language)
+    - Comments start with '#'
+    - Scene header: scene id=<id> title="..."
+    - Dialogue: say <character_id> voice=<voice_id>: <text>
+    """
+    try:
+        import re
+
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            st = get_story_db(conn, story_id)
+            voices = list_voices_db(conn, limit=500)
+            cur = conn.cursor()
+            cur.execute('SELECT casting FROM sf_castings WHERE story_id=%s', (story_id,))
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return {'ok': False, 'error': 'casting_not_saved'}
+
+        casting = row[0] or {}
+        assigns = list((casting or {}).get('assignments') or [])
+        if not assigns:
+            return {'ok': False, 'error': 'empty_casting'}
+
+        # Build a roster summary for the prompt
+        vrows = []
+        for v in voices:
+            vid = str(v.get('id') or '')
+            if not vid:
+                continue
+            dn = str(v.get('display_name') or vid)
+            eng = str(v.get('engine') or '')
+            vtj = str(v.get('voice_traits_json') or '').strip()
+            traits = {}
+            try:
+                if vtj:
+                    traits = json.loads(vtj).get('voice_traits') or {}
+            except Exception:
+                traits = {}
+            vrows.append(
+                {
+                    'id': vid,
+                    'name': dn,
+                    'engine': eng,
+                    'gender': str(traits.get('gender') or 'unknown'),
+                    'age': str(traits.get('age') or 'unknown'),
+                    'pitch': str(traits.get('pitch') or 'unknown'),
+                    'tone': traits.get('tone') if isinstance(traits.get('tone'), list) else [],
+                }
+            )
+
+        story_md = str(st.get('story_md') or '')
+        title = str(st.get('title') or story_id)
+        characters = list(st.get('characters') or [])
+
+        # LLM: produce SFML text. For now, keep it simple: 1 scene unless the story suggests multiple.
+        prompt = {
+            'format': 'SFML',
+            'version': 0,
+            'story': {'id': story_id, 'title': title, 'story_md': story_md},
+            'characters': characters,
+            'casting': assigns,
+            'roster': vrows,
+            'rules': [
+                'Output MUST be plain text SFML. No markdown fences.',
+                'Use only these directives: scene, say.',
+                'At least one scene. Prefer multiple scenes if the story naturally has parts.',
+                'Every spoken line must be a say statement with both character_id and voice=<voice_id>.',
+                'Always include narrator lines as character_id=narrator with the narrator voice from casting.',
+                'Keep scene ids short: scene-1, scene-2, ...',
+                'Do not invent voice ids: only use voice_id values that appear in casting.',
+                'Keep each say line to one paragraph (no multiline), wrap by adding additional say lines.',
+            ],
+            'example': (
+                '# SFML v0\n'
+                'scene id=scene-1 title="Intro"\n'
+                'say narrator voice=indigo-dawn: The lighthouse stood silent on the cliff.\n'
+                'say maris voice=lunar-violet: I can hear the sea breathing below.\n'
+            ),
+        }
+
+        req = {
+            'model': 'google/gemma-2-9b-it',
+            'messages': [{'role': 'user', 'content': 'Return ONLY SFML plain text.\n\n' + json.dumps(prompt, separators=(',', ':'))}],
+            'temperature': 0.4,
+            'max_tokens': 1400,
+        }
+
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
+        r.raise_for_status()
+        j = r.json()
+        txt = ''
+        try:
+            ch0 = (((j or {}).get('choices') or [])[0] or {})
+            msg = ch0.get('message') or {}
+            txt = str(msg.get('content') or ch0.get('text') or '')
+        except Exception:
+            txt = ''
+        txt = (txt or '').strip()
+        if not txt:
+            return {'ok': False, 'error': 'empty_llm_output'}
+
+        # Strip accidental fences
+        txt = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", txt).strip()
+        txt = re.sub(r"```\s*$", "", txt).strip()
+
+        # Basic safety: cap size
+        if len(txt) > 20000:
+            txt = txt[:20000]
+
+        return {'ok': True, 'sfml': txt}
+    except Exception as e:
+        return {'ok': False, 'error': f'sfml_generate_failed: {type(e).__name__}: {str(e)[:220]}'}
 
 
 @app.get('/api/voices/{voice_id}')
