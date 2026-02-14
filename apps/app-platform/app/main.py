@@ -2789,6 +2789,7 @@ def voices_edit_page(voice_id: str, response: Response):
     stxt = esc(v.get('sample_text') or '')
     surl = esc(v.get('sample_url') or '')
     enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
+    vtraits_json = str(v.get('voice_traits_json') or '').strip()
 
     html = """<!doctype html>
 <html>
@@ -2852,9 +2853,12 @@ def voices_edit_page(voice_id: str, response: Response):
     </label>
     <div class='muted' style='margin-top:6px'>Show in curated list</div>
 
-    <div class='row' style='margin-top:12px;justify-content:flex-end'>
-      <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze metadata</button>
-    </div>
+  </div>
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
+    <div class='muted'>Auto-generated metadata for matching characters to voices.</div>
+    <pre class='term' id='voice_traits' style='margin-top:10px;white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
   </div>
 
   <div class='card'>
@@ -2894,7 +2898,8 @@ def voices_edit_page(voice_id: str, response: Response):
     <div class='row' style='margin-top:12px;justify-content:space-between;gap:10px;flex-wrap:wrap'>
       <button type='button' class='secondary' onclick='deleteThisVoice()' style='border-color: rgba(255,77,77,.35); color: var(--bad);'>Delete</button>
       <div class='row' style='gap:10px;justify-content:flex-end;margin-left:auto'>
-        <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze metadata</button>
+        <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
+        <button type='button' class='secondary' onclick='viewVoiceAnalysisJobs()'>View analysis jobs</button>
         <button type='button' onclick='save()'>Save</button>
       </div>
     </div>
@@ -2936,15 +2941,23 @@ function deleteThisVoice(){
   }catch(e){}
 }
 
+
+function viewVoiceAnalysisJobs(){
+  try{
+    // Best-effort: navigate to Jobs; filter not implemented yet.
+    window.location.href='/#tab-history';
+  }catch(e){}
+}
+
 function analyzeMeta(){
   try{
-    var out=$('out'); if(out) out.textContent='Analyzing metadata…';
+    var out=$('out'); if(out) out.textContent='Analyzing voice…';
     fetch('/api/voices/__VID_RAW__/analyze_metadata', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
       .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
       .then(function(j){
         if (j && j.ok){
-          if(out) out.textContent='Metadata job started.';
-          try{ toastSet('Analyzing metadata…', 'info', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+          if(out) out.textContent='Voice analysis job started.';
+          try{ toastSet('Analyzing voice…', 'info', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
           setTimeout(function(){ window.location.href='/#tab-history'; }, 250);
           return;
         }
@@ -3357,6 +3370,7 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__SURL__', surl)
         .replace('__ENABLED__', enabled_checked)
         .replace('__VID_RAW__', voice_id)
+        .replace('__VTRAITS__', esc(vtraits_json) if vtraits_json else '—')
     )
     html = (html
         .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
