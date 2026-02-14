@@ -232,8 +232,21 @@ def analyze_voice_metadata(
         except Exception:
             raw = txt
 
+        # Tolerate common non-strict JSON issues (trailing commas)
+        raw2 = raw
         try:
-            traits = json.loads(raw)
+            raw2 = raw2.strip()
+            # strip code fences if they survived slicing
+            if raw2.startswith('```'):
+                raw2 = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", raw2)
+                raw2 = re.sub(r"```\s*$", "", raw2).strip()
+            # remove trailing commas before } or ]
+            raw2 = re.sub(r",\s*([}\]])", r"\1", raw2)
+        except Exception:
+            raw2 = raw
+
+        try:
+            traits = json.loads(raw2)
         except Exception:
             return {
                 "ok": False,
