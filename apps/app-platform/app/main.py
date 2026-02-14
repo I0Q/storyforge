@@ -6815,6 +6815,14 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
             'tortoise_preset': str((payload or {}).get('tortoise_preset') or '').strip(),
         }
 
+        # For tortoise, enforce a stable voice across all chunks.
+        # Prefer explicit tortoise_voice from UI; otherwise fall back to voice_ref.
+        if engine == 'tortoise':
+            tv = str(meta.get('tortoise_voice') or '').strip() or str(voice or '').strip()
+            meta['tortoise_voice_fixed'] = tv
+            if not meta.get('tortoise_voice'):
+                meta['tortoise_voice'] = tv
+
         _job_patch(
             job_id,
             {
@@ -6882,10 +6890,18 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 # Parallelize across enabled GPUs.
                 workers = max(1, len(allowed_gpus) or 1)
 
+                # Stable voice for tortoise chunking
+                voice_fixed = voice
+                try:
+                    if engine == 'tortoise':
+                        voice_fixed = str((meta.get('tortoise_voice_fixed') or meta.get('tortoise_voice') or voice) or '').strip() or voice
+                except Exception:
+                    voice_fixed = voice
+
                 def do_one(i: int, chunk: str, gpu: int | None):
                     r = requests.post(
                         GATEWAY_BASE + '/v1/tts',
-                        json={'engine': engine, 'voice': voice, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads},
+                        json={'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads},
                         headers=_h(),
                         timeout=1800,
                     )
@@ -6947,10 +6963,15 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
 
                 _key, url = upload_bytes(b, key_prefix='tts/samples', filename='sample.wav', content_type='audio/wav')
 
-                # record gpus used in job meta (best-effort)
+                # record gpus used + effective voice used in job meta (best-effort)
                 try:
                     meta2 = dict(meta)
                     meta2['gpus_used'] = gpus_used
+                    try:
+                        if engine == 'tortoise':
+                            meta2['tortoise_voice_effective'] = str(voice_fixed or '')
+                    except Exception:
+                        pass
                     _job_patch(job_id, {'meta_json': json.dumps(meta2, separators=(',', ':'))})
                 except Exception:
                     pass
