@@ -1009,17 +1009,19 @@ def index(response: Response):
   </div>
 
   <div id='pane-production' class='hide'>
+
     <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>Production</div>
-      <div class='muted'>Step 1: select a library story. Step 2: suggest voice casting from roster. Step 3 unlocks after saving casting.</div>
-
-      <div class='muted' style='margin-top:12px'>1) Story</div>
+      <div style='font-weight:950;margin-bottom:6px;'>1) Story</div>
       <select id='prodStorySel' style='margin-top:8px;width:100%'></select>
+    </div>
 
-      <div class='muted' style='margin-top:12px'>2) Voice casting suggestion</div>
-      <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
-        <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
-        <button type='button' id='prodSaveBtn' onclick='prodSaveCasting()' disabled>Save casting</button>
+    <div class='card'>
+      <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
+        <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
+        <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+          <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
+          <button type='button' id='prodSaveBtn' onclick='prodSaveCasting()' disabled>Save casting</button>
+        </div>
       </div>
 
       <div id='prodBusy' class='updateBar hide' style='margin-top:10px'>
@@ -1030,16 +1032,21 @@ def index(response: Response):
 
       <div id='prodOut' class='muted' style='margin-top:10px'></div>
       <div id='prodAssignments' style='margin-top:10px'></div>
+    </div>
 
-      <div class='muted' style='margin-top:14px'>3) Generate markup (SFML)</div>
-      <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
-        <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
-        <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
+    <div class='card'>
+      <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
+        <div style='font-weight:950;margin-bottom:6px;'>3) SFML</div>
+        <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+          <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
+          <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
+        </div>
       </div>
 
       <div class='muted' style='margin-top:8px'>Edit inline (autosaves on pause/blur).</div>
       <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;'></div>
     </div>
+
   </div>
 
   <div id='pane-advanced' class='hide'>
