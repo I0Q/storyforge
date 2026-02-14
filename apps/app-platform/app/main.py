@@ -1690,6 +1690,8 @@ function renderProviders(providers){
 
       "<div class='provSection'>Voice service</div>"+
       "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
+      "<div class='k'>CPU threads</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_threads' value='"+escAttr(String(p.voice_threads||16))+"' placeholder='16' style='width:96px;max-width:100%;min-width:0' /></div>"+
+      "<div class='k'>Split min chars</div><div><input data-pid='"+escAttr(id)+"' data-k='tortoise_split_min_text' value='"+escAttr(String(p.tortoise_split_min_text||480))+"' placeholder='480' style='width:96px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>Voice GPUs</div><div>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"'/>"+
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
@@ -1787,6 +1789,10 @@ function collectProvidersFromUI(){
       p[k] = !!el.checked;
     } else if (k==='voice_gpus' || k==='llm_gpus'){
       p[k] = parseGpuList(el.value);
+    } else if (k==='voice_threads' || k==='tortoise_split_min_text'){
+      var n = parseInt(String(el.value||'').trim(),10);
+      if (isNaN(n)) n = 0;
+      p[k] = n;
     } else {
       p[k] = String(el.value||'').trim();
     }
@@ -5542,6 +5548,8 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                     'monitoring_enabled': bool(p.get('monitoring_enabled', False)),
                     'voice_enabled': bool(p.get('voice_enabled', False)),
                     'voice_gpus': _ints(p.get('voice_gpus') or []),
+                    'voice_threads': int(p.get('voice_threads') or 16) if str(p.get('voice_threads') or '').strip() else 16,
+                    'tortoise_split_min_text': int(p.get('tortoise_split_min_text') or 480) if str(p.get('tortoise_split_min_text') or '').strip() else 480,
                     'llm_enabled': bool(p.get('llm_enabled', False)),
                     'llm_model': str(p.get('llm_model') or '').strip(),
                     'llm_gpus': _ints(p.get('llm_gpus') or []),
@@ -5679,7 +5687,12 @@ def _pick_voice_gpu_rr() -> int | None:
 
 
 
-def _split_tts_text(text: str, max_chars: int = 420, max_chunks: int = 8) -> list[str]:
+def _split_tts_text(
+    text: str,
+    max_chars: int = 400,
+    max_chunks: int = 8,
+    min_chunk_chars: int = 20,
+) -> list[str]:
     t = str(text or '').strip()
     if not t:
         return []
@@ -5701,23 +5714,40 @@ def _split_tts_text(text: str, max_chars: int = 420, max_chunks: int = 8) -> lis
             out.append(cur)
             cur = p
         if len(out) >= max_chunks - 1:
-            # stop early; put the rest into the last chunk
             break
     if cur:
         out.append(cur)
 
-    # If we bailed early, append remainder (best-effort)
-    if len(out) < max_chunks:
-        used = " ".join(out)
-        if len(used) < len(t) and t.startswith(used):
-            rem = t[len(used):].strip()
-            if rem:
-                if len(out) < max_chunks:
-                    out[-1] = (out[-1] + " " + rem).strip()
-
-    # Final clean
+    # Merge tiny chunks (< min_chunk_chars) into neighbors
     out = [c.strip() for c in out if c and c.strip()]
-    return out[:max_chunks]
+    merged: list[str] = []
+    for c in out:
+        if len(c) < int(min_chunk_chars or 0) and merged:
+            merged[-1] = (merged[-1] + " " + c).strip()
+        else:
+            merged.append(c)
+
+    # Enforce max_chars by splitting on whitespace as a last resort
+    final: list[str] = []
+    for c in merged:
+        c = c.strip()
+        if not c:
+            continue
+        if len(c) <= max_chars:
+            final.append(c)
+            continue
+        # hard wrap at whitespace
+        while len(c) > max_chars and len(final) < max_chunks:
+            cut = c.rfind(' ', 0, max_chars)
+            if cut < max(10, int(min_chunk_chars or 0)):
+                cut = max_chars
+            final.append(c[:cut].strip())
+            c = c[cut:].strip()
+        if c and len(final) < max_chunks:
+            final.append(c)
+
+    final = [c.strip() for c in final if c and c.strip()]
+    return final[:max_chunks]
 
 
 def _concat_wavs(wavs: list[bytes]) -> bytes:
@@ -5877,8 +5907,24 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 # For tortoise, split long text into chunks and run each chunk as its own TTS call.
                 chunks = [text]
                 try:
-                    if engine == 'tortoise' and len(text) > 480:
-                        chunks = _split_tts_text(text, max_chars=420, max_chunks=8) or [text]
+                    if engine == 'tortoise':
+                        p = _get_tinybox_provider() or {}
+                        split_min_text = 480
+                        threads = 16
+                        try:
+                            split_min_text = int((p or {}).get('tortoise_split_min_text') or 480)
+                        except Exception:
+                            split_min_text = 480
+                        try:
+                            threads = int((p or {}).get('tortoise_threads') or (p or {}).get('voice_threads') or 16)
+                        except Exception:
+                            threads = 16
+                        if len(text) > split_min_text:
+                            chunks = _split_tts_text(text, max_chars=400, max_chunks=8, min_chunk_chars=20) or [text]
+                        else:
+                            chunks = [text]
+                    else:
+                        threads = 16
                 except Exception:
                     chunks = [text]
 
@@ -5904,7 +5950,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
 
                     r = requests.post(
                         GATEWAY_BASE + '/v1/tts',
-                        json={'engine': engine, 'voice': voice, 'text': chunk, 'upload': True, 'gpu': gpu},
+                        json={'engine': engine, 'voice': voice, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads},
                         headers=_h(),
                         timeout=1800,
                     )
