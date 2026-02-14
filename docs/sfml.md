@@ -68,15 +68,25 @@ scene <scene_id> "<title>":
 
 ## 3) Speaker lines
 
-### Syntax
+### Syntax (single line)
 ```text
   [Name] text...
 ```
 
+### Syntax (speaker block; preferred for consecutive lines)
+```text
+  Name:
+    - line 1...
+    - line 2...
+    - line 3...
+```
+
 ### Rules
-- Speaker tag is always `[Name]`.
+- Speaker tag is always `[Name]` for single lines.
+- For a **speaker block**, the `Name:` line is indented by **two spaces**, and the bullet lines are indented by **four spaces**.
 - `Name` must exist in the casting map.
-- Text must be single-line; split long paragraphs into multiple lines.
+- A speaker block is treated as **one audio segment** (the lines are read in one go), to avoid audible joins.
+- For Tortoise, keep punctuation in the lines; punctuation helps delivery.
 
 ---
 

@@ -7068,10 +7068,14 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'SCENES: Emit 1..max_scenes scene blocks. Each scene header is: scene <id> "<title>":',
                 'SCENES: If max_scenes=1, output exactly ONE scene block (scene-1) but still cover the whole story.',
                 'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
-                'BODY: Inside a scene block, lines are indented by two spaces and use speaker lines: [Name] text',
-                'BODY: Every [Name] must exist in cast: mappings.',
+                'BODY: Inside a scene block, content is indented by two spaces.',
+                'BODY: You can emit either single speaker lines: [Name] text',
+                'BODY: Or speaker blocks (preferred for consecutive lines by same speaker): Name: then 4-space indented bullets "- ..."',
+                'BODY: Speaker blocks MUST be treated as one segment; use them to avoid splitting delivery.',
+                'BODY: Every [Name] and every Name: in a speaker block must exist in cast: mappings.',
                 'Do not invent voice ids; only use voice ids from casting_map values.',
-                'Keep each speaker line to a single line; split long paragraphs into multiple lines.',
+                'For Tortoise delivery, keep punctuation; do not strip commas/periods.',
+                'Keep each bullet line to a single line; split long paragraphs into multiple bullets within the speaker block.',
                 'COVERAGE: Include the full story content (do not stop early; do not summarize).',
                 'COVERAGE: Keep emitting speaker lines until the story reaches a clear ending.',
                 'Do not output JSON.',
@@ -7083,8 +7087,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 '  Maris: lunar-violet\n'
                 '\n'
                 'scene scene-1 "Intro":\n'
-                '  [Narrator] The lighthouse stood silent on the cliff.\n'
-                '  [Maris] I can hear the sea breathing below.\n'
+                '  Narrator:\n'
+                '    - The lighthouse stood silent on the cliff.\n'
+                '    - The sea breathed below, slow and steady.\n'
+                '  Maris:\n'
+                '    - I can hear the sea breathing below.\n'
             ),
         }
 
