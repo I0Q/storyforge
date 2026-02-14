@@ -84,13 +84,28 @@ def register_library_viewer(app: FastAPI) -> None:
         story_md = st.get("story_md") or ""
         chars = st.get("characters") or []
 
-# character cards
+# character cards (narrator first)
+        try:
+            chars = list(chars or [])
+        except Exception:
+            chars = []
+        chars.sort(
+            key=lambda c: (
+                0
+                if str((c or {}).get("role") or "").strip().lower() == "narrator"
+                or str((c or {}).get("name") or "").strip().lower() == "narrator"
+                else 1,
+                str((c or {}).get("name") or ""),
+            )
+        )
+
         char_cards = []
-        for c in chars:
+        for idx, c in enumerate(chars):
             cid = str(c.get("id") or c.get("name") or "")
             nm = str(c.get("name") or c.get("id") or "")
             desc = str(c.get("description") or "")
-            ty = str(c.get("type") or "")
+            role = str(c.get("role") or "")
+            ty = role
             color = _swatch(cid)
 
             pill = (
@@ -104,7 +119,7 @@ def register_library_viewer(app: FastAPI) -> None:
                 else ""
             )
             char_cards.append(
-                "<div class='charCard'>"
+                "<div class='charCard' onclick=\"openCharEdit(" + str(idx) + ")\">"
                 f"<div class='sw' style='background:{color}'></div>"
                 "<div class='cbody'>"
                 f"<div class='cname'>{html.escape(nm)}{pill}</div>"
@@ -125,8 +140,85 @@ def register_library_viewer(app: FastAPI) -> None:
         js = f"""
 <script>
 window.__STORY_ID = {story_id!r};
+window.__CHARS = {json.dumps(chars, separators=(',',':'))};
 
 function $(id){{ return document.getElementById(id); }}
+
+function openCharEdit(idx){{
+  try{{
+    idx = parseInt(String(idx||'0'),10) || 0;
+    var chars = window.__CHARS || [];
+    var c = (chars && chars[idx]) ? chars[idx] : null;
+    if (!c) return;
+
+    $('ce_idx').value = String(idx);
+    $('ce_name').value = String(c.name||'');
+    $('ce_role').value = String(c.role||'');
+    $('ce_desc').value = String(c.description||'');
+
+    var vt = (c.voice_traits||{{}});
+    $('ce_gender').value = String(vt.gender||'unknown');
+    $('ce_age').value = String(vt.age||'unknown');
+    $('ce_pitch').value = String(vt.pitch||'medium');
+    $('ce_accent').value = String(vt.accent||'');
+    $('ce_tone').value = Array.isArray(vt.tone) ? vt.tone.join(', ') : '';
+
+    $('charEdit').classList.remove('hide');
+  }}catch(e){{}}
+}}
+
+function closeCharEdit(){{
+  try{{ $('charEdit').classList.add('hide'); }}catch(e){{}}
+}}
+
+function saveCharEdit(){{
+  try{{
+    var idx = parseInt(String(($('ce_idx')||{{}}).value||'0'),10) || 0;
+    var chars = window.__CHARS || [];
+    if (!chars[idx]) return;
+
+    chars[idx].name = String(($('ce_name')||{{}}).value||'').trim();
+    chars[idx].role = String(($('ce_role')||{{}}).value||'').trim();
+    chars[idx].description = String(($('ce_desc')||{{}}).value||'').trim();
+
+    var vt = chars[idx].voice_traits || {{}};
+    vt.gender = String(($('ce_gender')||{{}}).value||'unknown').trim();
+    vt.age = String(($('ce_age')||{{}}).value||'unknown').trim();
+    vt.pitch = String(($('ce_pitch')||{{}}).value||'medium').trim();
+    vt.accent = String(($('ce_accent')||{{}}).value||'').trim();
+    var tone = String(($('ce_tone')||{{}}).value||'').split(',').map(function(x){{return String(x||'').trim();}}).filter(Boolean);
+    vt.tone = tone;
+    chars[idx].voice_traits = vt;
+
+    // enforce narrator first
+    try{{ chars.sort(function(a,b){{
+      function isN(x){{ return String((x&&x.role)||'').toLowerCase()==='narrator' || String((x&&x.name)||'').toLowerCase()==='narrator'; }}
+      var an=isN(a), bn=isN(b);
+      if (an && !bn) return -1;
+      if (!an && bn) return 1;
+      return String((a&&a.name)||'').localeCompare(String((b&&b.name)||''));
+    }}); }}catch(e){{}}
+
+    fetch('/api/library/story/' + encodeURIComponent(String(window.__STORY_ID||'')) + '/characters', {{
+      method:'PUT',
+      headers:{{'Content-Type':'application/json'}},
+      credentials:'include',
+      body: JSON.stringify({{characters: chars}})
+    }})
+    .then(function(r){{ return r.json().catch(function(){{return {{ok:false,error:'bad_json'}};}}); }})
+    .then(function(j){{
+      if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
+      window.__CHARS = (j.characters||chars);
+      closeCharEdit();
+      window.location.reload();
+    }})
+    .catch(function(e){{
+      var out=$('charsOut');
+      if (out) out.innerHTML = '<div class="err">'+String(e&&e.message?e.message:e)+'</div>';
+      try{{ toastShowNow('Save failed', 'err', 2200); }}catch(_e){{}}
+    }});
+  }}catch(e){{}}
+}}
 
 // --- Toasts (persist across fast navigation via localStorage) ---
 function toastSet(msg, kind, ms){{
@@ -421,6 +513,27 @@ if ($('mdCode')) {{
                 "    </div>",
                 "    <div id='charsOut' class='muted' style='margin-top:8px'></div>",
                 f"    {chars_html}",
+                "  </div>",
+                "",
+                "  <div id='charEdit' class='card hide'>",
+                "    <div class='row rowBetweenCenter'>",
+                "      <div class='fw950'>Edit character</div>",
+                "      <button class='secondary' type='button' onclick=\"closeCharEdit()\">Close</button>",
+                "    </div>",
+                "    <input id='ce_idx' type='hidden' value='0' />",
+                "    <div class='kvs' style='margin-top:10px'>",
+                "      <div class='k'>Name</div><div><input id='ce_name' /></div>",
+                "      <div class='k'>Role</div><div><input id='ce_role' placeholder='narrator / protagonist / …' /></div>",
+                "      <div class='k'>Desc</div><div><input id='ce_desc' placeholder='short description' /></div>",
+                "      <div class='k'>Gender</div><div><input id='ce_gender' placeholder='female/male/neutral/unknown' /></div>",
+                "      <div class='k'>Age</div><div><input id='ce_age' placeholder='child/teen/adult/elder/unknown' /></div>",
+                "      <div class='k'>Pitch</div><div><input id='ce_pitch' placeholder='low/medium/high' /></div>",
+                "      <div class='k'>Accent</div><div><input id='ce_accent' placeholder='e.g. british, none' /></div>",
+                "      <div class='k'>Tone</div><div><input id='ce_tone' placeholder='comma-separated tags' /></div>",
+                "    </div>",
+                "    <div class='row' style='margin-top:12px;justify-content:flex-end'>",
+                "      <button type='button' onclick=\"saveCharEdit()\">Save</button>",
+                "    </div>",
                 "  </div>",
                 "</div>",
                 "",

@@ -5609,6 +5609,62 @@ def api_library_story_update(story_id: str, payload: dict[str, Any]):
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
+@app.put('/api/library/story/{story_id}/characters')
+def api_library_story_characters_set(story_id: str, payload: dict[str, Any] | None = None):
+    """Update only the characters JSON for a story."""
+    try:
+        story_id = validate_story_id(story_id)
+        payload = payload or {}
+        chars = payload.get('characters')
+        if not isinstance(chars, list):
+            return {'ok': False, 'error': 'bad_characters_shape'}
+
+        # normalize minimal; keep voice_traits if present
+        out_chars: list[dict[str, Any]] = []
+        for c in chars:
+            if not isinstance(c, dict):
+                continue
+            name = str(c.get('name') or '').strip()
+            if not name:
+                continue
+            role = str(c.get('role') or '').strip()[:60]
+            desc = str(c.get('description') or '').strip()[:400]
+            vt = c.get('voice_traits') if isinstance(c.get('voice_traits'), dict) else None
+            if vt is not None:
+                vt2 = {
+                    'gender': str(vt.get('gender') or '').strip().lower()[:16],
+                    'age': str(vt.get('age') or '').strip().lower()[:16],
+                    'pitch': str(vt.get('pitch') or '').strip().lower()[:16],
+                    'accent': str(vt.get('accent') or '').strip()[:80],
+                    'tone': [str(x).strip()[:40] for x in (vt.get('tone') or []) if str(x).strip()][:8] if isinstance(vt.get('tone'), list) else [],
+                }
+            else:
+                vt2 = None
+
+            row = {'name': name, 'role': role, 'description': desc}
+            if vt2 is not None:
+                row['voice_traits'] = vt2
+            out_chars.append(row)
+
+        # narrator first
+        out_chars.sort(key=lambda c: (0 if str(c.get('role') or '').lower() == 'narrator' or str(c.get('name') or '').strip().lower() == 'narrator' else 1, str(c.get('name') or '')))
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            existing = get_story_db(conn, story_id)
+            meta = existing.get('meta') or {}
+            title = str(meta.get('title') or story_id)
+            story_md = str(existing.get('story_md') or '')
+            upsert_story_db(conn, story_id, title, story_md, out_chars)
+        finally:
+            conn.close()
+
+        return {'ok': True, 'characters': out_chars}
+    except Exception as e:
+        return {'ok': False, 'error': f'characters_set_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
 @app.post('/api/library/story/{story_id}/identify_characters')
 def api_library_story_identify_characters(story_id: str, payload: dict[str, Any] | None = None):
     """Use the Tinybox LLM service to extract characters from a story and persist them."""
