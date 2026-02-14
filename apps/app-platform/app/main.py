@@ -5775,67 +5775,87 @@ def _pick_voice_gpu_rr() -> int | None:
 
 
 
-def _split_tts_text(
-    text: str,
-    max_chars: int = 400,
-    max_chunks: int = 8,
-    min_chunk_chars: int = 20,
-) -> list[str]:
+def _split_tts_text(text: str, x: int = 100, max_chunks: int = 12) -> list[str]:
+    """Split text into chunks using the agreed strategy.
+
+    If len(text) <= x: return one chunk.
+
+    Else repeat: find a split point near x using strong punctuation (. ; ! ? :) or newline.
+    If none found, allow soft overflow to 1.25x, then whitespace fallback, then hard split at 1.5x.
+    """
+
     t = str(text or '').strip()
     if not t:
         return []
-    # Normalize whitespace a bit, but keep punctuation.
-    t = re.sub(r"[	 ]+", " ", t)
-    # Split into sentence-ish parts.
-    # Rule: split only on strong boundaries: . ; ! ? : (and newlines). Do NOT split on commas.
-    parts = re.split(r"(?<=[\.;!\?:])\s+|\n+", t)
-    parts = [p.strip() for p in parts if p and p.strip()]
+    try:
+        x = int(x)
+    except Exception:
+        x = 100
+    if x <= 0:
+        x = 100
+
+    if len(t) <= x:
+        return [t]
+
+    def is_boundary(ch: str) -> bool:
+        return ch in ('.', ';', '!', '?', ':', '\n')
+
     out: list[str] = []
-    cur = ""
-    for p in parts:
-        if not cur:
-            cur = p
-            continue
-        if len(cur) + 1 + len(p) <= max_chars:
-            cur = cur + " " + p
-        else:
-            out.append(cur)
-            cur = p
-        if len(out) >= max_chunks - 1:
+    s = t
+    try:
+        max_chunks = int(max_chunks or 12)
+    except Exception:
+        max_chunks = 12
+    if max_chunks < 1:
+        max_chunks = 1
+
+    while s and len(out) < max_chunks:
+        s = s.lstrip()
+        if not s:
             break
-    if cur:
-        out.append(cur)
+        if len(s) <= x or len(out) == max_chunks - 1:
+            out.append(s.strip())
+            break
 
-    # Merge tiny chunks (< min_chunk_chars) into neighbors
-    out = [c.strip() for c in out if c and c.strip()]
-    merged: list[str] = []
-    for c in out:
-        if len(c) < int(min_chunk_chars or 0) and merged:
-            merged[-1] = (merged[-1] + " " + c).strip()
-        else:
-            merged.append(c)
+        cut = None
+        back = min(x, len(s) - 1)
+        # A) preferred backward boundary <= x
+        for i in range(back, 0, -1):
+            if is_boundary(s[i - 1]):
+                cut = i
+                break
 
-    # Enforce max_chars by splitting on whitespace as a last resort
-    final: list[str] = []
-    for c in merged:
-        c = c.strip()
-        if not c:
-            continue
-        if len(c) <= max_chars:
-            final.append(c)
-            continue
-        # hard wrap at whitespace
-        while len(c) > max_chars and len(final) < max_chunks:
-            cut = c.rfind(' ', 0, max_chars)
-            if cut < max(10, int(min_chunk_chars or 0)):
-                cut = max_chars
-            final.append(c[:cut].strip())
-            c = c[cut:].strip()
-        if c and len(final) < max_chunks:
-            final.append(c)
+        # B) soft overflow up to 1.25x
+        if cut is None:
+            hi = min(int(x * 1.25), len(s) - 1)
+            for i in range(back + 1, hi + 1):
+                if is_boundary(s[i - 1]):
+                    cut = i
+                    break
 
-    final = [c.strip() for c in final if c and c.strip()]
-    return final[:max_chunks]
+        # C) whitespace fallback: next whitespace after 1.25x
+        if cut is None:
+            start = min(int(x * 1.25), len(s) - 1)
+            ws = None
+            for i in range(start, len(s)):
+                if s[i].isspace():
+                    ws = i
+                    break
+            if ws is not None and ws > 0:
+                cut = ws
+
+        # D) hard fallback: force split at 1.5x
+        if cut is None:
+            cut = min(int(x * 1.5), len(s))
+
+        chunk = s[:cut].strip()
+        rest = s[cut:].strip()
+        if chunk:
+            out.append(chunk)
+        s = rest
+
+    return [c for c in out if c]
+
 
 
 def _concat_wavs(wavs: list[bytes]) -> bytes:
@@ -6008,17 +6028,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                         except Exception:
                             threads = 16
                         if len(text) > split_min_text:
-                            max_chars = split_min_text
-                            # safety clamp
-                            try:
-                                max_chars = int(max_chars)
-                            except Exception:
-                                max_chars = 100
-                            if max_chars < 20:
-                                max_chars = 20
-                            if max_chars > 480:
-                                max_chars = 480
-                            chunks = _split_tts_text(text, max_chars=max_chars, max_chunks=8, min_chunk_chars=20) or [text]
+                            chunks = _split_tts_text(text, x=split_min_text, max_chunks=12) or [text]
                         else:
                             chunks = [text]
                     else:
