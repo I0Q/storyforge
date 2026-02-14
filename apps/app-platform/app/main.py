@@ -6008,7 +6008,17 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                         except Exception:
                             threads = 16
                         if len(text) > split_min_text:
-                            chunks = _split_tts_text(text, max_chars=400, max_chunks=8, min_chunk_chars=20) or [text]
+                            max_chars = split_min_text
+                            # safety clamp
+                            try:
+                                max_chars = int(max_chars)
+                            except Exception:
+                                max_chars = 100
+                            if max_chars < 20:
+                                max_chars = 20
+                            if max_chars > 480:
+                                max_chars = 480
+                            chunks = _split_tts_text(text, max_chars=max_chars, max_chunks=8, min_chunk_chars=20) or [text]
                         else:
                             chunks = [text]
                     else:
