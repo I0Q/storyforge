@@ -5685,17 +5685,95 @@ def api_library_story_identify_characters(story_id: str, payload: dict[str, Any]
             txt = ''
         txt = txt.strip()
 
-        # Extract JSON object from text (best-effort)
+        def _extract_json_obj(s: str) -> str:
+            s = str(s or '').strip()
+            if not s:
+                return s
+            # Find a balanced top-level {...} region.
+            start = s.find('{')
+            if start < 0:
+                return s
+            depth = 0
+            in_str = False
+            esc = False
+            end = -1
+            for i in range(start, len(s)):
+                ch = s[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                        continue
+                    if ch == '\\':
+                        esc = True
+                        continue
+                    if ch == '"':
+                        in_str = False
+                    continue
+                else:
+                    if ch == '"':
+                        in_str = True
+                        continue
+                    if ch == '{':
+                        depth += 1
+                    elif ch == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i
+                            break
+            if end > start:
+                return s[start : end + 1]
+            # fallback: first..last
+            i2 = s.rfind('}')
+            if i2 > start:
+                return s[start : i2 + 1]
+            return s
+
+        # Extract JSON object from text (best-effort + one repair attempt)
+        obj = None
+        raw0 = txt
+        txt2 = _extract_json_obj(txt)
         try:
-            i1 = txt.find('{')
-            i2 = txt.rfind('}')
-            if i1 >= 0 and i2 > i1:
-                txt2 = txt[i1 : i2 + 1]
-            else:
-                txt2 = txt
             obj = json.loads(txt2)
-        except Exception as e:
-            return {'ok': False, 'error': f'bad_json_from_llm: {str(e)[:120]}', 'raw': txt[:400]}
+        except Exception:
+            obj = None
+
+        if obj is None:
+            # Ask the LLM to repair into STRICT JSON
+            try:
+                fix_req = {
+                    'model': 'google/gemma-2-9b-it',
+                    'messages': [
+                        {
+                            'role': 'user',
+                            'content': (
+                                "Convert the following into STRICT JSON only (no markdown). "
+                                "It MUST match schema {\"characters\":[{\"name\":str,\"role\":str,\"description\":str,\"voice_traits\":{\"gender\":str,\"age\":str,\"energy\":str,\"pace\":str,\"pitch\":str,\"tone\":[str],\"accent\":str,\"style_notes\":str}}]}. "
+                                "Use double quotes everywhere. Do not include trailing commas.\n\n"
+                                + raw0
+                            ),
+                        }
+                    ],
+                    'max_tokens': 700,
+                    'temperature': 0.0,
+                }
+                r2 = requests.post(GATEWAY_BASE + '/v1/llm', json=fix_req, headers=_h(), timeout=180)
+                j2 = r2.json() if r2 is not None else None
+                txt_fix = ''
+                try:
+                    choices = (j2 or {}).get('choices') or []
+                    if choices and isinstance(choices, list):
+                        msg = choices[0].get('message') if isinstance(choices[0], dict) else None
+                        if isinstance(msg, dict) and msg.get('content'):
+                            txt_fix = str(msg.get('content') or '')
+                        elif choices[0].get('text'):
+                            txt_fix = str(choices[0].get('text') or '')
+                except Exception:
+                    txt_fix = ''
+                txt_fix = txt_fix.strip()
+                txt_fix2 = _extract_json_obj(txt_fix)
+                obj = json.loads(txt_fix2)
+            except Exception as e:
+                return {'ok': False, 'error': f'bad_json_from_llm: {str(e)[:120]}', 'raw': raw0[:600]}
 
         chars = obj.get('characters') if isinstance(obj, dict) else None
         if not isinstance(chars, list):
