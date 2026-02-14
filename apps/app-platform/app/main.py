@@ -833,6 +833,9 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/ace.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/mode-text.js"></script>
   __DEBUG_BANNER_BOOT_JS__
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
@@ -1034,7 +1037,7 @@ def index(response: Response):
       </div>
 
       <div class='muted' style='margin-top:8px'>Edit inline (autosaves on pause/blur).</div>
-      <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px'></div>
+      <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;'></div>
     </div>
   </div>
 
@@ -2483,165 +2486,63 @@ function prodRenderSfml(sfml){
     if (!box) return;
 
     var raw = String(sfml||'');
-    // IMPORTANT: this JS lives inside a Python triple-quoted string.
-    // Use double-escaped newlines so we don't embed literal CR/LF into the JS source.
     raw = raw.split("\\r\\n").join("\\n");
-    var lines = raw.split("\\n");
 
-    function esc(s){ return escapeHtml(String(s||'')); }
-    function span(cls, txt){ return '<span class="'+cls+'">'+txt+'</span>'; }
-
-    function hilite(line){
-      var s = String(line||'');
-      // Preserve indentation (2-space blocks) in the viewer.
-      var lead = '';
-      try{ if (s.startsWith('  ')) lead = '  '; }catch(_e){}
-      var t = s.trimStart();
-      if (!t) return '';
-      if (t.startsWith('#')) return esc(lead) + span('tok-c', esc(t));
-
-      // SFML v1: casting block header
-      if (t.toLowerCase()==='cast:'){
-        return esc(lead) + span('tok-kw','cast') + ':';
-      }
-
-      // SFML v1: cast mapping line: Name: voice_id (indented)
-      // e.g. "  Maris: lunar-violet"
-      if (t.indexOf(':') > 0 && lead){
-        var i2 = t.indexOf(':');
-        var nm = t.slice(0, i2).trim();
-        var val = t.slice(i2+1).trim();
-        if (nm && val){
-          return esc(lead) + span('tok-id', esc(nm)) + span('tok-a', ':') + ' ' + span('tok-id', esc(val));
-        }
-      }
-
-      // SFML v1: scene header: scene <id> "Title":
-      if (t.toLowerCase().startsWith('scene ')){
-        var rest = t.slice(5).trim();
-        var out = esc(lead) + span('tok-kw','scene') + ' ';
-        var parts = rest.split(' ').filter(Boolean);
-        if (parts.length){
-          out += span('tok-id', esc(parts[0]));
-          var tail = rest.slice(parts[0].length).trim();
-          if (tail) out += ' ' + span('tok-s', esc(tail));
-          return out;
-        }
-        return esc(lead) + span('tok-kw','scene') + ' ' + esc(rest);
-      }
-
-      // speaker line: [Name] text (indented or not)
-      if (t.startsWith('[')){
-        var rb = t.indexOf(']');
-        if (rb>0){
-          var nm = t.slice(1, rb).trim();
-          var rest = t.slice(rb+1).trim();
-          var out = esc(lead) + '[' + span('tok-id', esc(nm)) + ']';
-          if (rest) out += ' ' + esc(rest);
-          return out;
-        }
-      }
-
-      // SFML v0 legacy support (chevrons + voice lines)
-      if (t.toUpperCase()==='<<CAST>>' || t.toUpperCase()==='<<ENDCAST>>'){
-        return span('tok-kw', esc(t));
-      }
-      if (t.toUpperCase().startsWith('<<SCENE')){
-        return span('tok-kw', esc(t));
-      }
-      if (t.toLowerCase().startsWith('voice ')){
-        return span('tok-kw','voice') + ' ' + esc(t.slice(5));
-      }
-
-      // legacy say (keep supported)
-      if (t.toLowerCase().startsWith('say ')){
-        var colon = t.indexOf(':');
-        var head = (colon>=0)?t.slice(0,colon).trim():t;
-        var text = (colon>=0)?t.slice(colon+1).trim():'';
-        var parts = head.split(' ').filter(Boolean);
-        var out = span('tok-kw','say');
-        if (parts.length>1) out += ' ' + span('tok-id', esc(parts[1]));
-        for (var i=2;i<parts.length;i++){
-          var p=String(parts[i]||'');
-          if (p.startsWith('voice=')) out += ' ' + span('tok-a','voice')+'='+span('tok-id', esc(p.slice(6)));
-          else out += ' ' + esc(p);
-        }
-        out += ':';
-        if (text) out += ' ' + esc(text);
-        return out;
-      }
-
-      // speaker line: [Name] text
-      if (t.startsWith('[')){
-        var rb = t.indexOf(']');
-        if (rb>0){
-          var nm = t.slice(1, rb).trim();
-          var rest = t.slice(rb+1).trim();
-          var out = esc(lead) + '[' + span('tok-id', esc(nm)) + ']';
-          if (rest) out += ' ' + esc(rest);
-          return out;
-        }
-      }
-
-      // legacy say (keep supported)
-      if (t.toLowerCase().startsWith('say ')){
-        var colon = t.indexOf(':');
-        var head = (colon>=0)?t.slice(0,colon).trim():t;
-        var text = (colon>=0)?t.slice(colon+1).trim():'';
-        var parts = head.split(' ').filter(Boolean);
-        var out = span('tok-kw','say');
-        if (parts.length>1) out += ' ' + span('tok-id', esc(parts[1]));
-        for (var i=2;i<parts.length;i++){
-          var p=String(parts[i]||'');
-          if (p.startsWith('voice=')) out += ' ' + span('tok-a','voice')+'='+span('tok-id', esc(p.slice(6)));
-          else out += ' ' + esc(p);
-        }
-        out += ':';
-        if (text) out += ' ' + esc(text);
-        return out;
-      }
-
-      return esc(s);
-    }
-
-    var html = '<div class="codeWrap">' + lines.map(function(ln, i){
-      return '<div class="codeLine"><div class="codeLn">'+String(i+1)+'</div><div class="codeTxt">'+hilite(ln)+'</div></div>';
-    }).join('') + '</div>';
-
-    // Editable overlay textarea
-    var ta = '<textarea id="prodSfmlInline" class="codeEdit" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off"></textarea>';
-
-    box.innerHTML = html + ta;
     box.classList.remove('hide');
 
-    try{
-      var ed=document.getElementById('prodSfmlInline');
-      if (ed){
-        ed.value = raw;
-        // Keep scroll in sync
-        ed.addEventListener('scroll', function(){ try{ box.scrollTop = ed.scrollTop; box.scrollLeft = ed.scrollLeft; }catch(_e){} });
-        box.addEventListener('scroll', function(){ try{ ed.scrollTop = box.scrollTop; ed.scrollLeft = box.scrollLeft; }catch(_e){} });
+    // Use Ace editor for robust mobile editing (cursor/selection/lines)
+    if (!window.ace){
+      box.innerHTML = "<div class='muted'>Editor loading…</div>";
+      return;
+    }
 
-        // Autosave + re-highlight on pause
-        var tmr = null;
-        function arm(){
-          try{ if (tmr) clearTimeout(tmr); }catch(_e){}
-          tmr = setTimeout(function(){
-            try{
-              var v = String(ed.value||'');
-              window.__SF_PROD.sfml = v;
-              prodSfmlSaveNow(v);
-              // re-render (preserve scroll)
-              var st=box.scrollTop, sl=box.scrollLeft;
-              prodRenderSfml(v);
-              try{ var ed2=document.getElementById('prodSfmlInline'); if (ed2){ ed2.scrollTop=st; ed2.scrollLeft=sl; } box.scrollTop=st; box.scrollLeft=sl; }catch(_e){}
-            }catch(_e){}
-          }, 900);
-        }
-        ed.addEventListener('input', arm);
-        ed.addEventListener('blur', function(){ try{ arm(); }catch(_e){} });
+    if (!window.__SF_ACE){
+      box.innerHTML = "";
+      window.__SF_ACE = ace.edit(box);
+      window.__SF_ACE.setTheme('ace/theme/tomorrow_night');
+      window.__SF_ACE.session.setMode('ace/mode/text');
+      window.__SF_ACE.setOptions({
+        fontSize: '12px',
+        showPrintMargin: false,
+        wrap: true,
+        useWorker: false,
+        displayIndentGuides: true,
+      });
+      window.__SF_ACE.session.setUseWrapMode(true);
+      window.__SF_ACE.session.setTabSize(2);
+      window.__SF_ACE.session.setUseSoftTabs(true);
+
+      // Autosave on pause
+      window.__SF_ACE_SAVE_T = null;
+      window.__SF_ACE.on('change', function(){
+        try{ if (window.__SF_ACE_SAVE_T) clearTimeout(window.__SF_ACE_SAVE_T); }catch(_e){}
+        window.__SF_ACE_SAVE_T = setTimeout(function(){
+          try{
+            var v = String(window.__SF_ACE.getValue()||'');
+            window.__SF_PROD.sfml = v;
+            prodSfmlSaveNow(v);
+          }catch(_e){}
+        }, 900);
+      });
+      window.__SF_ACE.on('blur', function(){
+        try{
+          var v = String(window.__SF_ACE.getValue()||'');
+          window.__SF_PROD.sfml = v;
+          prodSfmlSaveNow(v);
+        }catch(_e){}
+      });
+    }
+
+    // Only set if different, to preserve cursor position.
+    try{
+      if (String(window.__SF_ACE.getValue()||'') !== raw){
+        var pos = window.__SF_ACE.getCursorPosition();
+        window.__SF_ACE.setValue(raw, -1);
+        try{ window.__SF_ACE.moveCursorToPosition(pos); }catch(_e){}
       }
-    }catch(_e){}
+    }catch(_e){
+      window.__SF_ACE.setValue(raw, -1);
+    }
 
   }catch(e){}
 }
