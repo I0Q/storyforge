@@ -2132,6 +2132,8 @@ function loadVoices(){
         if (Array.isArray(vt.tone) && vt.tone.length){
           parts.push(vt.tone.slice(0,3).join(', '));
         }
+        // voice ref (useful for tortoise/xtts identifiers)
+        if (v.voice_ref) parts.push(String(v.voice_ref));
         traitsLine = parts.join(' • ');
       }catch(e){ traitsLine=''; }
       var en = (v.enabled!==false);
