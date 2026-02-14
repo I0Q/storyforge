@@ -499,14 +499,38 @@ def analyze_voice_metadata(
         except Exception:
             pass
 
-        # Gender: do NOT infer from pitch; it's too error-prone.
-        # Only set gender when we have a strong source:
-        #  - explicit tortoise_gender from UI/provider
-        #  - curated tortoise voice hint
+            # Gender: use a dedicated classifier endpoint (Tinybox) when available.
+        # Fall back only to explicit provider/curated hints.
         out_traits["gender"] = "unknown"
+
+        # 1) explicit provider hint
         if tortoise_gender:
             out_traits["gender"] = _norm(tortoise_gender, 16).lower() or "unknown"
-        elif engine == 'tortoise':
+
+        # 2) classifier via gateway
+        if out_traits["gender"] in ("", "unknown"):
+            try:
+                gr = requests.post(
+                    gateway_base + '/v1/audio/gender',
+                    json={'url': sample_url},
+                    headers=headers,
+                    timeout=120,
+                )
+                if int(getattr(gr, 'status_code', 0) or 0) == 200:
+                    gj = {}
+                    try:
+                        gj = gr.json()
+                    except Exception:
+                        gj = {}
+                    if isinstance(gj, dict) and gj.get('ok'):
+                        g = str(gj.get('gender') or 'unknown').strip().lower()
+                        if g in ('male','female'):
+                            out_traits['gender'] = g
+            except Exception:
+                pass
+
+        # 3) curated tortoise voice hint
+        if out_traits["gender"] in ("", "unknown") and engine == 'tortoise':
             try:
                 k = (tortoise_voice or voice_ref or '').strip().lower()
                 g = _TORTOISE_GENDER_HINTS.get(k)
