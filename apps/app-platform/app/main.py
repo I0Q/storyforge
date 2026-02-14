@@ -3116,6 +3116,23 @@ function startUpdateWatch(){
     // This disappears once we confirm we're on the current build.
     setUpdateBar(true, 'Checking for updates…');
 
+    // Safety: if checks succeed but something goes sideways (navigation timing), hide after a moment.
+    try{
+      setTimeout(function(){
+        try{
+          var bar=document.getElementById('updateBar');
+          if (!bar) return;
+          var lastFail = Number(window.__SF_LAST_API_FAIL||0);
+          if (!lastFail || (Date.now()-lastFail) > 15000){
+            // If we're not actively deploying, don't leave the bar stuck.
+            fetch('/api/deploy/status', {cache:'no-store'}).then(r=>r.json()).then(function(j){
+              if (j && j.ok && String(j.state||'idle') !== 'deploying') setUpdateBar(false, '');
+            }).catch(function(_e){ setUpdateBar(false, ''); });
+          }
+        }catch(_e){}
+      }, 8000);
+    }catch(_e){}
+
     function tick(){
       var deployState = 'unknown';
       var deployMsg = '';
