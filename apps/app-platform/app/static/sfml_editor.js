@@ -157,7 +157,8 @@
     return /^[A-Za-z][A-Za-z0-9_-]*$/.test(nm);
   }
 
-  function hiliteLine(line){
+  function hiliteLine(line, ctx){
+    ctx = ctx || {};
     var s = String(line == null ? '' : line);
 
     // preserve leading 2-space indents
@@ -181,12 +182,12 @@
       return leadEsc + '<span class="sfmlTokKw">' + escHtml(tr) + '</span>';
     }
 
-    // cast mapping: Name: voice_id (indented)
-    if (lead && t.indexOf(':') > 0){
+    // cast mapping: ONLY highlight inside cast: block, and only if RHS looks like a voice id
+    if (ctx.inCast && lead && t.indexOf(':') > 0){
       var i = t.indexOf(':');
       var nm = t.slice(0, i).replace(/^\s+|\s+$/g, '');
       var rest = t.slice(i+1).replace(/^\s+|\s+$/g, '');
-      if (nm && rest){
+      if (nm && rest && /^[a-z0-9][a-z0-9_-]*$/.test(rest)){
         return leadEsc +
           '<span class="sfmlTokId">' + escHtml(nm) + '</span>' +
           '<span class="sfmlTokKw">:</span> ' +
@@ -235,12 +236,20 @@
     text = normalizeNewlines(text);
     var lines = text.split('\n');
 
-    // highlighted html
+    // highlighted html (context-aware)
     var h = [];
+    var inCast = false;
+
     for (var j=0;j<lines.length;j++){
       var ln = lines[j];
+      var tr = String(ln || '').replace(/^\s+|\s+$/g, '');
+
+      // update context based on top-level headers
+      if (isBlockHeaderLine(tr) && tr.toLowerCase() === 'cast:') inCast = true;
+      else if (isBlockHeaderLine(tr) && tr.toLowerCase() !== 'cast:') inCast = false;
+
       // ensure empty lines remain "editable" (some browsers collapse empty blocks)
-      var body = ln.length ? hiliteLine(ln) : '<span class="sfmlTokBase"><br></span>';
+      var body = ln.length ? hiliteLine(ln, {inCast: inCast}) : '<span class="sfmlTokBase"><br></span>';
       h.push('<div class="sfmlLine" data-sfml-line="'+j+'">' + body + '</div>');
     }
     ed.innerHTML = h.join('');
