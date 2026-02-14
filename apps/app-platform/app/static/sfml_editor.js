@@ -37,28 +37,6 @@
     }
   }
 
-  function setCaretByOffset(root, offset){
-    try{
-      var sel = window.getSelection ? window.getSelection() : null;
-      if (!sel) return;
-      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-      var cur = 0;
-      var node;
-      while ((node = walker.nextNode())){
-        var nlen = node.nodeValue ? node.nodeValue.length : 0;
-        if (cur + nlen >= offset){
-          var r = document.createRange();
-          r.setStart(node, Math.max(0, offset - cur));
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-          return;
-        }
-        cur += nlen;
-      }
-    }catch(e){}
-  }
-
   function getTextFromEditor(ed){
     // Prefer a stored model; DOM is just a view.
     var t = '';
@@ -67,25 +45,107 @@
     return t;
   }
 
-  function getSelOffsets(root){
+  function findLineEl(node){
+    try{
+      while (node){
+        if (node.nodeType === 1 && node.getAttribute && node.getAttribute('data-sfml-line') != null) return node;
+        node = node.parentNode;
+      }
+    }catch(e){}
+    return null;
+  }
+
+  function getSelOffsets(ed, lines){
+    // Map DOM selection -> model offsets (accounting for structural newlines between line DIVs)
     try{
       var sel = window.getSelection ? window.getSelection() : null;
       if (!sel || sel.rangeCount === 0) return {start:0,end:0};
       var r = sel.getRangeAt(0);
-      var pre1 = r.cloneRange();
-      pre1.selectNodeContents(root);
-      pre1.setEnd(r.startContainer, r.startOffset);
-      var start = pre1.toString().length;
 
-      var pre2 = r.cloneRange();
-      pre2.selectNodeContents(root);
-      pre2.setEnd(r.endContainer, r.endOffset);
-      var end = pre2.toString().length;
+      function offsetFor(container, off){
+        var lineEl = findLineEl(container);
+        if (!lineEl) return 0;
+        var li = parseInt(lineEl.getAttribute('data-sfml-line') || '0', 10) || 0;
 
+        // prefix: lengths of prior lines + '\n'
+        var pre = 0;
+        for (var i=0;i<li;i++) pre += (lines[i] ? lines[i].length : 0) + 1;
+
+        // within this line: count chars from line start to selection point
+        var rr = document.createRange();
+        rr.selectNodeContents(lineEl);
+        rr.setEnd(container, off);
+        var within = rr.toString().length;
+
+        // clamp within to model line length (DOM can include artifacts)
+        var maxw = (lines[li] ? lines[li].length : 0);
+        if (within < 0) within = 0;
+        if (within > maxw) within = maxw;
+        return pre + within;
+      }
+
+      var start = offsetFor(r.startContainer, r.startOffset);
+      var end = offsetFor(r.endContainer, r.endOffset);
       return {start:start,end:end};
     }catch(e){
       return {start:0,end:0};
     }
+  }
+
+  function setCaretByOffset(ed, lines, offset){
+    // Map model offset -> DOM caret (accounting for structural newlines)
+    try{
+      offset = offset|0;
+      if (offset < 0) offset = 0;
+      var total = 0;
+      for (var k=0;k<lines.length;k++) total += (lines[k] ? lines[k].length : 0) + (k < lines.length-1 ? 1 : 0);
+      if (offset > total) offset = total;
+
+      // find line
+      var li = 0;
+      var acc = 0;
+      for (li=0; li<lines.length; li++){
+        var lnlen = (lines[li] ? lines[li].length : 0);
+        var nextAcc = acc + lnlen;
+        if (offset <= nextAcc) break;
+        acc = nextAcc + 1; // skip '\n'
+      }
+      if (li >= lines.length) li = lines.length-1;
+      if (li < 0) li = 0;
+      var within = offset - acc;
+      if (within < 0) within = 0;
+      var maxw2 = (lines[li] ? lines[li].length : 0);
+      if (within > maxw2) within = maxw2;
+
+      var lineEl = ed.querySelector("[data-sfml-line='"+li+"']");
+      if (!lineEl) return;
+
+      var sel = window.getSelection ? window.getSelection() : null;
+      if (!sel) return;
+
+      var walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT, null);
+      var cur = 0;
+      var node;
+      while ((node = walker.nextNode())){
+        var nlen = node.nodeValue ? node.nodeValue.length : 0;
+        if (cur + nlen >= within){
+          var rr = document.createRange();
+          rr.setStart(node, Math.max(0, within - cur));
+          rr.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(rr);
+          return;
+        }
+        cur += nlen;
+      }
+
+      // fallback: end of line
+      var rr2 = document.createRange();
+      rr2.selectNodeContents(lineEl);
+      rr2.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(rr2);
+    }catch(e){}
   }
 
   function isBlockHeaderLine(trimmed){
@@ -181,9 +241,10 @@
       var ln = lines[j];
       // ensure empty lines remain "editable" (some browsers collapse empty blocks)
       var body = ln.length ? hiliteLine(ln) : '<span class="sfmlTokBase"><br></span>';
-      h.push('<div class="sfmlLine">' + body + '</div>');
+      h.push('<div class="sfmlLine" data-sfml-line="'+j+'">' + body + '</div>');
     }
     ed.innerHTML = h.join('');
+    return lines;
   }
 
   function Editor(hostEl, opts){
@@ -217,8 +278,8 @@
 
     function rerenderFromValue(caret){
       var txt = String(self._value || '');
-      render(ed, txt);
-      setCaretByOffset(ed, caret == null ? 0 : caret);
+      self._lines = render(ed, txt);
+      setCaretByOffset(ed, self._lines, caret == null ? 0 : caret);
       return txt;
     }
 
@@ -265,7 +326,7 @@
         ){
           ev.preventDefault();
 
-          var sel = getSelOffsets(ed);
+          var sel = getSelOffsets(ed, self._lines || String(self._value||'').split('\n'));
           var start = sel.start;
           var end = sel.end;
           var caret = start;
@@ -315,9 +376,9 @@
   Editor.prototype.setValue = function(text){
     text = normalizeNewlines(text);
     this._value = text;
-    render(this.ed, text);
+    this._lines = render(this.ed, text);
     // put caret at end on initial set
-    try{ setCaretByOffset(this.ed, text.length); }catch(_e){}
+    try{ setCaretByOffset(this.ed, this._lines || [text], text.length); }catch(_e){}
   };
 
   Editor.prototype.getValue = function(){
