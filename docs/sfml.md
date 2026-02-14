@@ -12,7 +12,7 @@ SFML is designed to be:
 - easy to diff/review by a human
 - easy for a renderer to parse deterministically
 
-This document defines **SFML v0**.
+This document defines **SFML v1** (preferred) and SFML v0 (legacy).
 
 ---
 

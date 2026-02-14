@@ -2424,62 +2424,79 @@ function prodRenderSfml(sfml){
       if (!t) return '';
       if (t.startsWith('#')) return span('tok-c', esc(s));
 
-      // cast delimiters
-      if (t.toUpperCase()==='<<CAST>>' || t.toUpperCase()==='<<ENDCAST>>'){
-        return span('tok-kw', esc(t));
+      // SFML v1: casting block header
+      if (t.toLowerCase()==='cast:'){
+        return span('tok-kw','cast') + ':';
       }
 
-      // scene tag chevrons
-      if (t.toUpperCase().startsWith('<<SCENE')){
-        // e.g. <<SCENE id=scene-1 title="Intro">>
-        var out = span('tok-kw', '<<SCENE>>');
-        var body = t;
-        if (body.startsWith('<<')) body = body.slice(2);
-        if (body.endsWith('>>')) body = body.slice(0, -2);
-        var parts = body.split(' ').filter(Boolean);
-        for (var i=0;i<parts.length;i++){
-          var p=String(parts[i]||'');
-          if (p.toLowerCase()==='scene') continue;
-          out += ' ';
-          if (p.startsWith('id=')) out += span('tok-a','id')+'='+span('tok-id',esc(p.slice(3)));
-          else if (p.startsWith('title=')) out += span('tok-a','title')+'='+span('tok-s',esc(p.slice(6)));
-          else out += esc(p);
+      // SFML v1: cast mapping line: Name: voice_id (indented)
+      // e.g. "  Maris: lunar-violet"
+      if (t.indexOf(':') > 0 && s.startsWith('  ')){
+        var i2 = t.indexOf(':');
+        var nm = t.slice(0, i2).trim();
+        var val = t.slice(i2+1).trim();
+        if (nm && val){
+          return span('tok-id', esc(nm)) + span('tok-a', ':') + ' ' + span('tok-id', esc(val));
         }
-        return out;
       }
 
-      // voice mapping: voice [Name] = voice_id
-      if (t.toLowerCase().startsWith('voice ')){
-        // best-effort parse: voice [Name] = id
-        var out = span('tok-kw','voice') + ' ';
-        var lb = t.indexOf('[');
-        var rb = t.indexOf(']');
-        if (lb>=0 && rb>lb){
-          out += '[' + span('tok-id', esc(t.slice(lb+1, rb).trim())) + ']';
-          out += ' ';
-          var eq = t.indexOf('=', rb);
-          if (eq>=0){
-            out += '= ' + span('tok-id', esc(t.slice(eq+1).trim()));
-          }else{
-            out += esc(t.slice(rb+1));
+      // SFML v1: scene header: scene <id> "Title":
+      if (t.toLowerCase().startsWith('scene ')){
+        // keep full header but highlight keyword + id and quoted title
+        var rest = t.slice(5).trim();
+        var out = span('tok-kw','scene') + ' ';
+        // id is first token
+        var parts = rest.split(' ').filter(Boolean);
+        if (parts.length){
+          out += span('tok-id', esc(parts[0]));
+          var tail = rest.slice(parts[0].length).trim();
+          if (tail){
+            // keep quotes as string-ish
+            out += ' ' + span('tok-s', esc(tail));
           }
           return out;
         }
+        return span('tok-kw','scene') + ' ' + esc(rest);
+      }
+
+      // speaker line: [Name] text (indented or not)
+      if (t.startsWith('[')){
+        var rb = t.indexOf(']');
+        if (rb>0){
+          var nm = t.slice(1, rb).trim();
+          var rest = t.slice(rb+1).trim();
+          var out = '[' + span('tok-id', esc(nm)) + ']';
+          if (rest) out += ' ' + esc(rest);
+          return out;
+        }
+      }
+
+      // SFML v0 legacy support (chevrons + voice lines)
+      if (t.toUpperCase()==='<<CAST>>' || t.toUpperCase()==='<<ENDCAST>>'){
+        return span('tok-kw', esc(t));
+      }
+      if (t.toUpperCase().startsWith('<<SCENE')){
+        return span('tok-kw', esc(t));
+      }
+      if (t.toLowerCase().startsWith('voice ')){
         return span('tok-kw','voice') + ' ' + esc(t.slice(5));
       }
 
-      // legacy scene (keep supported)
-      if (t.toLowerCase().startsWith('scene ')){
-        var rest = t.slice(5).trim();
-        var parts = rest.split(' ').filter(Boolean);
-        var out = span('tok-kw','scene') + ' ';
-        for (var i=0;i<parts.length;i++){
+      // legacy say (keep supported)
+      if (t.toLowerCase().startsWith('say ')){
+        var colon = t.indexOf(':');
+        var head = (colon>=0)?t.slice(0,colon).trim():t;
+        var text = (colon>=0)?t.slice(colon+1).trim():'';
+        var parts = head.split(' ').filter(Boolean);
+        var out = span('tok-kw','say');
+        if (parts.length>1) out += ' ' + span('tok-id', esc(parts[1]));
+        for (var i=2;i<parts.length;i++){
           var p=String(parts[i]||'');
-          if (p.startsWith('id=')) out += span('tok-a','id')+'='+span('tok-id',esc(p.slice(3)));
-          else if (p.startsWith('title=')) out += span('tok-a','title')+'='+span('tok-s',esc(p.slice(6)));
-          else out += esc(p);
-          if (i<parts.length-1) out += ' ';
+          if (p.startsWith('voice=')) out += ' ' + span('tok-a','voice')+'='+span('tok-id', esc(p.slice(6)));
+          else out += ' ' + esc(p);
         }
+        out += ':';
+        if (text) out += ' ' + esc(text);
         return out;
       }
 
@@ -6424,31 +6441,30 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
-                'Casting must be at the top inside a delimited block: <<CAST>> ... <<ENDCAST>>.',
-                'Inside the cast block, one line per character: voice [Name] = voice_id',
-                'Scenes must use chevron tags: <<SCENE id=scene-1 title="...">>',
-                'For story lines, use speaker lines: [Name] text',
-                'Every [Name] used in the body MUST have a corresponding voice [Name] mapping in the cast block.',
-                'Always include narrator as: voice [Narrator] = <voice_id> and use [Narrator] lines.',
+                'FORMAT: Use SFML v1 (succinct blocks + indentation). Do NOT use chevrons like <<CAST>> or <<SCENE>>.',
+                'CASTING: At the top, emit a casting block exactly like:\ncast:\n  Name: voice_id',
+                'CASTING: One mapping per character. Names must match the speaker tags used later.',
+                'CASTING: Always include Narrator.',
+                'SCENES: Emit 1..max_scenes scene blocks. Each scene header is: scene <id> "<title>":',
+                'SCENES: If max_scenes=1, output exactly ONE scene block (scene-1) but still cover the whole story.',
+                'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
+                'BODY: Inside a scene block, lines are indented by two spaces and use speaker lines: [Name] text',
+                'BODY: Every [Name] must exist in cast: mappings.',
                 'Do not invent voice ids; only use voice ids from casting_map values.',
                 'Keep each speaker line to a single line; split long paragraphs into multiple lines.',
                 'COVERAGE: Include the full story content (do not stop early; do not summarize).',
                 'COVERAGE: Keep emitting speaker lines until the story reaches a clear ending.',
-                'SCENES: If max_scenes=1, output exactly ONE scene (scene-1) but still cover the whole story.',
-                'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
                 'Do not output JSON.',
             ],
             'example': (
-                '# SFML v0\n'
-                '<<CAST>>\n'
-                'voice [Narrator] = indigo-dawn\n'
-                'voice [Maris] = lunar-violet\n'
-                '<<ENDCAST>>\n'
+                '# SFML v1\n'
+                'cast:\n'
+                '  Narrator: indigo-dawn\n'
+                '  Maris: lunar-violet\n'
                 '\n'
-                '<<SCENE id=scene-1 title="Intro">>\n'
-                '\n'
-                '[Narrator] The lighthouse stood silent on the cliff.\n'
-                '[Maris] I can hear the sea breathing below.\n'
+                'scene scene-1 "Intro":\n'
+                '  [Narrator] The lighthouse stood silent on the cliff.\n'
+                '  [Maris] I can hear the sea breathing below.\n'
             ),
         }
 
@@ -6480,25 +6496,14 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         txt = re.sub(r'^```[a-zA-Z0-9_-]*\s*', '', txt).strip()
         txt = re.sub(r'```\s*$', '', txt).strip()
 
-        # Normalize common tag mistakes so exported SFML is consistent.
-        # (LLMs sometimes emit single chevrons or forget the closing '>>'.)
+        # Normalize common format mistakes so exported SFML is consistent.
+        # For v1 we mainly normalize indentation (2 spaces) and avoid tabs.
         try:
             lines = []
             for ln in (txt or '').splitlines():
-                t = (ln or '').strip()
-                # CAST delimiters
-                if t.upper() in ('<CAST>', 'CAST', '<<CAST>'):
-                    ln = '<<CAST>>'
-                elif t.upper() in ('<ENDCAST>', 'ENDCAST', '<<ENDCAST>'):
-                    ln = '<<ENDCAST>>'
-
-                # SCENE tag
-                if t.upper().startswith('<SCENE') and not t.upper().startswith('<<SCENE'):
-                    ln = '<<' + t[1:]
-                if t.upper().startswith('<<SCENE') and not t.endswith('>>'):
-                    # ensure closing
-                    ln = (ln.rstrip('>') + '>>')
-                lines.append(ln)
+                # replace tabs with two spaces
+                ln = (ln or '').replace('\t', '  ')
+                lines.append(ln.rstrip())
             txt = '\n'.join(lines).strip()
         except Exception:
             pass
