@@ -639,29 +639,15 @@ function __sfSetDeployBar(on, msg){
 }
 
 function __sfStartDeployWatch(){
-  // Show a progress bar during deployments. Full-width bar is always visible when deploying.
-  // Debug boot bar only shows when debug UI is enabled.
+  // Debug-only: show deploy progress bar inside the debug boot area.
   try{
     var dbg = null;
     try{ dbg = localStorage.getItem('sf_debug_ui'); }catch(e){}
     var debugOn = (dbg===null || dbg==='' || dbg==='1');
+    if (!debugOn) return;
 
     var lastUpdated = 0;
     var lastState = '';
-
-    function setTopBar(on, msg){
-      try{
-        var bar=document.getElementById('updateBar');
-        var sub=document.getElementById('updateSub');
-        if (!bar) return;
-        if (on){
-          bar.classList.remove('hide');
-          if (sub) sub.textContent = msg || 'Deploying…';
-        }else{
-          bar.classList.add('hide');
-        }
-      }catch(_e){}
-    }
 
     function tick(){
       fetch('/api/deploy/status', {cache:'no-store'}).then(function(r){
@@ -674,19 +660,14 @@ function __sfStartDeployWatch(){
         var upd = Number(j.updated_at||0);
 
         if (st === 'deploying'){
-          setTopBar(true, msg || 'Deploying…');
-          if (debugOn) __sfSetDeployBar(true, msg || 'StoryForge updating…');
-          else __sfSetDeployBar(false, '');
+          __sfSetDeployBar(true, msg || 'StoryForge updating…');
         }else{
-          setTopBar(false, '');
           __sfSetDeployBar(false, '');
         }
 
-        // If we just finished a deploy, reload once to pick up new build.
         if (lastState === 'deploying' && st !== 'deploying'){
           try{
             if (upd && upd !== lastUpdated){
-              setTopBar(true, 'Deploy complete. Refreshing…');
               setTimeout(function(){
                 try{ window.location.reload(); }catch(_e){}
               }, 450);
@@ -985,11 +966,7 @@ def index(response: Response):
   <div class='top'>
     <div>
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
-      <div id='updateBar' class='updateBar hide'>
-        <div class='muted' style='font-weight:950'>StoryForge updating…</div>
-        <div class='updateTrack'><div id='updateProg' class='updateProg'></div></div>
-        <div id='updateSub' class='muted'>Deploying…</div>
-      </div>
+      <!-- updating bar moved to debug area -->
     </div>
     <div class='row rowEnd'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
