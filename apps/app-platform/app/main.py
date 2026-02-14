@@ -2396,8 +2396,10 @@ function prodRenderSfml(sfml){
     if (!box) return;
 
     var raw = String(sfml||'');
-    raw = raw.split("\r\n").join("\n");
-    var lines = raw.split("\n");
+    // IMPORTANT: this JS lives inside a Python triple-quoted string.
+    // Use double-escaped newlines so we don't embed literal CR/LF into the JS source.
+    raw = raw.split("\\r\\n").join("\\n");
+    var lines = raw.split("\\n");
 
     function esc(s){ return escapeHtml(String(s||'')); }
     function span(cls, txt){ return '<span class="'+cls+'">'+txt+'</span>'; }
