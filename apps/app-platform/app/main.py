@@ -833,10 +833,7 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
-  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/ace.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night_blue.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/mode-text.js"></script>
+  <!-- Ace removed: custom SFML editor to be implemented -->
   __DEBUG_BANNER_BOOT_JS__
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
@@ -2531,123 +2528,38 @@ function prodRenderSfml(sfml){
 
     box.classList.remove('hide');
 
-    // Use Ace editor for robust mobile editing (cursor/selection/lines)
-    if (!window.ace){
-      box.innerHTML = "<div class='muted'>Editor loading…</div>";
-      return;
-    }
+    // Lightweight editor for now (no Ace). Next step: custom highlighting.
+    if (!box.__sfmlInited){
+      box.__sfmlInited = true;
+      box.innerHTML = "<textarea id='sfmlText' class='code' spellcheck='false' autocapitalize='none' autocomplete='off' autocorrect='off' style='width:100%;min-height:45vh;'></textarea>";
 
-    if (!window.__SF_ACE){
-      box.innerHTML = "";
-      // Ensure Ace can find its dynamic modules if it needs them.
-      try{ ace.config.set('basePath', 'https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict'); }catch(_e){}
-      window.__SF_ACE = ace.edit(box);
+      var ta = document.getElementById('sfmlText');
+      window.__SF_SFML_SAVE_T = null;
 
-      // Define a tiny SFML mode (local) for syntax highlighting.
-      try{
-        ace.define('ace/mode/sfml_highlight_rules', ['require','exports','module','ace/lib/oop','ace/mode/text_highlight_rules'], function(require, exports, module){
-          var oop = require('ace/lib/oop');
-          var TextHighlightRules = require('ace/mode/text_highlight_rules').TextHighlightRules;
-          var SfmlHighlightRules = function(){
-            // Keep rules very simple (no lookbehind; mobile-Safari safe)
-            this.$rules = {
-              start: [
-                { token: 'comment', regex: '^\\s*#.*$' },
-
-                // Block headers: cast:, and future blocks like meta:
-                { token: ['text','keyword'], regex: '^(\\s*)([a-z][a-z0-9_-]*:)\\s*$' },
-
-                // Scene header: highlight keyword + scene id
-                { token: ['text','keyword','text','variable','text'],
-                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(.*)$' },
-
-                // Cast mapping: "  Name: voice_id"
-                { token: ['text','variable','punctuation.operator','text','variable'],
-                  regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
-
-                // Speaker tags: highlight the name inside brackets
-                { token: ['text','paren.lparen','variable','paren.rparen'],
-                  regex: '^(\\s*)(\\[)([^\\]]+)(\\])' },
-
-                // Quoted strings (titles etc)
-                { token: 'string', regex: '"[^"]*"' },
-              ]
-            };
-            this.normalizeRules();
-          };
-          oop.inherits(SfmlHighlightRules, TextHighlightRules);
-          exports.SfmlHighlightRules = SfmlHighlightRules;
-        });
-        ace.define('ace/mode/sfml', ['require','exports','module','ace/lib/oop','ace/mode/text','ace/mode/sfml_highlight_rules'], function(require, exports, module){
-          var oop = require('ace/lib/oop');
-          var TextMode = require('ace/mode/text').Mode;
-          var SfmlHighlightRules = require('ace/mode/sfml_highlight_rules').SfmlHighlightRules;
-          var Mode = function(){
-            this.HighlightRules = SfmlHighlightRules;
-            this.$id = 'ace/mode/sfml';
-          };
-          oop.inherits(Mode, TextMode);
-          (function(){ this.lineCommentStart = '#'; }).call(Mode.prototype);
-          exports.Mode = Mode;
-        });
-      }catch(_e){}
-
-      // Theme: try the more blue-tinted variant to match StoryForge.
-      try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night_blue'); }
-      catch(_e){ try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night'); }catch(__e){} }
-
-      // Mode: SFML (prefer constructing directly so it can't silently fail)
-      try{
-        var SfmlMode = ace.require('ace/mode/sfml').Mode;
-        window.__SF_ACE.session.setMode(new SfmlMode());
-      }catch(_e){
-        try{ window.__SF_ACE.session.setMode('ace/mode/sfml'); }
-        catch(__e){ try{ window.__SF_ACE.session.setMode('ace/mode/text'); }catch(__e2){} }
-      }
-
-      window.__SF_ACE.setOptions({
-        fontSize: '12px',
-        showPrintMargin: false,
-        wrap: true,
-        useWorker: false,
-        displayIndentGuides: true,
-        showGutter: true,
-      });
-      try{ window.__SF_ACE.renderer.setShowGutter(true); }catch(_e){}
-      window.__SF_ACE.session.setUseWrapMode(true);
-      window.__SF_ACE.session.setTabSize(2);
-      window.__SF_ACE.session.setUseSoftTabs(true);
-
-      // Autosave on pause
-      window.__SF_ACE_SAVE_T = null;
-      window.__SF_ACE.on('change', function(){
-        try{ if (window.__SF_ACE_SAVE_T) clearTimeout(window.__SF_ACE_SAVE_T); }catch(_e){}
-        window.__SF_ACE_SAVE_T = setTimeout(function(){
+      function queueSave(){
+        try{ if (window.__SF_SFML_SAVE_T) clearTimeout(window.__SF_SFML_SAVE_T); }catch(_e){}
+        window.__SF_SFML_SAVE_T = setTimeout(function(){
           try{
-            var v = String(window.__SF_ACE.getValue()||'');
+            var v = String(ta.value||'');
             window.__SF_PROD.sfml = v;
             prodSfmlSaveNow(v);
           }catch(_e){}
         }, 2000);
-      });
-      window.__SF_ACE.on('blur', function(){
+      }
+
+      ta.addEventListener('input', function(){ queueSave(); });
+      ta.addEventListener('blur', function(){
         try{
-          var v = String(window.__SF_ACE.getValue()||'');
+          var v = String(ta.value||'');
           window.__SF_PROD.sfml = v;
           prodSfmlSaveNow(v);
         }catch(_e){}
       });
     }
 
-    // Only set if different, to preserve cursor position.
-    try{
-      if (String(window.__SF_ACE.getValue()||'') !== raw){
-        var pos = window.__SF_ACE.getCursorPosition();
-        window.__SF_ACE.setValue(raw, -1);
-        try{ window.__SF_ACE.moveCursorToPosition(pos); }catch(_e){}
-      }
-    }catch(_e){
-      window.__SF_ACE.setValue(raw, -1);
+    var ta2 = document.getElementById('sfmlText');
+    if (ta2 && String(ta2.value||'') !== raw){
+      ta2.value = raw;
     }
 
   }catch(e){}
