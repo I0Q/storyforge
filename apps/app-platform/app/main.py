@@ -2522,7 +2522,7 @@ function prodRenderSfml(sfml){
             window.__SF_PROD.sfml = v;
             prodSfmlSaveNow(v);
           }catch(_e){}
-        }, 900);
+        }, 2000);
       });
       window.__SF_ACE.on('blur', function(){
         try{
