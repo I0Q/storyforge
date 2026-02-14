@@ -182,15 +182,40 @@ def analyze_voice_metadata(
             headers=headers,
             timeout=90,
         )
-        r.raise_for_status()
-        j = r.json()
+
+        # Robust parse: gateway occasionally returns HTML/plaintext errors.
+        status = int(getattr(r, "status_code", 0) or 0)
+        raw_txt = ""
+        try:
+            raw_txt = r.text or ""
+        except Exception:
+            raw_txt = ""
+
+        if status < 200 or status >= 300:
+            return {
+                "ok": False,
+                "error": f"llm_http_{status}",
+                "detail": (raw_txt[:400] if raw_txt else ""),
+                "measured": measured,
+            }
+
+        try:
+            j = json.loads(raw_txt) if raw_txt else {}
+        except Exception:
+            return {
+                "ok": False,
+                "error": "llm_non_json",
+                "detail": (raw_txt[:400] if raw_txt else ""),
+                "measured": measured,
+            }
+
         txt = ""
         try:
             txt = str((j.get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
         except Exception:
             txt = ""
         if not txt:
-            return {"ok": False, "error": "llm_empty"}
+            return {"ok": False, "error": "llm_empty", "measured": measured}
         # Extract JSON
         import re
 
