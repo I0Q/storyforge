@@ -1272,6 +1272,10 @@ function renderJobs(jobs){
     const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
     const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
 
+    const errRow = (String(job.state||'')==='failed' && (job.sfml_url||'')) ? (
+      `<div class='k'>error</div><div class='term' style='white-space:pre-wrap'>${escapeHtml(String(job.sfml_url||'').slice(0,1600))}</div>`
+    ) : '';
+
     const sfmlRow = isSample ? '' : (
       `<div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`
     );
@@ -1287,6 +1291,7 @@ function renderJobs(jobs){
         <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
         <div class='k'>progress</div><div>${progText}${progBar}</div>
         <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
+        ${errRow}
         ${sfmlRow}
       </div>
       ${actions}
