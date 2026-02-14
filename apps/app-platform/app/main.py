@@ -6242,7 +6242,7 @@ def api_jobs_claim(request: Request, payload: dict[str, Any] = Body(default={}))
 
             job_id = str(row[0])
             now = int(time.time())
-            cur.execute("UPDATE jobs SET state=%s, started_at=%s, updated_at=%s WHERE id=%s", ('running', now, now, job_id))
+            cur.execute("UPDATE jobs SET state=%s, started_at=%s WHERE id=%s", ('running', now, job_id))
             conn.commit()
 
             job = {
