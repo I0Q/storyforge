@@ -221,9 +221,17 @@ def analyze_voice_metadata(
 
         m = re.search(r"\{[\s\S]*\}\s*$", txt)
         raw = m.group(0) if m else txt
-        traits = json.loads(raw)
+        try:
+            traits = json.loads(raw)
+        except Exception:
+            return {
+                "ok": False,
+                "error": "llm_bad_output",
+                "detail": (txt[:400] if txt else ""),
+                "measured": measured,
+            }
         if not isinstance(traits, dict):
-            return {"ok": False, "error": "llm_bad_json_shape"}
+            return {"ok": False, "error": "llm_bad_json_shape", "measured": measured}
 
         # Normalize
         def _norm(s: Any, maxlen: int = 80) -> str:
