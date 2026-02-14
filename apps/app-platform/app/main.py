@@ -6175,7 +6175,8 @@ async def api_metrics_stream():
 
         while True:
             try:
-                m = _get('/v1/metrics', timeout_s=12.0)
+                # _get uses requests (blocking); run in a thread so we don't block the event loop.
+                m = await asyncio.to_thread(_get, '/v1/metrics', 12.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception as e:
@@ -6201,12 +6202,16 @@ async def api_jobs_stream():
 
         while True:
             try:
-                conn = db_connect()
-                try:
-                    db_init(conn)
-                    jobs = db_list_jobs(conn, limit=60)
-                finally:
-                    conn.close()
+                # DB access is blocking; run in a thread so we don't block the event loop.
+                def _load_jobs():
+                    conn = db_connect()
+                    try:
+                        db_init(conn)
+                        return db_list_jobs(conn, limit=60)
+                    finally:
+                        conn.close()
+
+                jobs = await asyncio.to_thread(_load_jobs)
                 data = json.dumps({'ok': True, 'jobs': jobs}, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception:
