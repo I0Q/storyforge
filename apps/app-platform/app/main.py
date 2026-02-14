@@ -835,6 +835,7 @@ def index(response: Response):
   <style>__INDEX_BASE_CSS__</style>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/ace.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night_blue.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/mode-text.js"></script>
   __DEBUG_BANNER_BOOT_JS__
   <script>
@@ -2498,16 +2499,63 @@ function prodRenderSfml(sfml){
 
     if (!window.__SF_ACE){
       box.innerHTML = "";
+      // Ensure Ace can find its dynamic modules if it needs them.
+      try{ ace.config.set('basePath', 'https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict'); }catch(_e){}
       window.__SF_ACE = ace.edit(box);
-      window.__SF_ACE.setTheme('ace/theme/tomorrow_night');
-      window.__SF_ACE.session.setMode('ace/mode/text');
+
+      // Define a tiny SFML mode (local) for syntax highlighting.
+      try{
+        ace.define('ace/mode/sfml_highlight_rules', ['require','exports','module','ace/lib/oop','ace/mode/text_highlight_rules'], function(require, exports, module){
+          var oop = require('ace/lib/oop');
+          var TextHighlightRules = require('ace/mode/text_highlight_rules').TextHighlightRules;
+          var SfmlHighlightRules = function(){
+            this.$rules = {
+              start: [
+                { token: 'comment', regex: '^\\s*#.*$' },
+                { token: 'keyword', regex: '^\\s*(cast:)(?:\\s*)$' },
+                { token: 'keyword', regex: '^\\s*(scene)\\b' },
+                { token: 'variable', regex: '^\\s{2,}[^:]+(?=\\s*:)'} ,
+                { token: 'constant.language', regex: '(?<=:)\\s*[a-z0-9][a-z0-9_-]*\\s*$' },
+                { token: 'string', regex: '"(?:[^"\\\\]|\\\\.)*"' },
+                { token: 'variable.parameter', regex: '\\[[^\\]]+\\]' },
+              ]
+            };
+            this.normalizeRules();
+          };
+          oop.inherits(SfmlHighlightRules, TextHighlightRules);
+          exports.SfmlHighlightRules = SfmlHighlightRules;
+        });
+        ace.define('ace/mode/sfml', ['require','exports','module','ace/lib/oop','ace/mode/text','ace/mode/sfml_highlight_rules'], function(require, exports, module){
+          var oop = require('ace/lib/oop');
+          var TextMode = require('ace/mode/text').Mode;
+          var SfmlHighlightRules = require('ace/mode/sfml_highlight_rules').SfmlHighlightRules;
+          var Mode = function(){
+            this.HighlightRules = SfmlHighlightRules;
+            this.$id = 'ace/mode/sfml';
+          };
+          oop.inherits(Mode, TextMode);
+          (function(){ this.lineCommentStart = '#'; }).call(Mode.prototype);
+          exports.Mode = Mode;
+        });
+      }catch(_e){}
+
+      // Theme: try the more blue-tinted variant to match StoryForge.
+      try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night_blue'); }
+      catch(_e){ try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night'); }catch(__e){} }
+
+      // Mode: SFML
+      try{ window.__SF_ACE.session.setMode('ace/mode/sfml'); }
+      catch(_e){ try{ window.__SF_ACE.session.setMode('ace/mode/text'); }catch(__e){} }
+
       window.__SF_ACE.setOptions({
         fontSize: '12px',
         showPrintMargin: false,
         wrap: true,
         useWorker: false,
         displayIndentGuides: true,
+        showGutter: true,
       });
+      try{ window.__SF_ACE.renderer.setShowGutter(true); }catch(_e){}
       window.__SF_ACE.session.setUseWrapMode(true);
       window.__SF_ACE.session.setTabSize(2);
       window.__SF_ACE.session.setUseSoftTabs(true);
