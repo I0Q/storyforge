@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS sf_voices (
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   sample_text TEXT NOT NULL DEFAULT '',
   sample_url TEXT NOT NULL DEFAULT '',
+  voice_traits_json TEXT NOT NULL DEFAULT '',
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
@@ -55,7 +56,7 @@ def list_voices_db(conn, limit: int = 500) -> list[dict[str, Any]]:
         pass
 
     cur.execute(
-        "SELECT id,engine,voice_ref,display_name,enabled,sample_text,sample_url,updated_at "
+        "SELECT id,engine,voice_ref,display_name,enabled,sample_text,sample_url,voice_traits_json,updated_at "
         "FROM sf_voices ORDER BY updated_at DESC LIMIT %s",
         (int(limit),),
     )
@@ -71,7 +72,8 @@ def list_voices_db(conn, limit: int = 500) -> list[dict[str, Any]]:
                 "enabled": bool(r[4]),
                 "sample_text": r[5] or "",
                 "sample_url": r[6] or "",
-                "updated_at": r[7],
+                "voice_traits_json": r[7] or "",
+                "updated_at": r[8],
             }
         )
     return out
@@ -85,7 +87,7 @@ def get_voice_db(conn, voice_id: str) -> dict[str, Any]:
         pass
 
     cur.execute(
-        "SELECT id,engine,voice_ref,display_name,enabled,sample_text,sample_url,created_at,updated_at "
+        "SELECT id,engine,voice_ref,display_name,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at "
         "FROM sf_voices WHERE id=%s",
         (voice_id,),
     )
@@ -100,8 +102,9 @@ def get_voice_db(conn, voice_id: str) -> dict[str, Any]:
         "enabled": bool(r[4]),
         "sample_text": r[5] or "",
         "sample_url": r[6] or "",
-        "created_at": r[7],
-        "updated_at": r[8],
+        "voice_traits_json": r[7] or "",
+        "created_at": r[8],
+        "updated_at": r[9],
     }
 
 
@@ -124,8 +127,8 @@ def upsert_voice_db(
 
     cur.execute(
         """
-INSERT INTO sf_voices (id,engine,voice_ref,display_name,enabled,sample_text,sample_url,created_at,updated_at)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+INSERT INTO sf_voices (id,engine,voice_ref,display_name,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON CONFLICT (id) DO UPDATE SET
   engine=EXCLUDED.engine,
   voice_ref=EXCLUDED.voice_ref,
@@ -133,8 +136,9 @@ ON CONFLICT (id) DO UPDATE SET
   enabled=EXCLUDED.enabled,
   sample_text=EXCLUDED.sample_text,
   sample_url=EXCLUDED.sample_url,
+  voice_traits_json=COALESCE(NULLIF(EXCLUDED.voice_traits_json,''), sf_voices.voice_traits_json),
   updated_at=EXCLUDED.updated_at;
-""",
+""", 
         (
             voice_id,
             str(engine or ""),
@@ -143,6 +147,7 @@ ON CONFLICT (id) DO UPDATE SET
             bool(enabled),
             str(sample_text or ""),
             str(sample_url or ""),
+            "",  # voice_traits_json (preserve existing on conflict)
             now,
             now,
         ),

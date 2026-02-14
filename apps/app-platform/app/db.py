@@ -73,11 +73,18 @@ CREATE TABLE IF NOT EXISTS sf_voices (
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   sample_text TEXT NOT NULL DEFAULT '',
   sample_url TEXT NOT NULL DEFAULT '',
+  voice_traits_json TEXT NOT NULL DEFAULT '',
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
 """
     )
+
+    # Migrations: voice traits
+    try:
+        cur.execute("ALTER TABLE sf_voices ADD COLUMN IF NOT EXISTS voice_traits_json TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
 
     # Settings (small JSON blobs)
     cur.execute(

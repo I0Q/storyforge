@@ -40,6 +40,8 @@ from .voices_db import (
     set_voice_enabled_db,
     delete_voice_db,
 )
+
+from .voice_meta import analyze_voice_metadata
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi import Response
 
@@ -5305,6 +5307,76 @@ def api_voices_create(payload: dict[str, Any]):
             upsert_voice_db(conn, voice_id, engine, voice_ref, display_name, enabled, sample_text, sample_url)
         finally:
             conn.close()
+
+        # After saving to roster, kick off metadata analysis (best-effort, async).
+        try:
+            job_id = "voice_meta_" + voice_id + "_" + str(int(time.time()))
+            meta = {
+                'voice_id': voice_id,
+                'engine': engine,
+                'voice_ref': voice_ref,
+                'sample_text': sample_text,
+                'sample_url': sample_url,
+                'tortoise_voice': str(payload.get('tortoise_voice') or '').strip(),
+                'tortoise_gender': str(payload.get('tortoise_gender') or '').strip(),
+                'tortoise_preset': str(payload.get('tortoise_preset') or '').strip(),
+            }
+            _job_patch(
+                job_id,
+                {
+                    'title': f"Voice metadata ({display_name})",
+                    'kind': 'voice_meta',
+                    'meta_json': json.dumps(meta, separators=(',', ':')),
+                    'state': 'running',
+                    'started_at': int(time.time()),
+                    'finished_at': 0,
+                    'total_segments': 2,
+                    'segments_done': 0,
+                },
+            )
+
+            def worker():
+                try:
+                    _job_patch(job_id, {'segments_done': 1})
+                    res = analyze_voice_metadata(
+                        voice_id=voice_id,
+                        engine=engine,
+                        voice_ref=voice_ref,
+                        sample_text=sample_text,
+                        sample_url=sample_url,
+                        tortoise_voice=str(payload.get('tortoise_voice') or '').strip(),
+                        tortoise_gender=str(payload.get('tortoise_gender') or '').strip(),
+                        tortoise_preset=str(payload.get('tortoise_preset') or '').strip(),
+                        gateway_base=GATEWAY_BASE,
+                        headers=_h(),
+                    )
+                    if not (isinstance(res, dict) and res.get('ok')):
+                        raise RuntimeError(str((res or {}).get('error') or 'meta_failed'))
+                    _job_patch(job_id, {'segments_done': 2, 'state': 'completed', 'finished_at': int(time.time())})
+                except Exception as e:
+                    det = ''
+                    try:
+                        import traceback
+
+                        det = traceback.format_exc(limit=6)
+                    except Exception:
+                        det = ''
+                    _job_patch(
+                        job_id,
+                        {
+                            'state': 'failed',
+                            'finished_at': int(time.time()),
+                            'segments_done': 0,
+                            'sfml_url': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
+                        },
+                    )
+
+            import threading
+
+            threading.Thread(target=worker, daemon=True).start()
+        except Exception:
+            pass
+
         return {'ok': True, 'sample_url': sample_url}
     except Exception as e:
         return {'ok': False, 'error': f'create_failed: {type(e).__name__}: {e}'}
