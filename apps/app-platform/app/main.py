@@ -1494,6 +1494,49 @@ function parseGpuList(s){
   }
 }
 
+function onGpuToggle(cb){
+  try{
+    if (!cb) return;
+    var pid = String(cb.getAttribute('data-pid')||'');
+    if (!pid) return;
+
+    function selList(roleName){
+      var list=[];
+      var els=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="'+roleName+'"]');
+      for (var i=0;i<els.length;i++){
+        if (els[i].checked){
+          var n=parseInt(String(els[i].getAttribute('data-gpu')||''),10);
+          if (!isNaN(n)) list.push(n);
+        }
+      }
+      list.sort(function(a,b){return a-b;});
+      var u=[];
+      for (var j=0;j<list.length;j++){ if (u.indexOf(list[j])<0) u.push(list[j]); }
+      return u;
+    }
+
+    // Reservation: LLM GPUs are not available for voice
+    var llm = selList('llm');
+    var voiceEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="voice"]');
+    for (var k=0;k<voiceEls.length;k++){
+      var n2=parseInt(String(voiceEls[k].getAttribute('data-gpu')||''),10);
+      var dis = (llm.indexOf(n2)>=0);
+      voiceEls[k].disabled = dis;
+      if (dis) voiceEls[k].checked = false;
+      try{
+        var lab = voiceEls[k].parentElement;
+        if (lab) lab.style.opacity = dis ? '0.45' : '1';
+      }catch(e){}
+    }
+
+    var v = selList('voice');
+    var vHidden=document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="voice_gpus"]');
+    if (vHidden) vHidden.value = v.join(',');
+    var lHidden=document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="llm_gpus"]');
+    if (lHidden) lHidden.value = llm.join(',');
+  }catch(e){}
+}
+
 function __provId(p){
   return String((p&&p.id)||'').trim();
 }
@@ -1544,11 +1587,29 @@ function renderProviders(providers){
 
       "<div class='provSection'>Voice service</div>"+
       "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
-      "<div class='k'>Voice GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"' placeholder='0,1' style='width:96px;max-width:100%;min-width:0' /></div>"+
+      "<div class='k'>Voice GPUs</div><div>"+
+        "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_gpus' value='"+escAttr(voiceG.join(','))+"'/>"+
+        "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
+          [0,1,2,3].map(function(n){
+            var on = (voiceG.indexOf(n)>=0);
+            var dis = (llmG.indexOf(n)>=0);
+            var op = dis ? 0.45 : 1;
+            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" "+(dis?'disabled':'')+" onchange='onGpuToggle(this); event.stopPropagation();' style='display:none'/>GPU "+n+"</label>";
+          }).join('')+
+        "</div>"+
+      "</div>"+
 
       "<div class='provSection'>LLM service</div>"+
       "<div class='provHint'>Choose a model and which GPU(s) it can use.</div>"+
-      "<div class='k'>LLM GPUs</div><div><input data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"' placeholder='2' style='width:72px;max-width:100%;min-width:0' /></div>"+
+      "<div class='k'>LLM GPUs</div><div>"+
+        "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"'/>"+
+        "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
+          [0,1,2,3].map(function(n){
+            var on = (llmG.indexOf(n)>=0);
+            return "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this); event.stopPropagation();' style='display:none'/>GPU "+n+"</label>";
+          }).join('')+
+        "</div>"+
+      "</div>"+
       "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model' style='width:220px;max-width:100%;min-width:0'>"+
           enabledModels.map(function(m){
             var sel = (String(m.id)===llmModel) ? 'selected' : '';
@@ -5352,12 +5413,53 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                 }
             )
 
-        conn = db_connect()
+        # Detect LLM GPU changes (tinybox provider only) so we can reload vLLM.
+        prev_llm_gpus: list[int] = []
+        next_llm_gpus: list[int] = []
         try:
-            db_init(conn)
-            _settings_set(conn, 'providers', {'providers': norm})
-        finally:
-            conn.close()
+            conn = db_connect()
+            try:
+                db_init(conn)
+                prev = _settings_get(conn, 'providers')
+                prev_provs = (prev or {}).get('providers') if isinstance(prev, dict) else None
+                if isinstance(prev_provs, list):
+                    for pp in prev_provs:
+                        if isinstance(pp, dict) and str(pp.get('kind') or '').strip() == 'tinybox':
+                            v = pp.get('llm_gpus')
+                            if isinstance(v, list):
+                                prev_llm_gpus = [int(x) for x in v if str(x).strip().isdigit()]
+                            break
+
+                for np in norm:
+                    if isinstance(np, dict) and str(np.get('kind') or '').strip() == 'tinybox':
+                        v = np.get('llm_gpus')
+                        if isinstance(v, list):
+                            next_llm_gpus = [int(x) for x in v if str(x).strip().isdigit()]
+                        break
+
+                _settings_set(conn, 'providers', {'providers': norm})
+            finally:
+                conn.close()
+        except Exception:
+            # If DB read fails, still consider the save successful.
+            prev_llm_gpus = []
+
+        # If LLM GPUs changed, trigger vLLM reconfigure+restart on Tinybox.
+        try:
+            if sorted(set(prev_llm_gpus)) != sorted(set(next_llm_gpus)) and next_llm_gpus:
+                r = requests.post(
+                    GATEWAY_BASE + '/v1/admin/vllm/reconfigure',
+                    json={'gpus': sorted(set(next_llm_gpus))},
+                    headers=_h(),
+                    timeout=120,
+                )
+                # best-effort; don't fail settings save on restart issues
+                try:
+                    _ = r.json()
+                except Exception:
+                    _ = None
+        except Exception:
+            pass
 
         return {'ok': True}
     except Exception as e:
@@ -5420,10 +5522,21 @@ def _get_tinybox_provider() -> dict[str, Any] | None:
 def _pick_voice_gpu_rr() -> int | None:
     p = _get_tinybox_provider() or {}
     pid = str(p.get('id') or 'tinybox')
-    gpus = p.get('voice_gpus') if isinstance(p, dict) else None
-    if not isinstance(gpus, list):
-        gpus = []
-    return _pick_rr_from_list('voice:' + pid, gpus)
+    vg = p.get('voice_gpus') if isinstance(p, dict) else None
+    lg = p.get('llm_gpus') if isinstance(p, dict) else None
+    if not isinstance(vg, list):
+        vg = []
+    if not isinstance(lg, list):
+        lg = []
+    try:
+        reserved = {int(x) for x in lg}
+    except Exception:
+        reserved = set()
+    try:
+        allowed = [int(x) for x in vg if int(x) not in reserved]
+    except Exception:
+        allowed = []
+    return _pick_rr_from_list('voice:' + pid, allowed)
 
 
 def _job_patch(job_id: str, patch: dict[str, Any]) -> None:
