@@ -32,7 +32,7 @@ jobs:
             echo "Missing secrets.SF_DEPLOY_TOKEN" >&2
             exit 1
           fi
-          msg="Deploying (GitHub push ${GITHUB_SHA:0:7})"
+          msg="Deploying (Commit ${GITHUB_SHA:0:7})"
           payload=$(jq -nc --arg m "$msg" '{message:$m}')
           curl -fsS -X POST "$STORYFORGE_URL/api/deploy/start" \
             -H "content-type: application/json" \
@@ -121,7 +121,7 @@ jobs:
           if [ "$res" = "success" ]; then msg="Deployed"; fi
           if [ "$res" = "failure" ]; then msg="Deploy failed"; fi
           if [ "$res" = "timeout" ]; then msg="Deploy timed out"; fi
-          msg2="$msg (GitHub push ${GITHUB_SHA:0:7})"
+          msg2="$msg (Commit ${GITHUB_SHA:0:7})"
           payload=$(jq -nc --arg m "$msg2" '{message:$m}')
           curl -fsS -X POST "$STORYFORGE_URL/api/deploy/end" \
             -H "content-type: application/json" \
