@@ -5376,7 +5376,11 @@ def api_voices_create(payload: dict[str, Any]):
                         headers=_h(),
                     )
                     if not (isinstance(res, dict) and res.get('ok')):
-                        raise RuntimeError(str((res or {}).get('error') or 'meta_failed'))
+                        msg = str((res or {}).get('error') or 'meta_failed')
+                        det2 = (res or {}).get('detail')
+                        if det2:
+                            msg = msg + ' :: ' + str(det2)[:240]
+                        raise RuntimeError(msg)
                     _job_patch(job_id, {'segments_done': 2, 'state': 'completed', 'finished_at': int(time.time())})
                 except Exception as e:
                     det = ''
@@ -5463,7 +5467,11 @@ def api_voices_analyze_metadata(voice_id: str):
                     headers=_h(),
                 )
                 if not (isinstance(res, dict) and res.get('ok')):
-                    raise RuntimeError(str((res or {}).get('error') or 'meta_failed'))
+                    msg = str((res or {}).get('error') or 'meta_failed')
+                    det2 = (res or {}).get('detail')
+                    if det2:
+                        msg = msg + ' :: ' + str(det2)[:240]
+                    raise RuntimeError(msg)
                 _job_patch(job_id, {'segments_done': 2, 'state': 'completed', 'finished_at': int(time.time())})
             except Exception as e:
                 det = ''
