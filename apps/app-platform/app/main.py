@@ -5673,6 +5673,76 @@ def _pick_voice_gpu_rr() -> int | None:
     return _pick_rr_from_list('voice:' + pid, allowed)
 
 
+
+def _split_tts_text(text: str, max_chars: int = 420, max_chunks: int = 8) -> list[str]:
+    t = str(text or '').strip()
+    if not t:
+        return []
+    # Normalize whitespace a bit, but keep punctuation.
+    t = re.sub(r"[	 ]+", " ", t)
+    # Split into sentence-ish parts.
+    parts = re.split(r"(?<=[\.!\?])\s+|\n+", t)
+    parts = [p.strip() for p in parts if p and p.strip()]
+    out: list[str] = []
+    cur = ""
+    for p in parts:
+        if not cur:
+            cur = p
+            continue
+        if len(cur) + 1 + len(p) <= max_chars:
+            cur = cur + " " + p
+        else:
+            out.append(cur)
+            cur = p
+        if len(out) >= max_chunks - 1:
+            # stop early; put the rest into the last chunk
+            break
+    if cur:
+        out.append(cur)
+
+    # If we bailed early, append remainder (best-effort)
+    if len(out) < max_chunks:
+        used = " ".join(out)
+        if len(used) < len(t) and t.startswith(used):
+            rem = t[len(used):].strip()
+            if rem:
+                if len(out) < max_chunks:
+                    out[-1] = (out[-1] + " " + rem).strip()
+
+    # Final clean
+    out = [c.strip() for c in out if c and c.strip()]
+    return out[:max_chunks]
+
+
+def _concat_wavs(wavs: list[bytes]) -> bytes:
+    import io
+    import wave
+
+    if not wavs:
+        return b""
+    params = None
+    frames_all: list[bytes] = []
+    for b in wavs:
+        bio = io.BytesIO(b)
+        with wave.open(bio, 'rb') as w:
+            p = w.getparams()
+            if params is None:
+                params = p
+            else:
+                # Must match channels/sampwidth/framerate
+                if (p.nchannels, p.sampwidth, p.framerate) != (params.nchannels, params.sampwidth, params.framerate):
+                    raise RuntimeError('wav_params_mismatch')
+            frames_all.append(w.readframes(w.getnframes()))
+
+    out = io.BytesIO()
+    with wave.open(out, 'wb') as wo:
+        wo.setnchannels(params.nchannels)
+        wo.setsampwidth(params.sampwidth)
+        wo.setframerate(params.framerate)
+        for fr in frames_all:
+            wo.writeframes(fr)
+    return out.getvalue()
+
 def _job_patch(job_id: str, patch: dict[str, Any]) -> None:
     conn = db_connect()
     try:
@@ -5798,44 +5868,81 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 _job_patch(job_id, {'segments_done': 1})
 
                 # stage 2: synth
-                # Respect configured provider GPU list via round-robin selection.
-                gpu = None
+                # For tortoise, split long text into chunks and run each chunk as its own TTS call.
+                chunks = [text]
                 try:
-                    gpu = _pick_voice_gpu_rr()
+                    if engine == 'tortoise' and len(text) > 480:
+                        chunks = _split_tts_text(text, max_chars=420, max_chunks=8) or [text]
                 except Exception:
+                    chunks = [text]
+
+                # Update total to reflect chunked synth + upload
+                try:
+                    total2 = 1 + max(1, len(chunks)) + 1  # bookkeeping + synth_chunks + upload
+                    _job_patch(job_id, {'total_segments': int(total2)})
+                except Exception:
+                    total2 = total
+
+                wavs: list[bytes] = []
+                gpus_used: list[int] = []
+                seg_done = 1
+
+                for chunk in chunks:
+                    seg_done += 1
+
                     gpu = None
+                    try:
+                        gpu = _pick_voice_gpu_rr()
+                    except Exception:
+                        gpu = None
 
-                r = requests.post(
-                    GATEWAY_BASE + '/v1/tts',
-                    json={'engine': engine, 'voice': voice, 'text': text, 'upload': True, 'gpu': gpu},
-                    headers=_h(),
-                    timeout=1800,
-                )
-                r.raise_for_status()
-                j = r.json()
-                if not isinstance(j, dict) or not j.get('ok'):
-                    err = str((j or {}).get('error') or 'tts_failed')
-                    det = (j or {}).get('detail')
-                    if det:
-                        err = err + ' :: ' + str(det)
-                    raise RuntimeError(err)
+                    r = requests.post(
+                        GATEWAY_BASE + '/v1/tts',
+                        json={'engine': engine, 'voice': voice, 'text': chunk, 'upload': True, 'gpu': gpu},
+                        headers=_h(),
+                        timeout=1800,
+                    )
+                    r.raise_for_status()
+                    j = r.json()
+                    if not isinstance(j, dict) or not j.get('ok'):
+                        err = str((j or {}).get('error') or 'tts_failed')
+                        det = (j or {}).get('detail')
+                        if det:
+                            err = err + ' :: ' + str(det)
+                        raise RuntimeError(err)
 
-                _job_patch(job_id, {'segments_done': 2})
+                    try:
+                        if j.get('gpu') is not None:
+                            gpus_used.append(int(j.get('gpu')))
+                    except Exception:
+                        pass
 
-                # stage 3: upload to Spaces (via same logic as api_tts)
-                if j.get('audio_b64'):
-                    import base64
-                    from .spaces_upload import upload_bytes
+                    if j.get('audio_b64'):
+                        import base64
 
-                    b = base64.b64decode(str(j.get('audio_b64') or ''), validate=False)
-                    ct = str(j.get('content_type') or 'audio/wav')
-                    ext = 'wav'
-                    if 'mpeg' in ct:
-                        ext = 'mp3'
-                    fn = f"sample.{ext}"
-                    _key, url = upload_bytes(b, key_prefix='tts/samples', filename=fn, content_type=ct)
-                else:
-                    url = str(j.get('url') or j.get('sample_url') or '')
+                        b = base64.b64decode(str(j.get('audio_b64') or ''), validate=False)
+                        wavs.append(b)
+                    else:
+                        raise RuntimeError('no_audio_b64')
+
+                    _job_patch(job_id, {'segments_done': int(seg_done)})
+
+                # stage 3: upload concatenated wav to Spaces
+                from .spaces_upload import upload_bytes
+
+                b = _concat_wavs(wavs)
+                if not b:
+                    raise RuntimeError('empty_audio')
+
+                _key, url = upload_bytes(b, key_prefix='tts/samples', filename='sample.wav', content_type='audio/wav')
+
+                # record gpus used in job meta (best-effort)
+                try:
+                    meta2 = dict(meta)
+                    meta2['gpus_used'] = gpus_used
+                    _job_patch(job_id, {'meta_json': json.dumps(meta2, separators=(',', ':'))})
+                except Exception:
+                    pass
 
                 if not url:
                     raise RuntimeError('no_url')
