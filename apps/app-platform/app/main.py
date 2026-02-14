@@ -3021,13 +3021,22 @@ function setUpdateBar(on, msg){
 function startUpdateWatch(){
   try{
     var cur = String(window.__SF_BUILD||'');
+    var checkedOnce = false;
+
+    // Always show a small progress bar while we check build status.
+    // This disappears once we confirm we're on the current build.
+    setUpdateBar(true, 'Checking for updates…');
 
     function tick(){
       // Show a non-blocking updating bar when the app is temporarily failing.
       try{
         var lastFail = Number(window.__SF_LAST_API_FAIL||0);
-        if (lastFail && (Date.now()-lastFail) < 15000) setUpdateBar(true, 'Updating… reconnecting');
-        else setUpdateBar(false, '');
+        if (lastFail && (Date.now()-lastFail) < 15000){
+          setUpdateBar(true, 'Updating… reconnecting');
+        }else if (checkedOnce){
+          // Only hide after we've successfully checked at least once.
+          setUpdateBar(false, '');
+        }
       }catch(_e){}
 
       // Poll build. If changed, auto-reload with ?v=<new>.
@@ -3036,17 +3045,27 @@ function startUpdateWatch(){
         return r.json();
       }).then(function(j){
         if (!j || !j.ok || !j.build) return;
+        checkedOnce = true;
         var srv = String(j.build||'');
         if (srv && cur && srv !== cur){
+          // Keep bar visible long enough to be noticeable.
           setUpdateBar(true, 'Update deployed. Reloading…');
-          try{
-            var u = new URL(window.location.href);
-            u.searchParams.set('v', srv);
-            window.location.replace(u.toString());
-          }catch(_e){
-            window.location.reload();
-          }
+          setTimeout(function(){
+            try{
+              var u = new URL(window.location.href);
+              u.searchParams.set('v', srv);
+              window.location.replace(u.toString());
+            }catch(_e){
+              window.location.reload();
+            }
+          }, 700);
+          return;
         }
+        // Current build: hide bar if no recent errors.
+        try{
+          var lastFail = Number(window.__SF_LAST_API_FAIL||0);
+          if (!lastFail || (Date.now()-lastFail) >= 15000) setUpdateBar(false, '');
+        }catch(_e){}
       }).catch(function(_e){
         try{ window.__SF_LAST_API_FAIL = Date.now(); }catch(__e){}
         setUpdateBar(true, 'Updating… reconnecting');
