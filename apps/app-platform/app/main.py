@@ -2375,7 +2375,10 @@ function prodRenderSfml(sfml){
   try{
     var box=document.getElementById('prodSfmlBox');
     if (!box) return;
-    var lines = String(sfml||'').replace(/\r\n/g,'\n').split('\n');
+    var _raw = String(sfml||'');
+    // Avoid regex literals here (iOS Safari has been brittle during rapid iteration)
+    _raw = _raw.split("\r\n").join("\n");
+    var lines = _raw.split("\n");
 
     function esc(s){ return escapeHtml(String(s||'')); }
 
