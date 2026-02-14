@@ -181,11 +181,20 @@ INDEX_BASE_CSS = base_css("""\
 
     /* SFML code viewer (line numbers + basic highlighting) */
     .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;max-height:55vh;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+    .codeBox{position:relative;}
     .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
     .codeLine{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:2px 12px;}
     .codeLn{color:rgba(168,179,216,0.55);text-align:right;user-select:none;}
     /* Wrap long lines so vertical scrolling is natural on mobile */
     .codeTxt{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;}
+
+    /* editable overlay */
+    .codeEdit{position:absolute;inset:0;width:100%;height:100%;padding:0;margin:0;border:0;background:transparent;resize:none;outline:none;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;
+      color:transparent;caret-color:var(--text);
+      white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;
+    }
+    .codeEdit::selection{background:rgba(74,163,255,0.28);}
     .tok-c{color:rgba(168,179,216,0.55)}
     .tok-kw{color:#7dd3fc;font-weight:900}
     .tok-a{color:#a78bfa;font-weight:900}
@@ -1022,11 +1031,9 @@ def index(response: Response):
       <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
         <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
         <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
-        <button type='button' class='secondary' onclick='prodToggleSfmlEdit()'>Edit SFML</button>
       </div>
 
-      <div id='prodSfmlSaveNote' class='muted hide' style='margin-top:8px'>Autosave on pause/blur.</div>
-      <textarea id='prodSfmlEditor' class='term hide' style='margin-top:10px;min-height:45vh;white-space:pre;'></textarea>
+      <div class='muted' style='margin-top:8px'>Edit inline (autosaves on pause/blur).</div>
       <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px'></div>
     </div>
   </div>
@@ -2455,101 +2462,20 @@ function prodCopySfml(){
   }catch(e){}
 }
 
-window.__SF_SFML_EDIT = window.__SF_SFML_EDIT || { on:false, t:null, last:'' };
-
-function prodToggleSfmlEdit(){
-  try{
-    var ed=document.getElementById('prodSfmlEditor');
-    var box=document.getElementById('prodSfmlBox');
-    var note=document.getElementById('prodSfmlSaveNote');
-    if (!ed || !box) return;
-
-    var st = window.__SF_PROD || {};
-    var cur = String(st.sfml||'');
-
-    if (!window.__SF_SFML_EDIT.on){
-      // enter edit mode
-      window.__SF_SFML_EDIT.on = true;
-      window.__SF_SFML_EDIT.last = cur;
-      ed.value = cur;
-      ed.classList.remove('hide');
-      if (note) note.classList.remove('hide');
-      box.classList.add('hide');
-      try{ ed.focus(); }catch(_e){}
-    }else{
-      // exit edit mode (save if changed)
-      window.__SF_SFML_EDIT.on = false;
-      ed.classList.add('hide');
-      if (note) note.classList.add('hide');
-      box.classList.remove('hide');
-      var v = String(ed.value||'');
-      window.__SF_PROD.sfml = v;
-      prodRenderSfml(v);
-      if (v !== window.__SF_SFML_EDIT.last) prodSfmlSaveNow(v);
-    }
-  }catch(e){}
-}
-
 function prodSfmlSaveNow(sfmlText){
   try{
-    var out=document.getElementById('prodOut');
     var st = window.__SF_PROD || {};
     var sid = String(st.story_id||'').trim();
     if (!sid) return;
 
-    if (out) out.textContent='Saving SFML…';
     fetchJsonAuthed('/api/production/sfml_save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid, sfml_text:String(sfmlText||'')})})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'sfml_save_failed'); }
-        if (out) out.textContent='';
-        try{ toastShowNow('SFML saved', 'ok', 1200); }catch(_e){}
+        try{ toastShowNow('SFML saved', 'ok', 900); }catch(_e){}
       })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+      .catch(function(_e){ /* keep quiet; update bar will show if API is failing */ });
   }catch(e){}
 }
-
-function prodSfmlAutosaveArm(){
-  try{
-    if (!window.__SF_SFML_EDIT.on) return;
-    var ed=document.getElementById('prodSfmlEditor');
-    if (!ed) return;
-    var v = String(ed.value||'');
-    window.__SF_PROD.sfml = v;
-    if (window.__SF_SFML_EDIT.t) clearTimeout(window.__SF_SFML_EDIT.t);
-    window.__SF_SFML_EDIT.t = setTimeout(function(){
-      try{
-        if (!window.__SF_SFML_EDIT.on) return;
-        var vv = String(ed.value||'');
-        if (vv !== window.__SF_SFML_EDIT.last){
-          window.__SF_SFML_EDIT.last = vv;
-          prodSfmlSaveNow(vv);
-        }
-      }catch(_e){}
-    }, 900);
-  }catch(e){}
-}
-
-try{
-  document.addEventListener('input', function(ev){
-    try{
-      if (!ev || !ev.target) return;
-      if (ev.target.id==='prodSfmlEditor') prodSfmlAutosaveArm();
-    }catch(_e){}
-  });
-  document.addEventListener('focusout', function(ev){
-    try{
-      if (!ev || !ev.target) return;
-      if (ev.target.id==='prodSfmlEditor'){
-        var ed=document.getElementById('prodSfmlEditor');
-        var vv = String((ed&&ed.value)||'');
-        if (vv && vv !== window.__SF_SFML_EDIT.last){
-          window.__SF_SFML_EDIT.last = vv;
-          prodSfmlSaveNow(vv);
-        }
-      }
-    }catch(_e){}
-  });
-}catch(_e){}
 
 function prodRenderSfml(sfml){
   try{
@@ -2684,8 +2610,41 @@ function prodRenderSfml(sfml){
       return '<div class="codeLine"><div class="codeLn">'+String(i+1)+'</div><div class="codeTxt">'+hilite(ln)+'</div></div>';
     }).join('') + '</div>';
 
-    box.innerHTML = html;
+    // Editable overlay textarea
+    var ta = '<textarea id="prodSfmlInline" class="codeEdit" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off"></textarea>';
+
+    box.innerHTML = html + ta;
     box.classList.remove('hide');
+
+    try{
+      var ed=document.getElementById('prodSfmlInline');
+      if (ed){
+        ed.value = raw;
+        // Keep scroll in sync
+        ed.addEventListener('scroll', function(){ try{ box.scrollTop = ed.scrollTop; box.scrollLeft = ed.scrollLeft; }catch(_e){} });
+        box.addEventListener('scroll', function(){ try{ ed.scrollTop = box.scrollTop; ed.scrollLeft = box.scrollLeft; }catch(_e){} });
+
+        // Autosave + re-highlight on pause
+        var tmr = null;
+        function arm(){
+          try{ if (tmr) clearTimeout(tmr); }catch(_e){}
+          tmr = setTimeout(function(){
+            try{
+              var v = String(ed.value||'');
+              window.__SF_PROD.sfml = v;
+              prodSfmlSaveNow(v);
+              // re-render (preserve scroll)
+              var st=box.scrollTop, sl=box.scrollLeft;
+              prodRenderSfml(v);
+              try{ var ed2=document.getElementById('prodSfmlInline'); if (ed2){ ed2.scrollTop=st; ed2.scrollLeft=sl; } box.scrollTop=st; box.scrollLeft=sl; }catch(_e){}
+            }catch(_e){}
+          }, 900);
+        }
+        ed.addEventListener('input', arm);
+        ed.addEventListener('blur', function(){ try{ arm(); }catch(_e){} });
+      }
+    }catch(_e){}
+
   }catch(e){}
 }
 
