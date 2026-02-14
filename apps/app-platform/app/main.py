@@ -2557,18 +2557,19 @@ function prodRenderSfml(sfml){
                 // Block headers: cast:, and future blocks like meta:
                 { token: ['text','keyword'], regex: '^(\\s*)([a-z][a-z0-9_-]*:)\\s*$' },
 
+                // Scene header: highlight keyword + scene id
+                { token: ['text','keyword','text','variable','text'],
+                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(.*)$' },
+
                 // Cast mapping: "  Name: voice_id"
-                { token: ['text','variable.parameter','punctuation.operator','text','constant.language'],
+                { token: ['text','variable','punctuation.operator','text','variable'],
                   regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
 
-                // Scene header: scene <id> "Title":
-                { token: ['text','keyword','text','constant.numeric','string'],
-                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(\\s+"[^"]*"\\s*:?)?\\s*$' },
+                // Speaker tags: highlight the name inside brackets
+                { token: ['text','paren.lparen','variable','paren.rparen'],
+                  regex: '^(\\s*)(\\[)([^\\]]+)(\\])' },
 
-                // Speaker tags: [Name]
-                { token: 'variable.parameter', regex: '\\[[^\\]]+\\]' },
-
-                // Quoted strings (fallback)
+                // Quoted strings (titles etc)
                 { token: 'string', regex: '"[^"]*"' },
               ]
             };
