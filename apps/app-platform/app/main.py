@@ -1515,7 +1515,23 @@ function onGpuToggle(cb){
       return u;
     }
 
-    // Reservation: LLM GPUs are not available for voice
+    // Last-click wins: if you check a Voice GPU that's currently selected for LLM,
+    // automatically uncheck it from LLM (and vice versa via the reservation pass below).
+    try{
+      var roleNow = String(cb.getAttribute('data-role')||'');
+      var gpuNow = parseInt(String(cb.getAttribute('data-gpu')||''),10);
+      if (!isNaN(gpuNow) && cb.checked){
+        if (roleNow==='voice'){
+          var llmPeer = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="llm"][data-gpu="'+gpuNow+'"]');
+          if (llmPeer) llmPeer.checked = false;
+        } else if (roleNow==='llm'){
+          var vPeer = document.querySelector('.gpuCb[data-pid="'+pid+'"][data-role="voice"][data-gpu="'+gpuNow+'"]');
+          if (vPeer) vPeer.checked = false;
+        }
+      }
+    }catch(e){}
+
+    // Reservation pass: LLM GPUs are not available for voice (disable + uncheck)
     var llm = selList('llm');
     var voiceEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="voice"]');
     for (var k=0;k<voiceEls.length;k++){
