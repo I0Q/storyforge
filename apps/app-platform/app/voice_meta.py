@@ -73,6 +73,141 @@ def _ffmpeg_lufs(path: str) -> float | None:
         return None
 
 
+def _audio_to_wav16k(src_path: str, dst_path: str) -> bool:
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-y",
+                "-i",
+                src_path,
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-f",
+                "wav",
+                dst_path,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=40,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _extract_wav_features(wav_path: str) -> dict[str, Any]:
+    """Extract lightweight acoustic features from a mono 16k WAV.
+
+    No external deps beyond numpy.
+    Returns dict with keys like:
+      - f0_hz_median
+      - f0_hz_p10 / p90
+      - pitch_bucket (low|medium|high)
+      - centroid_hz_median
+      - brightness (dark|neutral|bright)
+      - rms
+    """
+    try:
+        import wave
+        import numpy as np
+
+        with wave.open(wav_path, 'rb') as w:
+            sr = int(w.getframerate() or 16000)
+            n = int(w.getnframes() or 0)
+            b = w.readframes(n)
+        if not b:
+            return {}
+        x = np.frombuffer(b, dtype=np.int16).astype(np.float32) / 32768.0
+        if x.size < sr * 0.2:
+            return {}
+
+        # RMS loudness proxy
+        rms = float(np.sqrt(np.mean(np.square(x)) + 1e-12))
+
+        # Pitch via autocorrelation on voiced frames
+        frame = int(0.04 * sr)   # 40ms
+        hop = int(0.01 * sr)     # 10ms
+        fmin, fmax = 70.0, 320.0
+        lag_min = int(sr / fmax)
+        lag_max = int(sr / fmin)
+
+        f0s = []
+        for i in range(0, len(x) - frame, hop):
+            seg = x[i:i+frame]
+            seg = seg - float(np.mean(seg))
+            e = float(np.mean(seg*seg))
+            if e < 1e-4:
+                continue
+            ac = np.correlate(seg, seg, mode='full')[frame-1:]
+            ac0 = float(ac[0]) if ac.size else 0.0
+            if ac0 <= 0:
+                continue
+            # normalize
+            ac = ac / (ac0 + 1e-9)
+            if lag_max >= ac.size:
+                continue
+            sl = ac[lag_min:lag_max]
+            j = int(np.argmax(sl))
+            peak = float(sl[j])
+            if peak < 0.25:
+                continue
+            lag = lag_min + j
+            f0 = float(sr / max(1, lag))
+            if fmin <= f0 <= fmax:
+                f0s.append(f0)
+
+        feat: dict[str, Any] = {"rms": rms}
+        if f0s:
+            f0a = np.array(f0s, dtype=np.float32)
+            f0_med = float(np.median(f0a))
+            feat["f0_hz_median"] = f0_med
+            feat["f0_hz_p10"] = float(np.percentile(f0a, 10))
+            feat["f0_hz_p90"] = float(np.percentile(f0a, 90))
+            # bucket
+            if f0_med < 140:
+                feat["pitch_bucket"] = "low"
+            elif f0_med > 210:
+                feat["pitch_bucket"] = "high"
+            else:
+                feat["pitch_bucket"] = "medium"
+
+        # Spectral centroid for brightness
+        # Compute on a small subset for speed
+        try:
+            import numpy.fft as fft
+
+            centroids = []
+            win = np.hanning(frame).astype(np.float32)
+            freqs = (np.arange(frame//2 + 1, dtype=np.float32) * (sr / frame))
+            for i in range(0, len(x) - frame, hop*4):
+                seg = x[i:i+frame] * win
+                mag = np.abs(fft.rfft(seg)) + 1e-9
+                c = float((freqs * mag).sum() / mag.sum())
+                if c > 0:
+                    centroids.append(c)
+            if centroids:
+                c_med = float(np.median(np.array(centroids, dtype=np.float32)))
+                feat["centroid_hz_median"] = c_med
+                if c_med < 1700:
+                    feat["brightness"] = "dark"
+                elif c_med > 2600:
+                    feat["brightness"] = "bright"
+                else:
+                    feat["brightness"] = "neutral"
+        except Exception:
+            pass
+
+        return feat
+    except Exception:
+        return {}
+
+
 def _set_voice_traits_json(voice_id: str, voice_traits: dict[str, Any], measured: dict[str, Any] | None = None) -> None:
     conn = db_connect()
     try:
@@ -120,9 +255,10 @@ def analyze_voice_metadata(
     if not sample_url:
         return {"ok": False, "error": "missing_sample_url"}
 
-    # Download sample audio
+    # Download + analyze sample audio
     with tempfile.TemporaryDirectory(prefix="sf_voice_meta_") as td:
         in_path = os.path.join(td, "sample")
+        wav_path = os.path.join(td, "sample_16k.wav")
         try:
             r = requests.get(sample_url, timeout=30)
             r.raise_for_status()
@@ -134,14 +270,27 @@ def analyze_voice_metadata(
         dur = _ffprobe_duration_s(in_path)
         lufs = _ffmpeg_lufs(in_path)
 
+        feats: dict[str, Any] = {}
+        try:
+            if _audio_to_wav16k(in_path, wav_path):
+                feats = _extract_wav_features(wav_path) or {}
+        except Exception:
+            feats = {}
+
     measured = {
         "duration_s": dur,
         "lufs_i": lufs,
+        "features": feats,
+        "engine": engine,
+        "voice_ref": voice_ref,
+        "tortoise_voice": tortoise_voice,
+        "tortoise_gender": tortoise_gender,
+        "tortoise_preset": tortoise_preset,
     }
 
-    # LLM: conservative labels. (No audio listening; just use known params + measured.)
+    # LLM: use measured audio features + known engine params.
     prompt = {
-        "task": "Label voice traits for a TTS voice from metadata only. Be conservative. If unknown, use 'unknown' or '' and do not guess accents.",
+        "task": "Label voice traits for a TTS voice using the provided measured audio features and engine parameters. If unknown, use 'unknown' or '' (do not invent accents).",
         "engine": engine,
         "voice_ref": voice_ref,
         "tortoise": {
@@ -262,6 +411,7 @@ def analyze_voice_metadata(
             s2 = str(s or "").strip()
             return s2[:maxlen]
 
+        # Start with LLM suggestions
         out_traits = {
             "gender": _norm(traits.get("gender"), 16).lower() or "unknown",
             "age": _norm(traits.get("age"), 16).lower() or "unknown",
@@ -269,9 +419,25 @@ def analyze_voice_metadata(
             "accent": _norm(traits.get("accent"), 80),
             "tone": [],
         }
+
+        # Override with measured pitch bucket if available
+        try:
+            pb = str(((measured.get('features') or {}).get('pitch_bucket') or '')).strip().lower()
+            if pb in ('low','medium','high'):
+                out_traits['pitch'] = pb
+        except Exception:
+            pass
         tone = traits.get("tone")
         if isinstance(tone, list):
             out_traits["tone"] = [_norm(x, 40) for x in tone if _norm(x, 40)][:8]
+
+        # Add brightness tag from spectral centroid
+        try:
+            br = str(((measured.get('features') or {}).get('brightness') or '')).strip().lower()
+            if br in ('dark','neutral','bright') and br not in out_traits['tone']:
+                out_traits['tone'].append(br)
+        except Exception:
+            pass
 
         # Prefer explicit tortoise_gender if provided
         if tortoise_gender and out_traits["gender"] in ("", "unknown"):
