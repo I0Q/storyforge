@@ -943,7 +943,6 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>Providers</div>
         <a href='/settings/providers/new'><button type='button' class='secondary'>Add provider</button></a>
       </div>
-      <div class='muted'>Configure local and cloud providers. Expand a card to edit its settings.</div>
 
       <div id='providersBox' class='muted' style='margin-top:10px'>Loading…</div>
 
