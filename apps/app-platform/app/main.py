@@ -3408,7 +3408,11 @@ function updateSampleTextCount(){
     var ta=$('sampleText');
     var c=$('sampleTextCount');
     if (!ta || !c) return;
-    c.textContent = String((ta.value||'').length) + ' chars';
+    var txt = String(ta.value||'');
+    var chars = txt.length;
+    var words = 0;
+    try{ words = txt.trim() ? txt.trim().split(/\s+/).length : 0; }catch(e){ words = 0; }
+    c.textContent = String(chars) + ' chars • ' + String(words) + ' words';
   }catch(e){}
 }
 
