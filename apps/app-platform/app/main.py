@@ -1169,6 +1169,7 @@ def index(response: Response):
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
           <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
           <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
+          <button type='button' id='prodProduceBtn' disabled onclick='prodProduceAudio()'>Produce</button>
         </div>
       </div>
 
@@ -2463,6 +2464,7 @@ function prodRenderAssignments(){
     var box=document.getElementById('prodAssignments');
     var saveBtn=null;
     var step3=document.getElementById('prodStep3Btn');
+    var prodBtn=document.getElementById('prodProduceBtn');
     if (!box) return;
 
     var st = window.__SF_PROD || {};
@@ -2531,8 +2533,9 @@ function prodRenderAssignments(){
       box.innerHTML = assigns.map(cardFor).join("");
     }
 
-    // Step 3 enabled when casting is saved.
+    // Step 3 + Produce enabled when casting is saved.
     try{ if (step3) step3.disabled = (!st.saved); }catch(_e){}
+    try{ if (prodBtn) prodBtn.disabled = (!st.saved); }catch(_e){}
   }catch(e){}
 }
 
@@ -2647,6 +2650,29 @@ function prodCopySfml(){
     if (!txt){ alert('No SFML yet.'); return; }
     copyToClipboard(txt);
     try{ toastShowNow('Copied SFML', 'ok', 1400); }catch(_e){}
+  }catch(e){}
+}
+
+function prodProduceAudio(){
+  try{
+    var out=document.getElementById('prodOut');
+    var st = window.__SF_PROD || {};
+    if (!st.saved){ if(out) out.innerHTML='<div class="err">Save casting first</div>'; return; }
+    var sid = String(st.story_id||'').trim();
+    if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+
+    prodSetSfmlBusy(true, 'Producing audio…', 'Queuing a render job');
+    if (out) out.textContent='';
+
+    fetchJsonAuthed('/api/production/produce_audio', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
+      .then(function(j){
+        if (!j || !j.ok || !j.job_id){ throw new Error((j&&j.error)||'produce_failed'); }
+        prodSetSfmlBusy(false);
+        // Jump to Jobs so progress is visible.
+        try{ window.location.href = '/#tab-history'; }catch(_e){}
+      })
+      .catch(function(e){ prodSetSfmlBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+
   }catch(e){}
 }
 
@@ -6885,6 +6911,56 @@ def api_production_sfml_save(payload: dict[str, Any] = Body(default={})):  # noq
         return {'ok': True}
     except Exception as e:
         return {'ok': False, 'error': f'sfml_save_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/production/produce_audio')
+def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Queue a job to produce final story audio from persisted SFML + casting.
+
+    Worker execution is implemented next (Tinybox). For now we create a job row
+    so the UI flow (Produce -> Jobs) is in place.
+    """
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute('SELECT title, sfml_text FROM sf_stories WHERE id=%s', (story_id,))
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return {'ok': False, 'error': 'story_not_found'}
+
+        title = str(row[0] or story_id)
+        sfml = str(row[1] or '')
+        if not sfml.strip():
+            return {'ok': False, 'error': 'missing_sfml'}
+
+        job_id = 'produce_' + str(int(time.time())) + '_' + story_id.replace('/', '_').replace(' ', '_')[:48]
+        meta = {'story_id': story_id}
+        _job_patch(
+            job_id,
+            {
+                'title': f'Produce audio ({title})',
+                'kind': 'produce_audio',
+                'meta_json': json.dumps(meta, separators=(',', ':')),
+                'state': 'running',
+                'started_at': int(time.time()),
+                'finished_at': 0,
+                'total_segments': 0,
+                'segments_done': 0,
+            },
+        )
+
+        return {'ok': True, 'job_id': job_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'produce_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.post('/api/production/casting_save')

@@ -185,6 +185,30 @@ CREATE TABLE IF NOT EXISTS sf_castings (
 """
     )
 
+    # Production: versioned story audio (published when user hits Save from a completed job)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_story_audio (
+  id BIGSERIAL PRIMARY KEY,
+  story_id TEXT NOT NULL,
+  job_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  mp3_url TEXT NOT NULL DEFAULT '',
+  meta_json TEXT NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_story_id_idx ON sf_story_audio (story_id)")
+    except Exception:
+        pass
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_job_id_idx ON sf_story_audio (job_id)")
+    except Exception:
+        pass
+
     # Internal TODO tracker (DB-backed, read-only UI)
     cur.execute(
         """
