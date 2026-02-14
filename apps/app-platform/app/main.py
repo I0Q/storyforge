@@ -1787,6 +1787,22 @@ function bindJobsLazyScroll(){
 
 // Live job updates
 let jobsES = null;
+let __SF_JOBS_POLL_T = null;
+function startJobsPoll(){
+  try{
+    if (__SF_JOBS_POLL_T) return;
+    __SF_JOBS_POLL_T = setInterval(function(){
+      try{
+        // Fallback poll for iOS/Safari when EventSource is flaky.
+        fetchJsonAuthed('/api/history?limit=60').then(function(j){
+          if (j && j.ok && Array.isArray(j.jobs)) renderJobs(j.jobs);
+        }).catch(function(_e){});
+      }catch(_e){}
+    }, 4000);
+  }catch(e){}
+}
+function stopJobsPoll(){ try{ if(__SF_JOBS_POLL_T){ clearInterval(__SF_JOBS_POLL_T); __SF_JOBS_POLL_T=null; } }catch(e){} }
+
 function startJobsStream(){
   try{ if ((window.__SF_JOBS_STREAM_PAUSED_UNTIL||0) > Date.now()) return; }catch(e){}
   try{ if (jobsES){ jobsES.close(); jobsES=null; } }catch(e){}
@@ -1794,11 +1810,20 @@ function startJobsStream(){
     jobsES = new EventSource('/api/jobs/stream');
     jobsES.onmessage = function(ev){
       try{
+        stopJobsPoll();
         var j = JSON.parse(ev.data || '{}');
         if (j && j.ok && Array.isArray(j.jobs)) renderJobs(j.jobs);
       }catch(e){}
     };
-  }catch(e){}
+    jobsES.onerror = function(_e){
+      // Fall back to polling; EventSource will also attempt reconnect.
+      try{ startJobsPoll(); }catch(e){}
+    };
+    // Start poll immediately; stop once SSE delivers.
+    startJobsPoll();
+  }catch(e){
+    try{ startJobsPoll(); }catch(_e){}
+  }
 }
 
 let metricsES = null;
