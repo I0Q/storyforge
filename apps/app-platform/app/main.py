@@ -3363,10 +3363,7 @@ def voices_new_page(response: Response):
       </div>
     </div>
 
-    <div class='row' style='justify-content:space-between;align-items:baseline'>
-      <div class='k'>Sample text</div>
-      <div class='muted' id='sampleTextCount'>0 chars</div>
-    </div>
+    <div class='k'>Sample text <span class='muted' id='sampleTextCount' style='margin-left:8px'>0 chars</span></div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <textarea id='sampleText' placeholder='Hello…' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
       <button type='button' class='copyBtn' onclick='genSampleText()' aria-label='Random sample text' title='Random sample text' style='align-self:stretch'>
@@ -3405,6 +3402,16 @@ function escAttr(s){
 }
 
 function $(id){ return document.getElementById(id); }
+
+function updateSampleTextCount(){
+  try{
+    var ta=$('sampleText');
+    var c=$('sampleTextCount');
+    if (!ta || !c) return;
+    c.textContent = String((ta.value||'').length) + ' chars';
+  }catch(e){}
+}
+
 function jsonFetch(url, opts){
   opts = opts || {};
   opts.credentials = 'include';
