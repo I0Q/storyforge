@@ -398,6 +398,12 @@ VOICE_EDIT_EXTRA_CSS = base_css("""\
     .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);font-weight:950;font-size:12px;}
     .chip.bad{border-color:rgba(255,90,90,0.35);color:var(--bad);}
     .chip.ok{border-color:rgba(80,200,120,0.35);}
+    .chip.male{border-color:rgba(80,160,255,0.45);background:rgba(80,160,255,0.14);}
+    .chip.female{border-color:rgba(255,120,200,0.45);background:rgba(255,120,200,0.14);}
+    .chip.age-child{border-color:rgba(255,210,80,0.45);background:rgba(255,210,80,0.14);}
+    .chip.age-teen{border-color:rgba(160,120,255,0.45);background:rgba(160,120,255,0.14);}
+    .chip.age-adult{border-color:rgba(80,200,120,0.45);background:rgba(80,200,120,0.12);}
+    .chip.age-elder{border-color:rgba(255,160,80,0.45);background:rgba(255,160,80,0.14);}
     details.rawBox summary{cursor:pointer;color:var(--muted);}
 
 """)
@@ -2109,33 +2115,42 @@ function loadVoices(){
     el.innerHTML = voices.map(function(v){
       var idEnc = encodeURIComponent(String(v.id||''));
       var nm = v.display_name || v.id;
-      var meta = [];
-      if (v.engine) meta.push(v.engine);
-      // Prefer showing the saved playable sample URL (if present). Otherwise fall back to voice_ref.
-      if (v.sample_url) meta.push('sample');
-      else if (v.voice_ref) meta.push(v.voice_ref);
-      var metaLine = meta.join(' • ');
-
-      // Traits summary (from voice_traits_json)
-      var traitsLine = '';
+      // Traits (from voice_traits_json)
+      var traitsHtml = '';
       try{
         var vtj = safeJson(v.voice_traits_json||'') || null;
         var vt = vtj ? (vtj.voice_traits||{}) : {};
         var m = vtj ? (vtj.measured||{}) : {};
         var f = m ? (m.features||{}) : {};
-        var parts=[];
-        if (vt.gender && vt.gender!=='unknown') parts.push(String(vt.gender));
-        if (vt.age && vt.age!=='unknown') parts.push(String(vt.age));
-        var pitch = vt.pitch && vt.pitch!=='unknown' ? String(vt.pitch) : '';
-        var f0 = (f && f.f0_hz_median!=null) ? (Number(f.f0_hz_median).toFixed(0) + ' Hz') : '';
-        if (pitch || f0) parts.push((pitch||'pitch') + (f0?(' • '+f0):''));
-        if (Array.isArray(vt.tone) && vt.tone.length){
-          parts.push(vt.tone.slice(0,3).join(', '));
+
+        function chip(txt, cls){
+          txt = String(txt||'').trim();
+          if (!txt) return '';
+          return "<span class='chip "+(cls||"")+"'>"+escapeHtml(txt)+"</span>";
         }
-        // voice ref (useful for tortoise/xtts identifiers)
-        if (v.voice_ref) parts.push(String(v.voice_ref));
-        traitsLine = parts.join(' • ');
-      }catch(e){ traitsLine=''; }
+
+        var chips = '';
+        var g = String(vt.gender||'unknown');
+        if (g && g!=='unknown') chips += chip('gender ' + g, g==='male'?'male':(g==='female'?'female':''));
+
+        var a = String(vt.age||'unknown');
+        if (a && a!=='unknown') chips += chip('age ' + a, 'age-' + a);
+
+        var pitch = String(vt.pitch||'');
+        if (pitch && pitch!=='unknown') chips += chip('pitch ' + pitch, '');
+
+        if (f && f.f0_hz_median!=null){
+          chips += chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
+        }
+
+        if (Array.isArray(vt.tone) && vt.tone.length){
+          for (var i=0;i<Math.min(3, vt.tone.length);i++) chips += chip('tone ' + String(vt.tone[i]), '');
+        }
+
+        if (v.voice_ref) chips += chip('ref ' + String(v.voice_ref), '');
+
+        traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
+      }catch(e){ traitsHtml=''; }
       var en = (v.enabled!==false);
       var pill = en ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>";
 
@@ -2149,8 +2164,7 @@ function loadVoices(){
         + "<div class='title'>" + escapeHtml(nm) + "</div>"
         + "<div>" + pill + "</div>"
         + "</div>"
-        + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
-        + (traitsLine ? ("<div class='muted' style='margin-top:6px'>" + escapeHtml(traitsLine) + "</div>") : "")
+        + traitsHtml
         + "<div class='row' style='margin-top:10px'>"
         + playBtn
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
