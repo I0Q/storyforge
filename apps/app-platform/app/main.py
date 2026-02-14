@@ -866,7 +866,6 @@ def index(response: Response):
       <div class='row' style='justify-content:space-between;'>
         <div>
           <div style='font-weight:950;'>Recent jobs</div>
-          <div class='muted'>Read-only from managed Postgres (migrated from Tinybox monitor).</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
 
