@@ -4266,9 +4266,10 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='voiceSwatch' class='swatch' title='Color swatch' style='background:#64748b'></span>
-      <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
+      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
       <input id='voiceColorHex' type='hidden' value='' />
+      <input id='voiceColorPick' type='color' class='hide' value='#64748b' onchange='setVoiceSwatchHex(this.value)' />
+      <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -4399,9 +4400,16 @@ function setVoiceSwatchHex(hex){
   try{
     var hx=document.getElementById('voiceColorHex');
     var sw=document.getElementById('voiceSwatch');
-    if (hx) hx.value = String(hex||'').trim();
-    if (sw) sw.style.background = String(hex||'').trim() || '#64748b';
+    var pk=document.getElementById('voiceColorPick');
+    var v = String(hex||'').trim();
+    if (hx) hx.value = v;
+    if (sw) sw.style.background = v || '#64748b';
+    if (pk) pk.value = v || '#64748b';
   }catch(e){}
+}
+
+function openVoiceColorPick(){
+  try{ var pk=document.getElementById('voiceColorPick'); if (pk) pk.click(); }catch(e){}
 }
 
 function $(id){ return document.getElementById(id); }

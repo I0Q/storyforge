@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS sf_voices (
   engine TEXT NOT NULL DEFAULT '',
   voice_ref TEXT NOT NULL DEFAULT '',
   display_name TEXT NOT NULL DEFAULT '',
+  color_hex TEXT NOT NULL DEFAULT '',
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   sample_text TEXT NOT NULL DEFAULT '',
   sample_url TEXT NOT NULL DEFAULT '',
@@ -151,9 +152,13 @@ CREATE TABLE IF NOT EXISTS sf_voices (
 """
     )
 
-    # Migrations: voice traits
+    # Migrations: voice traits + color swatch
     try:
         cur.execute("ALTER TABLE sf_voices ADD COLUMN IF NOT EXISTS voice_traits_json TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE sf_voices ADD COLUMN IF NOT EXISTS color_hex TEXT NOT NULL DEFAULT ''")
     except Exception:
         pass
 
