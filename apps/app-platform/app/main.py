@@ -1221,7 +1221,10 @@ function jobPlay(jobId, url){
     box.appendChild(a);
     card.appendChild(box);
 
-    try{ a.play(); }catch(e){}
+    try{
+      var p = a.play();
+      if (p && typeof p.catch === 'function') p.catch(function(_e){});
+    }catch(e){}
   }catch(e){}
 }
 
