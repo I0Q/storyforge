@@ -2889,12 +2889,6 @@ def voices_edit_page(voice_id: str, response: Response):
   </div>
 
   <div class='card'>
-    <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
-    <div class='muted'>Auto-generated metadata for matching characters to voices.</div>
-    <pre class='term' id='voice_traits' style='margin-top:10px;white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
-  </div>
-
-  <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Provider fields (read-only)</div>
 
     <div class='muted'>Engine</div>
@@ -2928,11 +2922,21 @@ def voices_edit_page(voice_id: str, response: Response):
       </button>
     </div>
 
-    <div class='row' style='margin-top:12px;justify-content:space-between;gap:10px;flex-wrap:wrap'>
+  </div>
+
+  <div class='card'>
+    <div class='row' style='justify-content:space-between;align-items:baseline;gap:10px'>
+      <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
+      <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
+    </div>
+    <div class='muted'>Auto-generated metadata for matching characters to voices.</div>
+    <pre class='term' id='voice_traits' style='margin-top:10px;white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
+  </div>
+
+  <div class='card'>
+    <div class='row' style='margin-top:0;justify-content:space-between;gap:10px;flex-wrap:wrap'>
       <button type='button' class='secondary' onclick='deleteThisVoice()' style='border-color: rgba(255,77,77,.35); color: var(--bad);'>Delete</button>
       <div class='row' style='gap:10px;justify-content:flex-end;margin-left:auto'>
-        <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
-        <button type='button' class='secondary' onclick='viewVoiceAnalysisJobs()'>View analysis jobs</button>
         <button type='button' onclick='save()'>Save</button>
       </div>
     </div>
@@ -2974,13 +2978,6 @@ function deleteThisVoice(){
   }catch(e){}
 }
 
-
-function viewVoiceAnalysisJobs(){
-  try{
-    // Best-effort: navigate to Jobs; filter not implemented yet.
-    window.location.href='/#tab-history';
-  }catch(e){}
-}
 
 function analyzeMeta(){
   try{
