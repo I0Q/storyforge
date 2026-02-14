@@ -216,6 +216,9 @@ INDEX_BASE_CSS = base_css("""\
     .pill.good{color:var(--good);border-color:rgba(38,208,124,.35)}
     .pill.bad{color:var(--bad);border-color:rgba(255,77,77,.35)}
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
+
+    /* voice color swatches */
+    .swatch{width:16px;height:16px;border-radius:7px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 6px 14px rgba(0,0,0,0.25);flex:0 0 auto;}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin-top:8px;font-size:13px;}
     .kvs > div{min-width:0;align-self:center;}
     .kvs > div:nth-child(2n){width:100%;}
@@ -353,6 +356,10 @@ VOICES_BASE_CSS = (
     .copyBtn:active{transform:translateY(1px);}
     .copyBtn svg{display:block;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;}
     .copyBtn:hover{background:rgba(255,255,255,0.06);}
+
+    /* voice color swatches */
+    .swatch{width:16px;height:16px;border-radius:7px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 6px 14px rgba(0,0,0,0.25);flex:0 0 auto;}
+
     input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0b1020;color:var(--text);font-size:16px;}
     textarea{min-height:90px;}
     .hide{display:none;}
@@ -1884,6 +1891,38 @@ function escAttr(s){
   }
 }
 
+function voiceColorHex(name){
+  // Deterministic: tries to match a named color word in the voice name.
+  // Fallback: hash -> pleasant HSL.
+  try{
+    var s = String(name||'').toLowerCase();
+    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    var map = {
+      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
+      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
+      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
+      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
+      ivory:'#f5f5dc', gold:'#facc15'
+    };
+
+    for (var i=words.length-1; i>=0; i--){
+      var w = words[i];
+      if (map[w]) return map[w];
+      if (w.length>1 && w.charAt(w.length-1)==='s'){
+        var w2 = w.slice(0,-1);
+        if (map[w2]) return map[w2];
+      }
+    }
+
+    var h=0;
+    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
+    var hue = Math.abs(h) % 360;
+    return 'hsl(' + hue + ', 70%, 55%)';
+  }catch(e){
+    return '#64748b';
+  }
+}
+
 function parseGpuList(s){
   try{
     s = String(s||'');
@@ -2726,9 +2765,12 @@ function loadVoices(){
         playBtn = "<button class='secondary' data-vid='" + idEnc + "' data-sample='" + escAttr(v.sample_url||'') + "' onclick='playVoiceEl(this)'>Play</button>";
       }
 
+      var sw = voiceColorHex(nm);
+      var swHtml = "<span class='swatch' title='" + escAttr(nm) + "' style='background:" + escAttr(sw) + "'></span>";
+
       var card = "<div class='job'>"
         + "<div class='row' style='justify-content:space-between;'>"
-        + "<div class='title'>" + escapeHtml(nm) + "</div>"
+        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div></div>"
         + "<div>" + pill + "</div>"
         + "</div>"
         + traitsHtml
@@ -3494,7 +3536,20 @@ def voices_edit_page(voice_id: str, response: Response):
     <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
 
     <div class='muted'>Display name</div>
-    <input id='display_name' value='__DN__' />
+    <div class='row' style='gap:10px;flex-wrap:nowrap'>
+      <span id='editSwatch' class='swatch' title='Color swatch' style='background:#64748b'></span>
+      <input id='display_name' value='__DN__' style='flex:1;min-width:0' oninput='updateEditSwatch()' />
+      <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          <path stroke="currentColor" fill="currentColor" d="M8.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M15.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M15.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M8.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M12 13a1 1 0 110-2 1 1 0 010 2z"/>
+        </svg>
+      </button>
+    </div>
 
     <div class='muted' style='margin-top:12px'>Enabled</div>
     <label class='switch'>
@@ -3574,6 +3629,62 @@ function escapeHtml(s){
 function $(id){ return document.getElementById(id); }
 function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
+
+function voiceColorHex(name){
+  try{
+    var s = String(name||'').toLowerCase();
+    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    var map = {
+      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
+      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
+      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
+      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
+      ivory:'#f5f5dc', gold:'#facc15'
+    };
+    for (var i=words.length-1; i>=0; i--){
+      var w = words[i];
+      if (map[w]) return map[w];
+      if (w.length>1 && w.charAt(w.length-1)==='s'){
+        var w2 = w.slice(0,-1);
+        if (map[w2]) return map[w2];
+      }
+    }
+    var h=0;
+    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
+    var hue = Math.abs(h) % 360;
+    return 'hsl(' + hue + ', 70%, 55%)';
+  }catch(e){
+    return '#64748b';
+  }
+}
+
+function updateEditSwatch(){
+  try{
+    var el=$('display_name');
+    var sw=$('editSwatch');
+    if (!el || !sw) return;
+    sw.style.background = voiceColorHex(String(el.value||''));
+  }catch(e){}
+}
+
+function genEditVoiceName(){
+  var out=$('out');
+  var el=$('display_name');
+  if (!el) return;
+  var orig = String(el.value||'');
+  if (out) out.textContent='Picking a color…';
+  fetch('/api/voices/random_name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}), credentials:'include'})
+    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+    .then(function(j){
+      if (!j || !j.ok || !j.name) throw new Error((j&&j.error)||'name_failed');
+      el.value = String(j.name||'').trim();
+      updateEditSwatch();
+      if (out) out.textContent='';
+    })
+    .catch(function(e){ el.value = orig; if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
+}
+
+try{ setTimeout(updateEditSwatch, 0); }catch(e){}
 
 function updateSampleTextCount(){
   try{
@@ -4200,7 +4311,8 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
+      <span id='voiceSwatch' class='swatch' title='Color swatch' style='background:#64748b'></span>
+      <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' oninput='updateVoiceSwatch()' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -4297,6 +4409,43 @@ function escAttr(s){
   }catch(e){
     return '';
   }
+}
+
+function voiceColorHex(name){
+  try{
+    var s = String(name||'').toLowerCase();
+    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    var map = {
+      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
+      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
+      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
+      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
+      ivory:'#f5f5dc', gold:'#facc15'
+    };
+    for (var i=words.length-1; i>=0; i--){
+      var w = words[i];
+      if (map[w]) return map[w];
+      if (w.length>1 && w.charAt(w.length-1)==='s'){
+        var w2 = w.slice(0,-1);
+        if (map[w2]) return map[w2];
+      }
+    }
+    var h=0;
+    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
+    var hue = Math.abs(h) % 360;
+    return 'hsl(' + hue + ', 70%, 55%)';
+  }catch(e){
+    return '#64748b';
+  }
+}
+
+function updateVoiceSwatch(){
+  try{
+    var el=document.getElementById('voiceName');
+    var sw=document.getElementById('voiceSwatch');
+    if (!el || !sw) return;
+    sw.style.background = voiceColorHex(String(el.value||''));
+  }catch(e){}
 }
 
 function $(id){ return document.getElementById(id); }
@@ -4561,6 +4710,7 @@ function genVoiceName(){
         throw new Error((j&&j.error)||'name_failed');
       }
       if (el) el.value = String(j.name||'').trim();
+      try{ updateVoiceSwatch(); }catch(e){}
       if (out) out.textContent='';
     })
     .catch(function(e){
@@ -4731,6 +4881,7 @@ try{ document.addEventListener('DOMContentLoaded', function(){
 
   // Suggest a random voice name on first load (only if empty)
   try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
+  try{ updateVoiceSwatch(); }catch(e){}
 
   // Mark JS as running for the debug banner.
   try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
