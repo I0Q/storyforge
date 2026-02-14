@@ -33,6 +33,9 @@ VIEWER_EXTRA_CSS = """
 .vTab.active{background:#163a74;}
 .vPane.hide{display:none;}
 
+.audioItem{border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:10px;}
+.audioLabel{font-weight:950;}
+
 .charsWrap{margin-top:10px;}
 .pill.ml6{margin-left:6px;}
 .desc.mt4{margin-top:4px;}
@@ -477,21 +480,83 @@ function showVTab(which){{
   try{{
     var ps=$('vp-story');
     var pc=$('vp-chars');
+    var pa=$('vp-audio');
     var ts=$('vtab-story');
     var tc=$('vtab-chars');
+    var ta=$('vtab-audio');
+
+    if (ps) ps.classList.add('hide');
+    if (pc) pc.classList.add('hide');
+    if (pa) pa.classList.add('hide');
+    if (ts) ts.classList.remove('active');
+    if (tc) tc.classList.remove('active');
+    if (ta) ta.classList.remove('active');
+
     if (which==='chars'){{
-      if (ps) ps.classList.add('hide');
       if (pc) pc.classList.remove('hide');
-      if (ts) ts.classList.remove('active');
       if (tc) tc.classList.add('active');
       try{{ window.location.hash = '#chars'; }}catch(e){{}}
-    }} else {{
-      if (pc) pc.classList.add('hide');
-      if (ps) ps.classList.remove('hide');
-      if (tc) tc.classList.remove('active');
-      if (ts) ts.classList.add('active');
-      try{{ window.location.hash = '#story'; }}catch(e){{}}
+      return;
     }}
+    if (which==='audio'){{
+      if (pa) pa.classList.remove('hide');
+      if (ta) ta.classList.add('active');
+      try{{ window.location.hash = '#audio'; }}catch(e){{}}
+      try{{ loadAudio(); }}catch(e){{}}
+      return;
+    }}
+
+    if (ps) ps.classList.remove('hide');
+    if (ts) ts.classList.add('active');
+    try{{ window.location.hash = '#story'; }}catch(e){{}}
+  }}catch(e){{}}
+}}
+
+function loadAudio(){{
+  try{{
+    var out=$('audioOut');
+    if (out) out.innerHTML = '<div class="muted">Loading…</div>';
+    fetch('/api/library/story_audio/list/' + encodeURIComponent(String(window.__STORY_ID||'')), {{credentials:'include'}})
+      .then(function(r){{ return r.json().catch(function(){{return {{ok:false,error:'bad_json'}};}}); }})
+      .then(function(j){{
+        if (!j || !j.ok){{ throw new Error((j&&j.error)||'load_failed'); }}
+        var items = j.items || [];
+        if (!items.length){{ if (out) out.innerHTML = '<div class="muted">No audio yet. Produce a render, then Save from Jobs.</div>'; return; }}
+        var html='';
+        for (var i=0;i<items.length;i++){{
+          var it=items[i]||{{}};
+          var label=String(it.label||'');
+          var url=String(it.mp3_url||'');
+          html += "<div class='audioItem'>"+
+            "<div class='audioLabel'>"+escapeHtml(label||('Audio '+String(i+1)))+"</div>"+
+            "<div class='muted' style='margin-top:6px'>"+escapeHtml(url||'')+"</div>"+
+            "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
+              "<button type='button' class='secondary' onclick=\"playAudio(\"+"+JSON.stringify(url)+"+\")\">Play</button>"+
+            "</div>"+
+          "</div>";
+        }}
+        if (out) out.innerHTML = html;
+      }})
+      .catch(function(e){{ if (out) out.innerHTML = '<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; }});
+  }}catch(e){{}}
+}}
+
+function playAudio(url){{
+  try{{
+    url = String(url||'');
+    if (!url) return;
+    var out=$('audioOut');
+    if (!out) return;
+    // Replace existing player
+    try{{
+      var olds = out.querySelectorAll('audio');
+      for (var i=0;i<olds.length;i++){{ try{{ olds[i].pause(); }}catch(_e){{}} try{{ olds[i].remove(); }}catch(_e){{}} }}
+    }}catch(_e){{}}
+
+    var a = document.createElement('audio');
+    a.controls=true; a.style.width='100%'; a.src=url;
+    out.insertBefore(a, out.firstChild);
+    try{{ a.play(); }}catch(e){{}}
   }}catch(e){{}}
 }}
 
@@ -499,6 +564,7 @@ function showVTab(which){{
   try{{
     var h = String(window.location.hash||'');
     if (h==='#chars') showVTab('chars');
+    else if (h==='#audio') showVTab('audio');
     else showVTab('story');
   }}catch(e){{}}
 }})();
@@ -546,6 +612,7 @@ if ($('mdCode')) {{
                 "<div class='vTabs'>",
                 "  <button id='vtab-story' class='vTab active' type='button' onclick=\"showVTab('story')\">Story</button>",
                 "  <button id='vtab-chars' class='vTab' type='button' onclick=\"showVTab('chars')\">Characters</button>",
+                "  <button id='vtab-audio' class='vTab' type='button' onclick=\"showVTab('audio')\">Audio</button>",
                 "</div>",
                 "",
                 "<div id='vp-story' class='vPane'>",
@@ -556,6 +623,14 @@ if ($('mdCode')) {{
                 "    </div>",
                 f"    <div id='mdRender' class='mdRender'>{rendered}</div>",
                 f"    <textarea id='mdCode' class='term mdCode hide'>{story_md_esc}</textarea>",
+                "  </div>",
+                "</div>",
+                "",
+                "<div id='vp-audio' class='vPane hide'>",
+                "  <div class='card'>",
+                "    <div class='fw950'>Audio</div>",
+                "    <div class='muted' style='margin-top:6px'>Saved renders for this story.</div>",
+                "    <div id='audioOut' style='margin-top:10px'></div>",
                 "  </div>",
                 "</div>",
                 "",

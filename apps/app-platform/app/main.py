@@ -1552,6 +1552,32 @@ function saveJobToRoster(jobId){
   }catch(e){ alert('Save failed'); }
 }
 
+function saveJobToStoryAudio(jobId){
+  try{
+    var card=document.querySelector('[data-jobid="'+jobId+'"]');
+    var meta = safeJson(card ? card.getAttribute('data-meta') : '');
+    var url = card ? String(card.getAttribute('data-url')||'') : '';
+    if (!meta || !url){ alert('Missing job metadata'); return; }
+
+    var storyId = String(meta.story_id||'').trim();
+    if (!storyId){ alert('Missing story_id on job'); return; }
+
+    var payload = {job_id: String(jobId||''), story_id: storyId, mp3_url: url, meta_json: JSON.stringify(meta||{})};
+
+    var btn = card ? card.querySelector('.saveStoryAudioBtn') : null;
+    if (btn) btn.textContent='Saving…';
+
+    fetchJsonAuthed('/api/library/story_audio/save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+      .then(function(j){
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
+        try{ localStorage.setItem('sf_story_audio_saved_'+String(jobId||''), '1'); }catch(_e){}
+        try{ toastSet('Saved to library', 'ok', 1400); window.__sfToastInit && window.__sfToastInit(); }catch(_e){}
+        if (btn){ btn.textContent='Saved'; btn.disabled=true; }
+      })
+      .catch(function(e){ if(btn){ btn.textContent='Save'; btn.disabled=false; } alert('Save failed: '+String(e)); });
+  }catch(e){ alert('Save failed'); }
+}
+
 function ensureJobsStream(on){
   try{
     on = !!on;
@@ -1585,23 +1611,34 @@ function renderJobs(jobs){
 
     const meta = safeJson(job.meta_json||'') || null;
     const isSample = (String(job.kind||'') === 'tts_sample') || (String(job.title||'').indexOf('TTS (')===0);
+    const isProduce = (String(job.kind||'') === 'produce_audio');
     const playable = (String(job.state||'')==='completed' && job.mp3_url);
 
-    const actions = (isSample && playable) ? (
-      `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
-      + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.id||'')}','${escAttr(job.mp3_url||'')}')">Play</button>`
-      + (function(){
-          try{
-            var saved = false;
-            try{ saved = (localStorage.getItem('sf_job_saved_'+String(job.id||'')) === '1'); }catch(_e){}
-            if (saved){
-              return `<button type='button' class='saveRosterBtn' disabled>Saved</button>`;
-            }
-          }catch(_e){}
-          return (meta ? `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>` : `<button type='button' class='saveRosterBtn' onclick="alert('This older job is missing metadata. Re-run Test sample once and then Save will appear here.')">Save to roster</button>`);
-        })()
-      + `</div>`
-    ) : '';
+    const actions = (playable && (isSample || isProduce)) ? (function(){
+      var btn2 = '';
+      if (isSample){
+        try{
+          var saved = false;
+          try{ saved = (localStorage.getItem('sf_job_saved_'+String(job.id||'')) === '1'); }catch(_e){}
+          if (saved) btn2 = `<button type='button' class='saveRosterBtn' disabled>Saved</button>`;
+          else btn2 = (meta ? `<button type='button' class='saveRosterBtn' onclick="saveJobToRoster('${escAttr(job.id||'')}')">Save to roster</button>` : `<button type='button' class='saveRosterBtn' onclick="alert('This older job is missing metadata. Re-run Test sample once and then Save will appear here.')">Save to roster</button>`);
+        }catch(_e){ btn2=''; }
+      }
+      if (isProduce){
+        try{
+          var saved2 = false;
+          try{ saved2 = (localStorage.getItem('sf_story_audio_saved_'+String(job.id||'')) === '1'); }catch(_e){}
+          if (saved2) btn2 = `<button type='button' class='saveStoryAudioBtn' disabled>Saved</button>`;
+          else btn2 = (meta ? `<button type='button' class='saveStoryAudioBtn' onclick="saveJobToStoryAudio('${escAttr(job.id||'')}')">Save</button>` : `<button type='button' class='saveStoryAudioBtn' onclick="alert('Missing metadata (story_id).')">Save</button>`);
+        }catch(_e){ btn2=''; }
+      }
+      return (
+        `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
+        + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.id||'')}','${escAttr(job.mp3_url||'')}')">Play</button>`
+        + btn2
+        + `</div>`
+      );
+    })() : '';
 
     const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
     const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
@@ -6943,7 +6980,7 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
             return {'ok': False, 'error': 'missing_sfml'}
 
         job_id = 'produce_' + str(int(time.time())) + '_' + story_id.replace('/', '_').replace(' ', '_')[:48]
-        meta = {'story_id': story_id}
+        meta = {'story_id': story_id, 'story_title': title}
         _job_patch(
             job_id,
             {
@@ -6961,6 +6998,77 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
         return {'ok': True, 'job_id': job_id}
     except Exception as e:
         return {'ok': False, 'error': f'produce_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.get('/api/library/story_audio/list/{story_id}')
+def api_story_audio_list(story_id: str):
+    """List saved audio versions for a story."""
+    try:
+        story_id = str(story_id or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT id, job_id, label, mp3_url, meta_json, created_at FROM sf_story_audio WHERE story_id=%s ORDER BY created_at DESC LIMIT 50',
+                (story_id,),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        out = []
+        for r in rows:
+            out.append({'id': int(r[0]), 'job_id': str(r[1] or ''), 'label': str(r[2] or ''), 'mp3_url': str(r[3] or ''), 'meta_json': str(r[4] or ''), 'created_at': int(r[5] or 0)})
+        return {'ok': True, 'items': out}
+    except Exception as e:
+        return {'ok': False, 'error': f'list_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/library/story_audio/save')
+def api_story_audio_save(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Save a completed produce_audio job into the story library as a versioned audio item."""
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        job_id = str((payload or {}).get('job_id') or '').strip()
+        mp3_url = str((payload or {}).get('mp3_url') or '').strip()
+        meta_json = str((payload or {}).get('meta_json') or '').strip()
+        if not story_id or not job_id or not mp3_url:
+            return {'ok': False, 'error': 'missing_required_fields'}
+
+        # Build label: <story title> — <YYYY-MM-DD HH:mm> (America/New_York)
+        from datetime import datetime
+        try:
+            from zoneinfo import ZoneInfo
+
+            tz = ZoneInfo('America/New_York')
+        except Exception:
+            tz = None
+        now_dt = datetime.now(tz) if tz else datetime.now()
+        ts_label = now_dt.strftime('%Y-%m-%d %H:%M')
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute('SELECT title FROM sf_stories WHERE id=%s', (story_id,))
+            row = cur.fetchone()
+            title = str((row[0] if row else '') or story_id)
+            label = f"{title} — {ts_label}"
+
+            now = int(time.time())
+            cur.execute(
+                'INSERT INTO sf_story_audio (story_id, job_id, label, mp3_url, meta_json, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                (story_id, job_id, label, mp3_url, meta_json, now, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'save_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.post('/api/production/casting_save')
