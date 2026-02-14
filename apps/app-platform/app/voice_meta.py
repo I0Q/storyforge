@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -18,6 +19,8 @@ def _now() -> int:
 
 def _ffprobe_duration_s(path: str) -> float | None:
     try:
+        if not shutil.which('ffprobe'):
+            return None
         out = subprocess.check_output(
             [
                 "ffprobe",
@@ -41,6 +44,8 @@ def _ffprobe_duration_s(path: str) -> float | None:
 def _ffmpeg_lufs(path: str) -> float | None:
     """Best-effort integrated loudness in LUFS via ffmpeg ebur128."""
     try:
+        if not shutil.which('ffmpeg'):
+            return None
         # We parse the final "I:" integrated value from ebur128 summary.
         p = subprocess.run(
             [
@@ -75,6 +80,8 @@ def _ffmpeg_lufs(path: str) -> float | None:
 
 def _audio_to_wav16k(src_path: str, dst_path: str) -> bool:
     try:
+        if not shutil.which('ffmpeg'):
+            return False
         subprocess.run(
             [
                 "ffmpeg",
@@ -99,6 +106,20 @@ def _audio_to_wav16k(src_path: str, dst_path: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _wav_duration_s(wav_path: str) -> float | None:
+    try:
+        import wave
+
+        with wave.open(wav_path, 'rb') as w:
+            sr = float(w.getframerate() or 0)
+            n = float(w.getnframes() or 0)
+        if sr <= 0 or n <= 0:
+            return None
+        return float(n / sr)
+    except Exception:
+        return None
 
 
 def _extract_wav_features(wav_path: str) -> dict[str, Any]:
@@ -267,6 +288,7 @@ def analyze_voice_metadata(
         except Exception as e:
             return {"ok": False, "error": f"download_failed: {type(e).__name__}: {str(e)[:160]}"}
 
+        # Always try to get something useful even if ffmpeg/ffprobe aren't installed.
         dur = _ffprobe_duration_s(in_path)
         lufs = _ffmpeg_lufs(in_path)
 
@@ -274,6 +296,8 @@ def analyze_voice_metadata(
         try:
             if _audio_to_wav16k(in_path, wav_path):
                 feats = _extract_wav_features(wav_path) or {}
+                if dur is None:
+                    dur = _wav_duration_s(wav_path)
         except Exception:
             feats = {}
 
@@ -281,11 +305,14 @@ def analyze_voice_metadata(
         "duration_s": dur,
         "lufs_i": lufs,
         "features": feats,
+        # deterministic metadata
         "engine": engine,
         "voice_ref": voice_ref,
         "tortoise_voice": tortoise_voice,
         "tortoise_gender": tortoise_gender,
         "tortoise_preset": tortoise_preset,
+        "has_ffmpeg": bool(shutil.which('ffmpeg')),
+        "has_ffprobe": bool(shutil.which('ffprobe')),
     }
 
     # LLM: use measured audio features + known engine params.
