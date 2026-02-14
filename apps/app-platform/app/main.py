@@ -415,6 +415,18 @@ VOICE_EDIT_EXTRA_CSS = base_css("""\
     .chip.age-elder{border-color:rgba(255,160,80,0.45);background:rgba(255,160,80,0.14);}
     details.rawBox summary{cursor:pointer;color:var(--muted);}
 
+    /* SFML code viewer (line numbers + basic highlighting) */
+    .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;overflow:auto;}
+    .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
+    .codeLine{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:2px 12px;}
+    .codeLn{color:rgba(168,179,216,0.55);text-align:right;user-select:none;}
+    .codeTxt{white-space:pre;}
+    .tok-c{color:rgba(168,179,216,0.55)}
+    .tok-kw{color:#7dd3fc;font-weight:900}
+    .tok-a{color:#a78bfa;font-weight:900}
+    .tok-s{color:#f9a8d4}
+    .tok-id{color:#fbbf24}
+
 """)
 
 VOICE_NEW_EXTRA_CSS = base_css("""\
@@ -985,10 +997,13 @@ def index(response: Response):
       <div id='prodOut' class='muted' style='margin-top:10px'></div>
       <div id='prodAssignments' style='margin-top:10px'></div>
 
-      <div class='muted' style='margin-top:14px'>3) Generate markup</div>
-      <div class='row' style='margin-top:8px;justify-content:flex-end'>
-        <button type='button' id='prodStep3Btn' disabled onclick='alert("Step 3 not implemented yet")'>Generate markup</button>
+      <div class='muted' style='margin-top:14px'>3) Generate markup (SFML)</div>
+      <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+        <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
+        <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
       </div>
+
+      <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px'></div>
     </div>
   </div>
 
@@ -2322,6 +2337,7 @@ function prodSuggestCasting(){
 function prodSaveCasting(){
   try{
     var out=document.getElementById('prodOut');
+    var box=document.getElementById('prodSfmlBox');
     var st = window.__SF_PROD || {};
     if (!st.story_id) { if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
@@ -2335,11 +2351,106 @@ function prodSaveCasting(){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
         if (out) out.textContent='Saved.';
         window.__SF_PROD.saved = true;
+        window.__SF_PROD.sfml = '';
         // exit edit mode
         try{ window.__SF_PROD.assignments.forEach(function(a){ a._editing=false; }); }catch(_e){}
+        try{ if (box){ box.classList.add('hide'); box.innerHTML=''; } }catch(_e){}
         prodRenderAssignments();
       })
       .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodGenerateSfml(){
+  try{
+    var out=document.getElementById('prodOut');
+    var st = window.__SF_PROD || {};
+    if (!st.saved){ if(out) out.innerHTML='<div class="err">Save casting first</div>'; return; }
+    var sid = String(st.story_id||'').trim();
+    if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+
+    if (out) out.textContent='Generating SFML…';
+    fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
+      .then(function(j){
+        if (!j || !j.ok || !j.sfml){ throw new Error((j&&j.error)||'sfml_failed'); }
+        window.__SF_PROD.sfml = String(j.sfml||'');
+        if (out) out.textContent='';
+        prodRenderSfml(window.__SF_PROD.sfml);
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodCopySfml(){
+  try{
+    var txt = String((window.__SF_PROD||{}).sfml || '');
+    if (!txt){ alert('No SFML yet.'); return; }
+    copyToClipboard(txt);
+    try{ toastShowNow('Copied SFML', 'ok', 1400); }catch(_e){}
+  }catch(e){}
+}
+
+function prodRenderSfml(sfml){
+  try{
+    var box=document.getElementById('prodSfmlBox');
+    if (!box) return;
+
+    var raw = String(sfml||'');
+    raw = raw.split("\r\n").join("\n");
+    var lines = raw.split("\n");
+
+    function esc(s){ return escapeHtml(String(s||'')); }
+    function span(cls, txt){ return '<span class="'+cls+'">'+txt+'</span>'; }
+
+    function hilite(line){
+      var s = String(line||'');
+      var t = s.trim();
+      if (!t) return '';
+      if (t.startsWith('#')) return span('tok-c', esc(s));
+
+      // scene
+      if (t.toLowerCase().startsWith('scene ')){
+        var rest = t.slice(5).trim();
+        var parts = rest.split(' ').filter(Boolean);
+        var out = span('tok-kw','scene') + ' ';
+        for (var i=0;i<parts.length;i++){
+          var p=String(parts[i]||'');
+          if (p.startsWith('id=')) out += span('tok-a','id')+'='+span('tok-id',esc(p.slice(3)));
+          else if (p.startsWith('title=')) out += span('tok-a','title')+'='+span('tok-s',esc(p.slice(6)));
+          else out += esc(p);
+          if (i<parts.length-1) out += ' ';
+        }
+        return out;
+      }
+
+      // say
+      if (t.toLowerCase().startsWith('say ')){
+        var colon = t.indexOf(':');
+        var head = (colon>=0)?t.slice(0,colon).trim():t;
+        var text = (colon>=0)?t.slice(colon+1).trim():'';
+        var parts = head.split(' ').filter(Boolean);
+        var out = span('tok-kw','say');
+        if (parts.length>1) out += ' ' + span('tok-id', esc(parts[1]));
+        // voice=...
+        for (var i=2;i<parts.length;i++){
+          var p=String(parts[i]||'');
+          if (p.startsWith('voice=')) out += ' ' + span('tok-a','voice')+'='+span('tok-id', esc(p.slice(6)));
+          else out += ' ' + esc(p);
+        }
+        out += ':';
+        if (text) out += ' ' + esc(text);
+        return out;
+      }
+
+      return esc(s);
+    }
+
+    var html = '<div class="codeWrap">' + lines.map(function(ln, i){
+      return '<div class="codeLine"><div class="codeLn">'+String(i+1)+'</div><div class="codeTxt">'+hilite(ln)+'</div></div>';
+    }).join('') + '</div>';
+
+    box.innerHTML = html;
+    box.classList.remove('hide');
   }catch(e){}
 }
 
@@ -6143,6 +6254,125 @@ def api_production_casting_get(story_id: str):
         return {'ok': True, 'saved': True, 'assignments': assigns, 'roster': vrows}
     except Exception as e:
         return {'ok': False, 'error': f'casting_get_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/production/sfml_generate')
+def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Generate SFML (StoryForge Markup Language) from story + saved casting.
+
+    SFML v0 directives:
+      - scene id=<id> title="..."
+      - say <character_id> voice=<voice_id>: <text>
+
+    The output is plain text.
+    """
+    try:
+        import re
+
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            st = get_story_db(conn, story_id)
+            cur = conn.cursor()
+            cur.execute('SELECT casting FROM sf_castings WHERE story_id=%s', (story_id,))
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return {'ok': False, 'error': 'casting_not_saved'}
+
+        casting = row[0] or {}
+        assigns = list((casting or {}).get('assignments') or [])
+        if not assigns:
+            return {'ok': False, 'error': 'empty_casting'}
+
+        story_md = str(st.get('story_md') or '')
+        title = str(st.get('title') or story_id)
+
+        # Build a strict casting map (character -> voice_id)
+        cmap = {}
+        for a in assigns:
+            try:
+                ch = str((a or {}).get('character') or '').strip()
+                vid = str((a or {}).get('voice_id') or '').strip()
+                if ch and vid:
+                    cmap[ch] = vid
+            except Exception:
+                pass
+
+        # Ensure narrator exists in map
+        if 'Narrator' in cmap and 'narrator' not in cmap:
+            cmap['narrator'] = cmap['Narrator']
+        if 'narrator' not in cmap:
+            # best-effort: take any assignment whose character is narrator-ish
+            for k, v in list(cmap.items()):
+                if str(k).strip().lower() == 'narrator':
+                    cmap['narrator'] = v
+                    break
+
+        prompt = {
+            'format': 'SFML',
+            'version': 0,
+            'story': {'id': story_id, 'title': title, 'story_md': story_md},
+            'casting_map': cmap,
+            'rules': [
+                'Output MUST be plain SFML text only. No markdown, no fences.',
+                'Use only directives: scene, say.',
+                'At least one scene.',
+                'Every say line MUST include voice=<voice_id> from casting_map values.',
+                'Narrator lines use character_id=narrator and voice=cmap["narrator"].',
+                'Keep each say line to a single line; split long paragraphs into multiple say lines.',
+                'Do not invent voice ids.',
+                'Do not include JSON in the output.',
+            ],
+            'example': (
+                '# SFML v0\n'
+                'scene id=scene-1 title="Intro"\n'
+                'say narrator voice=indigo-dawn: The lighthouse stood silent on the cliff.\n'
+                'say maris voice=lunar-violet: I can hear the sea breathing below.\n'
+            ),
+        }
+
+        req = {
+            'model': 'google/gemma-2-9b-it',
+            'messages': [
+                {'role': 'user', 'content': 'Return ONLY SFML plain text.\n\n' + json.dumps(prompt, separators=(',', ':'))},
+            ],
+            'temperature': 0.3,
+            'max_tokens': 1400,
+        }
+
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
+        r.raise_for_status()
+        j = r.json()
+        txt = ''
+        try:
+            ch0 = (((j or {}).get('choices') or [])[0] or {})
+            msg = ch0.get('message') or {}
+            txt = str(msg.get('content') or ch0.get('text') or '')
+        except Exception:
+            txt = ''
+
+        txt = (txt or '').strip()
+        if not txt:
+            return {'ok': False, 'error': 'empty_llm_output'}
+
+        # Strip accidental markdown fences
+        txt = re.sub(r'^```[a-zA-Z0-9_-]*\s*', '', txt).strip()
+        txt = re.sub(r'```\s*$', '', txt).strip()
+
+        # Cap size
+        if len(txt) > 20000:
+            txt = txt[:20000]
+
+        return {'ok': True, 'sfml': txt}
+    except Exception as e:
+        return {'ok': False, 'error': f'sfml_generate_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.post('/api/production/casting_save')
