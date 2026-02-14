@@ -3049,13 +3049,6 @@ function renderTraits(){
     var f0 = (f.f0_hz_median!=null) ? fmtNum(f.f0_hz_median,0)+' Hz' : '';
     var f0r = (f.f0_hz_p10!=null && f.f0_hz_p90!=null) ? (fmtNum(f.f0_hz_p10,0)+'–'+fmtNum(f.f0_hz_p90,0)+' Hz') : '';
 
-    var hasFfmpeg = (m.has_ffmpeg===true);
-    var hasFfprobe = (m.has_ffprobe===true);
-
-    var toolChips = '';
-    toolChips += chip('ffmpeg '+(hasFfmpeg?'ok':'missing'), hasFfmpeg?'ok':'bad');
-    toolChips += chip('ffprobe '+(hasFfprobe?'ok':'missing'), hasFfprobe?'ok':'bad');
-
     box.innerHTML = ''
       + '<div class="traitsGrid">'
       + '<div class="k">gender</div><div class="v">'+escapeHtml(String(vt.gender||'unknown'))+'</div>'
@@ -3068,7 +3061,6 @@ function renderTraits(){
       + '<div class="k">engine</div><div class="v">'+escapeHtml(String(m.engine||''))+'</div>'
       + '<div class="k">voice_ref</div><div class="v">'+escapeHtml(String(m.voice_ref||''))+'</div>'
       + (m.tortoise_voice?('<div class="k">tortoise</div><div class="v">'+escapeHtml(String(m.tortoise_voice||''))+'</div>'):'')
-      + '<div class="k">tools</div><div class="v"><div class="chips">'+toolChips+'</div></div>'
       + '</div>';
   }catch(e){}
 }

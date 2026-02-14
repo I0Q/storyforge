@@ -343,8 +343,6 @@ def analyze_voice_metadata(
         "tortoise_voice": tortoise_voice or (voice_ref if engine == 'tortoise' else ''),
         "tortoise_gender": tortoise_gender,
         "tortoise_preset": tortoise_preset,
-        "has_ffmpeg": bool(shutil.which('ffmpeg')),
-        "has_ffprobe": bool(shutil.which('ffprobe')),
     }
 
     # LLM: use measured audio features + known engine params.
