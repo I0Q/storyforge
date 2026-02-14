@@ -1683,7 +1683,7 @@ function renderProviders(providers){
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
           [0,1,2,3].map(function(n){
             var on = (llmG.indexOf(n)>=0);
-            return "<label class='pill' style='cursor:pointer;user-select:none"><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
+            return "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
           }).join('')+
         "</div>"+
       "</div>"+
