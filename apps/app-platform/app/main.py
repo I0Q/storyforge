@@ -6422,6 +6422,45 @@ def api_deploy_token_fingerprint():
         return {'ok': True, 'sha256_8': '', 'configured': bool(SF_DEPLOY_TOKEN)}
 
 
+@app.get('/api/debug/latency')
+def api_debug_latency(request: Request):
+    """Token-gated latency probe to debug slow UI loads.
+
+    Auth: x-sf-deploy-token (SF_DEPLOY_TOKEN)
+    """
+    _require_deploy_token(request)
+    out: dict[str, Any] = {'ok': True}
+    t0 = time.time()
+
+    # DB connect + simple query
+    try:
+        t_db0 = time.time()
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute('SELECT 1')
+            cur.fetchone()
+        finally:
+            conn.close()
+        out['db_ms'] = int((time.time() - t_db0) * 1000)
+    except Exception as e:
+        out['db_ms'] = None
+        out['db_err'] = f'{type(e).__name__}: {str(e)[:160]}'
+
+    # Gateway metrics (Tinybox) probe
+    try:
+        t_g0 = time.time()
+        _get('/v1/metrics', timeout_s=12.0)
+        out['gateway_metrics_ms'] = int((time.time() - t_g0) * 1000)
+    except Exception as e:
+        out['gateway_metrics_ms'] = None
+        out['gateway_err'] = f'{type(e).__name__}: {str(e)[:160]}'
+
+    out['total_ms'] = int((time.time() - t0) * 1000)
+    return out
+
+
 @app.post('/api/deploy/start')
 def api_deploy_start(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Mark deploy as started. Call from your deploy hook/pipeline."""
