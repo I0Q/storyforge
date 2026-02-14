@@ -148,6 +148,26 @@ def register_passphrase_auth(app: FastAPI) -> None:
             if dtok and got and hmac.compare_digest(got, dtok):
                 return await call_next(request)
 
+        # Allow worker APIs (jobs + SFML fetch) when token is provided.
+        if request.url.path.startswith('/api/jobs') or request.url.path.startswith('/api/production/sfml'):
+            # 1) dedicated job token
+            jt = (os.environ.get('SF_JOB_TOKEN') or '').strip()
+            gotj = (request.headers.get('x-sf-job-token') or '').strip()
+            if jt and gotj and hmac.compare_digest(gotj, jt):
+                return await call_next(request)
+
+            # 2) TODO API token (already provisioned)
+            tt = (os.environ.get('TODO_API_TOKEN') or '').strip()
+            gott = (request.headers.get('x-sf-todo-token') or '').strip()
+            if tt and gott and hmac.compare_digest(gott, tt):
+                return await call_next(request)
+
+            # 3) deploy token (bootstrap)
+            dtok = (os.environ.get('SF_DEPLOY_TOKEN') or '').strip()
+            gotd = (request.headers.get('x-sf-deploy-token') or '').strip()
+            if dtok and gotd and hmac.compare_digest(gotd, dtok):
+                return await call_next(request)
+
         # For API calls, always return JSON so the frontend can handle it.
         if request.url.path.startswith('/api/'):
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
