@@ -592,6 +592,10 @@ function __sfEnsureBootBanner(){
     if (t) return t;
 
     boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} • JS: ok</span>` +
+      `<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:160px; margin-left:12px'>` +
+        `<div class='muted' style='font-weight:950'>Deploying…</div>` +
+        `<div class='updateTrack' style='margin-top:6px'><div class='updateProg'></div></div>` +
+      `</div>` +
       `<button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>` +
       `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">` +
       `<path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>` +
@@ -609,6 +613,67 @@ function __sfSetDebugInfo(msg){
     window.__SF_LAST_ERR = msg || '';
     var t = __sfEnsureBootBanner();
     if (t) t.textContent = 'Build: ' + window.__SF_BUILD + ' • JS: ' + (window.__SF_LAST_ERR || 'ok');
+  }catch(e){}
+}
+
+function __sfSetDeployBar(on, msg){
+  try{
+    var el = document.getElementById('bootDeploy');
+    if (!el) return;
+    if (on){
+      el.classList.remove('hide');
+      if (msg){
+        try{ el.querySelector('.muted').textContent = String(msg||'Deploying…'); }catch(_e){}
+      }
+    }else{
+      el.classList.add('hide');
+    }
+  }catch(e){}
+}
+
+function __sfStartDeployWatch(){
+  // Debug-only: show a progress bar when the deploy pipeline toggles deploy state.
+  try{
+    var dbg = null;
+    try{ dbg = localStorage.getItem('sf_debug_ui'); }catch(e){}
+    var debugOn = (dbg===null || dbg==='' || dbg==='1');
+    if (!debugOn) return;
+
+    var lastUpdated = 0;
+    var lastState = '';
+
+    function tick(){
+      fetch('/api/deploy/status', {cache:'no-store'}).then(function(r){
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        return r.json();
+      }).then(function(j){
+        if (!j || !j.ok) return;
+        var st = String(j.state||'idle');
+        var msg = String(j.message||'');
+        var upd = Number(j.updated_at||0);
+
+        if (st === 'deploying') __sfSetDeployBar(true, msg || 'Deploying…');
+        else __sfSetDeployBar(false, '');
+
+        // If we just finished a deploy, reload once to pick up new build.
+        if (lastState === 'deploying' && st !== 'deploying'){
+          try{
+            if (upd && upd !== lastUpdated){
+              setTimeout(function(){
+                try{ window.location.reload(); }catch(_e){}
+              }, 400);
+            }
+          }catch(_e){}
+        }
+        lastUpdated = upd || lastUpdated;
+        lastState = st;
+      }).catch(function(_e){
+        // Quiet failure; don't break the page.
+      });
+    }
+
+    tick();
+    setInterval(tick, 3000);
   }catch(e){}
 }
 
@@ -3129,6 +3194,7 @@ reloadProviders();
 try{
   var __bootText2 = __sfEnsureBootBanner();
   if (__bootText2) __bootText2.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: ok';
+  try{ __sfStartDeployWatch(); }catch(e){}
 }catch(_e){}
 </script>
 
@@ -5938,7 +6004,105 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
 
 
 
-# Deploy/update pipeline endpoints removed (will be rebuilt from scratch)
+@app.get('/api/deploy/status')
+def api_deploy_status():
+    """Public deploy status used by the debug-only deploy bar."""
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute("SELECT value_json, updated_at FROM sf_settings WHERE key='deploy_state'")
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return {'ok': True, 'state': 'idle', 'message': '', 'updated_at': 0}
+
+        vraw = str(row[0] or '').strip()
+        try:
+            v = json.loads(vraw) if vraw else {}
+        except Exception:
+            v = {}
+
+        return {
+            'ok': True,
+            'state': str(v.get('state') or 'idle'),
+            'message': str(v.get('message') or ''),
+            'updated_at': int(row[1] or 0),
+        }
+    except Exception:
+        # Best-effort: never break the UI
+        return {'ok': True, 'state': 'unknown', 'message': '', 'updated_at': 0}
+
+
+def _require_deploy_token(request: Request) -> None:
+    # Reusing SF_DEPLOY_TOKEN env var; kept even though we removed the older pipeline code.
+    if not SF_DEPLOY_TOKEN:
+        raise HTTPException(status_code=500, detail='SF_DEPLOY_TOKEN not configured')
+    tok = (request.headers.get('x-sf-deploy-token') or '').strip()
+    if not tok or tok != SF_DEPLOY_TOKEN:
+        raise HTTPException(status_code=401, detail='unauthorized')
+
+
+@app.post('/api/deploy/start')
+def api_deploy_start(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Mark deploy as started. Call from your deploy hook/pipeline."""
+    _require_deploy_token(request)
+    now = int(time.time())
+    msg = str((payload or {}).get('message') or 'Deploying…')
+    v = {'state': 'deploying', 'message': msg}
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        cur.execute(
+            """
+INSERT INTO sf_settings (key,value_json,updated_at)
+VALUES ('deploy_state', %s, %s)
+ON CONFLICT (key)
+DO UPDATE SET value_json=EXCLUDED.value_json, updated_at=EXCLUDED.updated_at
+""",
+            (json.dumps(v, separators=(',', ':')), now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {'ok': True}
+
+
+@app.post('/api/deploy/end')
+def api_deploy_end(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Mark deploy as finished. Call from your deploy hook/pipeline."""
+    _require_deploy_token(request)
+    now = int(time.time())
+    msg = str((payload or {}).get('message') or 'Deployed')
+    v = {'state': 'idle', 'message': msg}
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        cur.execute(
+            """
+INSERT INTO sf_settings (key,value_json,updated_at)
+VALUES ('deploy_state', %s, %s)
+ON CONFLICT (key)
+DO UPDATE SET value_json=EXCLUDED.value_json, updated_at=EXCLUDED.updated_at
+""",
+            (json.dumps(v, separators=(',', ':')), now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {'ok': True}
+
+
+# (Older /api/build + auto-reload logic intentionally not reintroduced.)
 
 @app.get('/api/voices')
 def api_voices_list():
