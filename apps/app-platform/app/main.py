@@ -976,6 +976,18 @@ function getQueryParam(key){
 
 
 // --- Toasts (persist across fast navigation via localStorage) ---
+function toastSet(msg, kind, ms){
+  try{
+    localStorage.setItem('sf_toast_msg', String(msg||''));
+    localStorage.setItem('sf_toast_kind', String(kind||'info'));
+    localStorage.setItem('sf_toast_until', String(Date.now() + (ms||2600)));
+  }catch(e){}
+}
+function toastShowNow(msg, kind, ms){
+  try{ toastSet(msg, kind, ms); }catch(e){}
+  try{ if (window.__sfToastInit) window.__sfToastInit(); }catch(e){}
+}
+
 function __sfToastInit(){
   var el = document.getElementById('sfToast');
   if (!el){
