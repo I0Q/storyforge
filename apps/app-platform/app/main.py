@@ -177,6 +177,19 @@ INDEX_BASE_CSS = base_css("""\
     select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) calc(50% - 2px),calc(100% - 13px) calc(50% - 2px);background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px;}
     pre{background:#070b16;color:#d7e1ff;padding:12px;border-radius:12px;overflow:auto;border:1px solid var(--line)}
     .term{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.25;white-space:pre;}
+
+    /* SFML code viewer (line numbers + basic highlighting) */
+    .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;overflow:auto;}
+    .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
+    .codeLine{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:2px 12px;}
+    .codeLn{color:rgba(168,179,216,0.55);text-align:right;user-select:none;}
+    .codeTxt{white-space:pre;}
+    .tok-c{color:rgba(168,179,216,0.55)}
+    .tok-kw{color:#7dd3fc;font-weight:900}
+    .tok-a{color:#a78bfa;font-weight:900}
+    .tok-s{color:#f9a8d4}
+    .tok-id{color:#fbbf24}
+
     .job{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}
     .job .title{font-weight:950;font-size:14px;}
     .pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--line);color:var(--muted)}
