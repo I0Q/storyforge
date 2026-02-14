@@ -2887,9 +2887,12 @@ def voices_edit_page(voice_id: str, response: Response):
       </button>
     </div>
 
-    <div class='row' style='margin-top:12px;justify-content:space-between'>
+    <div class='row' style='margin-top:12px;justify-content:space-between;gap:10px;flex-wrap:wrap'>
       <button type='button' class='secondary' onclick='deleteThisVoice()' style='border-color: rgba(255,77,77,.35); color: var(--bad);'>Delete</button>
-      <button type='button' onclick='save()'>Save</button>
+      <div class='row' style='gap:10px;justify-content:flex-end;margin-left:auto'>
+        <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze metadata</button>
+        <button type='button' onclick='save()'>Save</button>
+      </div>
     </div>
 
     <div id='out' class='muted' style='margin-top:10px'></div>
@@ -2927,6 +2930,24 @@ function deleteThisVoice(){
       })
       .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
   }catch(e){}
+}
+
+function analyzeMeta(){
+  try{
+    var out=$('out'); if(out) out.textContent='Analyzing metadata…';
+    fetch('/api/voices/__VID_RAW__/analyze_metadata', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
+      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
+      .then(function(j){
+        if (j && j.ok){
+          if(out) out.textContent='Metadata job started.';
+          try{ toastSet('Analyzing metadata…', 'info', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+          setTimeout(function(){ window.location.href='/#tab-history'; }, 250);
+          return;
+        }
+        if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'analyze failed')+'</div>';
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
+  }catch(e){ }
 }
 
 function save(){
@@ -5380,6 +5401,90 @@ def api_voices_create(payload: dict[str, Any]):
         return {'ok': True, 'sample_url': sample_url}
     except Exception as e:
         return {'ok': False, 'error': f'create_failed: {type(e).__name__}: {e}'}
+
+
+@app.post('/api/voices/{voice_id}/analyze_metadata')
+def api_voices_analyze_metadata(voice_id: str):
+    """Kick off metadata analysis for an existing roster voice."""
+    try:
+        voice_id = validate_voice_id(voice_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            v = get_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+
+        engine = str(v.get('engine') or '').strip()
+        voice_ref = str(v.get('voice_ref') or '').strip()
+        sample_text = str(v.get('sample_text') or '').strip()
+        sample_url = str(v.get('sample_url') or '').strip()
+        display_name = str(v.get('display_name') or voice_id)
+
+        if not engine or not voice_ref or not sample_url:
+            return {'ok': False, 'error': 'missing_required_fields'}
+
+        job_id = "voice_meta_" + voice_id + "_" + str(int(time.time()))
+        meta = {
+            'voice_id': voice_id,
+            'engine': engine,
+            'voice_ref': voice_ref,
+            'sample_text': sample_text,
+            'sample_url': sample_url,
+        }
+        _job_patch(
+            job_id,
+            {
+                'title': f"Voice metadata ({display_name})",
+                'kind': 'voice_meta',
+                'meta_json': json.dumps(meta, separators=(',', ':')),
+                'state': 'running',
+                'started_at': int(time.time()),
+                'finished_at': 0,
+                'total_segments': 2,
+                'segments_done': 0,
+            },
+        )
+
+        def worker():
+            try:
+                _job_patch(job_id, {'segments_done': 1})
+                res = analyze_voice_metadata(
+                    voice_id=voice_id,
+                    engine=engine,
+                    voice_ref=voice_ref,
+                    sample_text=sample_text,
+                    sample_url=sample_url,
+                    gateway_base=GATEWAY_BASE,
+                    headers=_h(),
+                )
+                if not (isinstance(res, dict) and res.get('ok')):
+                    raise RuntimeError(str((res or {}).get('error') or 'meta_failed'))
+                _job_patch(job_id, {'segments_done': 2, 'state': 'completed', 'finished_at': int(time.time())})
+            except Exception as e:
+                det = ''
+                try:
+                    import traceback
+
+                    det = traceback.format_exc(limit=6)
+                except Exception:
+                    det = ''
+                _job_patch(
+                    job_id,
+                    {
+                        'state': 'failed',
+                        'finished_at': int(time.time()),
+                        'segments_done': 0,
+                        'sfml_url': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
+                    },
+                )
+
+        import threading
+
+        threading.Thread(target=worker, daemon=True).start()
+        return {'ok': True, 'job_id': job_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'analyze_failed: {type(e).__name__}: {e}'}
 
 
 @app.get('/api/voices/{voice_id}')
