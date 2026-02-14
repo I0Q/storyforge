@@ -2115,6 +2115,25 @@ function loadVoices(){
       if (v.sample_url) meta.push('sample');
       else if (v.voice_ref) meta.push(v.voice_ref);
       var metaLine = meta.join(' • ');
+
+      // Traits summary (from voice_traits_json)
+      var traitsLine = '';
+      try{
+        var vtj = safeJson(v.voice_traits_json||'') || null;
+        var vt = vtj ? (vtj.voice_traits||{}) : {};
+        var m = vtj ? (vtj.measured||{}) : {};
+        var f = m ? (m.features||{}) : {};
+        var parts=[];
+        if (vt.gender && vt.gender!=='unknown') parts.push(String(vt.gender));
+        if (vt.age && vt.age!=='unknown') parts.push(String(vt.age));
+        var pitch = vt.pitch && vt.pitch!=='unknown' ? String(vt.pitch) : '';
+        var f0 = (f && f.f0_hz_median!=null) ? (Number(f.f0_hz_median).toFixed(0) + ' Hz') : '';
+        if (pitch || f0) parts.push((pitch||'pitch') + (f0?(' • '+f0):''));
+        if (Array.isArray(vt.tone) && vt.tone.length){
+          parts.push(vt.tone.slice(0,3).join(', '));
+        }
+        traitsLine = parts.join(' • ');
+      }catch(e){ traitsLine=''; }
       var en = (v.enabled!==false);
       var pill = en ? "<span class='pill good'>enabled</span>" : "<span class='pill bad'>disabled</span>";
 
@@ -2129,6 +2148,7 @@ function loadVoices(){
         + "<div>" + pill + "</div>"
         + "</div>"
         + (metaLine ? ("<div class='muted' style='margin-top:6px'><code>" + escapeHtml(metaLine) + "</code></div>") : "")
+        + (traitsLine ? ("<div class='muted' style='margin-top:6px'>" + escapeHtml(traitsLine) + "</div>") : "")
         + "<div class='row' style='margin-top:10px'>"
         + playBtn
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
