@@ -174,6 +174,8 @@ INDEX_BASE_CSS = base_css("""\
     .rowEnd{justify-content:flex-end;}
     button{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#163a74;color:#fff;font-weight:950;cursor:pointer;}
     button.secondary{background:transparent;color:var(--text);}
+    button.prodGoBtn{background:linear-gradient(180deg,#26d07c,#15b66a);border-color:rgba(38,208,124,.55);color:#062011;}
+    button.prodGoBtn:disabled{opacity:.55;}
 
     /* switch */
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
@@ -1196,8 +1198,7 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>3) SFML</div>
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
           <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
-          <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
-          <button type='button' id='prodProduceBtn' disabled onclick='prodProduceAudio()'>Produce</button>
+          <button type='button' id='prodProduceBtn' class='prodGoBtn' disabled onclick='prodProduceAudio()'>Produce</button>
         </div>
       </div>
 
