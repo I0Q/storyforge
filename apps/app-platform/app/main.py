@@ -1729,7 +1729,7 @@ function renderProviders(providers){
       "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+" onchange='onProvMonitorToggle(this); event.stopPropagation();'/><span class='slider'></span></label></div>"+
 
       "<div class='provSection'>Voice service</div>"+
-      "<div class='provHint'>Engines available: <code>xtts</code> • <code>tortoise</code></div>"+
+      ""+
       "<div class='k'>Enabled engines</div><div class='checkLine'>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_engines' value='"+escAttr(voiceEng.join(','))+"'/>"+
         "<label class='checkPill'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='xtts' "+(voiceEng.indexOf('xtts')>=0?'checked':'')+" onchange='onEngineToggle(this)'/>xtts</label>"+
