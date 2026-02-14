@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 
 _DB_POOL = None
@@ -36,7 +37,7 @@ def db_connect():
     connection limits (StoryForge uses many short-lived connections in jobs).
     """
     import psycopg2
-    from psycopg2.pool import ThreadedConnectionPool
+    from psycopg2.pool import PoolError, ThreadedConnectionPool
 
     global _DB_POOL
 
@@ -55,8 +56,18 @@ def db_connect():
     if _DB_POOL is None:
         _DB_POOL = ThreadedConnectionPool(1, maxconn, dsn=dsn, connect_timeout=5)
 
-    conn = _DB_POOL.getconn()
-    return _PooledConn(_DB_POOL, conn)
+    # ThreadedConnectionPool raises PoolError immediately when exhausted.
+    # For our job workers, a brief wait is safer than failing the whole job.
+    last_err = None
+    for i in range(30):
+        try:
+            conn = _DB_POOL.getconn()
+            return _PooledConn(_DB_POOL, conn)
+        except PoolError as e:
+            last_err = e
+            time.sleep(min(0.05 * (i + 1), 0.8))
+
+    raise PoolError(f"connection pool exhausted (max={maxconn})") from last_err
 
 
 def db_init(conn) -> None:
