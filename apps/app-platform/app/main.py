@@ -2451,10 +2451,13 @@ function prodRenderAssignments(){
       var reason = String(a.reason||'');
       var editing = !!a._editing;
       var voiceName = '';
+      var voiceHex = '';
       try{
         var v = roster.find(function(x){ return String(x.id||'')===vid; });
         voiceName = v ? String(v.name||v.id||'') : vid;
+        voiceHex = v ? String(v.color_hex||'').trim() : '';
       }catch(_e){}
+      if (!voiceHex) voiceHex = '#64748b';
 
       var top = "<div class='row' style='justify-content:space-between;gap:10px'>"
         + "<div style='font-weight:950'>"+escapeHtml(ch||('Character '+(idx+1)))+"</div>"
@@ -2464,10 +2467,16 @@ function prodRenderAssignments(){
       var body = '';
       if (editing){
         body += "<div class='muted' style='margin-top:8px'>Voice</div>";
-        body += "<select style='margin-top:6px;width:100%' onchange='prodSetVoice("+idx+", this.value)'>" + optList(vid) + "</select>";
+        body += "<div class='row' style='gap:10px;flex-wrap:nowrap;margin-top:6px'>"
+          + "<span class='swatch' style='background:"+escAttr(voiceHex)+"'></span>"
+          + "<select style='flex:1;min-width:0' onchange='prodSetVoice("+idx+", this.value)'>" + optList(vid) + "</select>"
+          + "</div>";
       }else{
         body += "<div class='muted' style='margin-top:8px'>Voice</div>";
-        body += "<div style='margin-top:6px'>"+escapeHtml(voiceName||'—')+"</div>";
+        body += "<div class='row' style='gap:10px;flex-wrap:nowrap;margin-top:6px'>"
+          + "<span class='swatch' style='background:"+escAttr(voiceHex)+"'></span>"
+          + "<div style='min-width:0'>"+escapeHtml(voiceName||'—')+"</div>"
+          + "</div>";
       }
       if (reason){
         body += "<div class='muted' style='margin-top:8px'>Reason</div>";
@@ -2509,6 +2518,8 @@ function prodSetVoice(i, voiceId){
   try{
     window.__SF_PROD.assignments[i].voice_id = String(voiceId||'');
     window.__SF_PROD.saved=false;
+    // re-render so swatch updates immediately
+    try{ prodRenderAssignments(); }catch(_e){}
     prodCastAutosaveArm();
   }catch(e){}
 }
@@ -6611,6 +6622,7 @@ def api_production_casting_get(story_id: str):
                         'id': vid,
                         'name': dn,
                         'engine': eng,
+                        'color_hex': str(v.get('color_hex') or ''),
                         'gender': str(traits.get('gender') or 'unknown'),
                         'age': str(traits.get('age') or 'unknown'),
                         'pitch': str(traits.get('pitch') or 'unknown'),
