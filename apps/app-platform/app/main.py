@@ -5815,11 +5815,33 @@ def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
         # Keep it short + TTS-friendly.
         # NOTE: our vLLM chat endpoint for Gemma rejects "system" role.
         # Put all instructions in the user message to stay compatible.
+        import random
+
+        themes = [
+            "a confident tech product intro",
+            "a cozy bedtime narrator line",
+            "a warm customer support greeting",
+            "a dramatic audiobook hook",
+            "a calm meditation instruction",
+            "a playful cartoon announcement",
+            "a serious documentary opener",
+            "an enthusiastic sports commentary line",
+            "a gentle nature description",
+            "a witty one-liner",
+            "a friendly podcast intro",
+            "a mysterious noir narration",
+        ]
+        theme = random.choice(themes)
+        nonce = os.urandom(3).hex()
+
         prompt = (
             "Write a short sample script for a text-to-speech voice demo. "
             "Generate 1-2 sentences (<= 220 characters) that sound natural when spoken aloud. "
             "Avoid numbers, URLs, and special characters. "
-            "Return plain text only (no quotes, no markdown, no emojis)."
+            "Return plain text only (no quotes, no markdown, no emojis). "
+            f"Theme: {theme}. "
+            f"Make it meaningfully different from typical 'sun/leaves/wind' samples. "
+            f"Nonce: {nonce}."
         )
         model = str(payload.get('model') or 'google/gemma-2-9b-it')
 
@@ -5828,7 +5850,7 @@ def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
             'messages': [
                 {'role': 'user', 'content': prompt},
             ],
-            'temperature': float(payload.get('temperature') or 0.9),
+            'temperature': float(payload.get('temperature') or 1.1),
             'max_tokens': int(payload.get('max_tokens') or 90),
         }
 
