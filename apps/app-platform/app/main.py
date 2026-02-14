@@ -6405,10 +6405,16 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     cmap['NARRATOR'] = v
                     break
 
-        # Scene policy: default to 1 scene for short stories; otherwise allow up to 3.
+        # Scene policy: avoid over-splitting, but don't force everything into one tiny scene.
         story_chars = len(story_md or '')
         story_words = len((story_md or '').split())
-        max_scenes = 1 if (story_chars < 1200 and story_words < 220) else 3
+        # For very short stories, 1 scene. For normal short stories, allow up to 2. Otherwise up to 3.
+        if story_chars < 500 and story_words < 90:
+            max_scenes = 1
+        elif story_chars < 1600 and story_words < 320:
+            max_scenes = 2
+        else:
+            max_scenes = 3
 
         prompt = {
             'format': 'SFML',
@@ -6426,8 +6432,10 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'Always include narrator as: voice [Narrator] = <voice_id> and use [Narrator] lines.',
                 'Do not invent voice ids; only use voice ids from casting_map values.',
                 'Keep each speaker line to a single line; split long paragraphs into multiple lines.',
-                'SCENES: If max_scenes=1, output exactly ONE scene (scene-1).',
-                'SCENES: Otherwise, output at most max_scenes scenes; do not create scenes for minor mood shifts.',
+                'COVERAGE: Include the full story content (do not stop early; do not summarize).',
+                'COVERAGE: Keep emitting speaker lines until the story reaches a clear ending.',
+                'SCENES: If max_scenes=1, output exactly ONE scene (scene-1) but still cover the whole story.',
+                'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
                 'Do not output JSON.',
             ],
             'example': (
@@ -6450,7 +6458,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 {'role': 'user', 'content': 'Return ONLY SFML plain text.\n\n' + json.dumps(prompt, separators=(',', ':'))},
             ],
             'temperature': 0.3,
-            'max_tokens': 1400,
+            'max_tokens': 2200,
         }
 
         r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
