@@ -492,6 +492,7 @@ window.__SF_BOOT_TS = Date.now();
 window.__SF_LAST_ERR = '';
 
 // Cache-bust HTML on iOS/Safari/CF edge caching: only when Debug UI is enabled.
+// IMPORTANT: avoid refresh loops. Only auto-add ?v=... once per tab/session, and only if v is missing.
 try{
   var dbg = null;
   try{ dbg = localStorage.getItem('sf_debug_ui'); }catch(e){}
@@ -499,14 +500,13 @@ try{
   if (debugOn){
     var u = new URL(window.location.href);
     var v = u.searchParams.get('v');
-    if (String(v||'') !== String(window.__SF_BUILD||'')){
-      var key = 'sf_reload_v_' + String(window.__SF_BUILD||'');
+    if (!v){
+      var key = 'sf_reload_once';
       var did = false;
       try{ did = (sessionStorage.getItem(key) === '1'); }catch(e){}
       if (!did){
         try{ sessionStorage.setItem(key, '1'); }catch(e){}
         u.searchParams.set('v', String(window.__SF_BUILD||''));
-        // preserve hash
         window.location.replace(u.toString());
       }
     }
