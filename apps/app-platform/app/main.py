@@ -3726,14 +3726,17 @@ function genSampleText(){
       stopAnim();
       if (!j || !j.ok || !j.text){
         if (ta){ ta.value = origVal; ta.placeholder = origPh; }
+        try{ updateSampleTextCount(); }catch(e){}
         throw new Error((j&&j.error)||'sample_text_failed');
       }
       if (ta) ta.value = String(j.text||'');
+      try{ updateSampleTextCount(); }catch(e){}
       if (out) out.textContent='';
     })
     .catch(function(e){
       stopAnim();
       if (ta){ ta.value = origVal; ta.placeholder = origPh; }
+      try{ updateSampleTextCount(); }catch(_e){}
       if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
     });
 }
