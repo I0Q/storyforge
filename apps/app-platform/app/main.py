@@ -188,17 +188,13 @@ INDEX_BASE_CSS = base_css("""\
     /* Wrap long lines so vertical scrolling is natural on mobile */
     .codeTxt{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;}
 
-    /* SFML editor (custom, lightweight) */
-    .sfmlWrap{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:10px 12px;}
-    .sfmlGutter{color:rgba(168,179,216,0.55);text-align:right;user-select:none;white-space:pre;}
-    .sfmlEditor{outline:none;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-height:45vh;}
-    .sfmlLine{display:block;}
-    .sfmlCh{color:var(--text);} /* base */
-    .sfmlTokComment{color:rgba(168,179,216,0.55)}
-    .sfmlTokKw{color:#7dd3fc;font-weight:900}
-    .sfmlTokStr{color:#f9a8d4}
-    .sfmlTokId{color:#fbbf24}
-    .sfmlTokVoice{color:#a78bfa;font-weight:900}
+    /* editable overlay */
+    .codeEdit{position:absolute;inset:0;width:100%;height:100%;padding:0;margin:0;border:0;background:transparent;resize:none;outline:none;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;
+      color:transparent;caret-color:var(--text);
+      white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;
+    }
+    .codeEdit::selection{background:rgba(74,163,255,0.28);}
     .tok-c{color:rgba(168,179,216,0.55)}
     .tok-kw{color:#7dd3fc;font-weight:900}
     .tok-a{color:#a78bfa;font-weight:900}
@@ -837,7 +833,10 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
-  <!-- Ace editor removed (custom SFML editor) -->
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/ace.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/theme-tomorrow_night_blue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict/mode-text.js"></script>
   __DEBUG_BANNER_BOOT_JS__
   <script>
   // Ensure monitor UI is hidden on first paint when disabled.
@@ -1642,7 +1641,7 @@ function renderMetrics(m){
 function renderProc(m){
   const el = document.getElementById('monProc');
   if (!el) return;
-  const b = (m && m.body) ? m.body : (m || {});
+  const b = m?.body || m || {};
   const procs = b.processes || b.procs || null;
   if (!procs || !Array.isArray(procs) || procs.length===0){
     el.textContent = 'No process list available.';
@@ -1651,13 +1650,13 @@ function renderProc(m){
 
   // terminal-like table
   const rows = procs.slice(0, 18).map(p => ({
-    pid: String((p && p.pid != null) ? p.pid : ''),
-    cpu: (p && p.cpu_pct!=null) ? Number(p.cpu_pct).toFixed(1) : '',
-    mem: (p && p.mem_pct!=null) ? Number(p.mem_pct).toFixed(1) : '',
-    gmem: (p && p.gpu_mem_mb!=null) ? Number(p.gpu_mem_mb).toFixed(0) : '',
-    et: String((p && p.elapsed != null) ? p.elapsed : ''),
-    cmd: String((p && p.command != null) ? p.command : ((p && p.name != null) ? p.name : '')),
-    args: String((p && p.args != null) ? p.args : '')
+    pid: String(p.pid ?? ''),
+    cpu: (p.cpu_pct!=null) ? Number(p.cpu_pct).toFixed(1) : '',
+    mem: (p.mem_pct!=null) ? Number(p.mem_pct).toFixed(1) : '',
+    gmem: (p.gpu_mem_mb!=null) ? Number(p.gpu_mem_mb).toFixed(0) : '',
+    et: String(p.elapsed ?? ''),
+    cmd: String(p.command ?? p.name ?? ''),
+    args: String(p.args ?? '')
   }));
 
   const pad = (s, n) => (s.length >= n ? s.slice(0,n) : s + ' '.repeat(n - s.length));
@@ -2522,191 +2521,134 @@ function prodSfmlSaveNow(sfmlText){
   }catch(e){}
 }
 
-function __sfmlGetText(el){
-  try{
-    // innerText preserves line breaks nicely for our use
-    var t = String(el && el.innerText ? el.innerText : '');
-    // normalize
-    t = t.split("\r\n").join("\n");
-    // contenteditable often adds a trailing newline
-    if (t.endsWith("\n")) t = t.slice(0, -1);
-    return t;
-  }catch(e){ return ''; }
-}
-
-function __sfmlEscape(s){
-  try{ return escapeHtml(String(s||'')); }catch(e){ return String(s||''); }
-}
-
-function __sfmlHiliteLine(line){
-  var s = String(line||'');
-  // preserve leading spaces
-  var lead='';
-  while (s.startsWith('  ')) { lead += '  '; s = s.slice(2); }
-  var t = s;
-  var escLead = __sfmlEscape(lead);
-  var esc = __sfmlEscape;
-
-  // comment
-  if (t.trim().startsWith('#')) return escLead + '<span class="sfmlTokComment">'+esc(t)+'</span>';
-
-  // block header (e.g., cast:, meta:, settings:)
-  try{
-    var hh = t.trim();
-    if (hh.endsWith(':')){
-      var nm0 = hh.slice(0, -1);
-      if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(nm0)){
-        return escLead + '<span class="sfmlTokKw">'+esc(hh)+'</span>';
-      }
-    }
-  }catch(_e){}
-
-  // cast mapping: Name: voice_id (indented)
-  if (lead && t.indexOf(':')>0){
-    var i = t.indexOf(':');
-    var nm=t.slice(0,i).trim();
-    var rest=t.slice(i+1).trim();
-    if (nm && rest){
-      return escLead + '<span class="sfmlTokId">'+esc(nm)+'</span><span class="sfmlTokKw">:</span> <span class="sfmlTokVoice">'+esc(rest)+'</span>';
-    }
-  }
-
-  // scene header: scene id "Title":
-  if (t.trim().toLowerCase().startsWith('scene ')){
-    var tt=t.trim();
-    var parts=tt.split(' ');
-    var kw=parts.shift();
-    var id=parts.shift()||'';
-    var tail=parts.join(' ');
-    var out = '<span class="sfmlTokKw">'+esc(kw)+'</span>' + (id?(' <span class="sfmlTokId">'+esc(id)+'</span>'):'');
-    if (tail) out += ' <span class="sfmlTokStr">'+esc(tail)+'</span>';
-    return escLead + out;
-  }
-
-  // speaker line: [Name] text
-  if (t.trim().startsWith('[')){
-    var rb=t.indexOf(']');
-    if (rb>0){
-      var nm=t.slice(1,rb).trim();
-      var rest=t.slice(rb+1);
-      return escLead + '<span class="sfmlTokKw">[</span><span class="sfmlTokId">'+esc(nm)+'</span><span class="sfmlTokKw">]</span>' + esc(rest);
-    }
-  }
-
-  return escLead + esc(t);
-}
-
-function __sfmlSetCaretByOffset(root, offset){
-  try{
-    var sel = window.getSelection();
-    if (!sel) return;
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    var cur = 0;
-    var node;
-    while ((node = walker.nextNode())){
-      var nlen = node.nodeValue.length;
-      if (cur + nlen >= offset){
-        var r = document.createRange();
-        r.setStart(node, Math.max(0, offset - cur));
-        r.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(r);
-        return;
-      }
-      cur += nlen;
-    }
-  }catch(e){}
-}
-
-function __sfmlGetCaretOffset(root){
-  try{
-    var sel = window.getSelection();
-    if (!sel || sel.rangeCount===0) return 0;
-    var r = sel.getRangeAt(0);
-    var pre = r.cloneRange();
-    pre.selectNodeContents(root);
-    pre.setEnd(r.endContainer, r.endOffset);
-    return pre.toString().length;
-  }catch(e){ return 0; }
-}
-
-window.__SF_SFML_ED = window.__SF_SFML_ED || { t:null, last:'' };
-
 function prodRenderSfml(sfml){
   try{
     var box=document.getElementById('prodSfmlBox');
     if (!box) return;
+
+    var raw = String(sfml||'');
+    raw = raw.split("\\r\\n").join("\\n");
+
     box.classList.remove('hide');
 
-    var raw = String(sfml||'').split("\\r\\n").join("\\n");
-    window.__SF_PROD.sfml = raw;
+    // Use Ace editor for robust mobile editing (cursor/selection/lines)
+    if (!window.ace){
+      box.innerHTML = "<div class='muted'>Editor loading…</div>";
+      return;
+    }
 
-    // Build editor shell once
-    if (!box.__sfmlInited){
-      box.__sfmlInited = true;
-      box.innerHTML = "<div class='sfmlWrap'><div id='sfmlGutter' class='sfmlGutter'></div><div id='sfmlEditor' class='sfmlEditor' contenteditable='true' spellcheck='false' autocapitalize='none' autocomplete='off' autocorrect='off'></div></div>";
+    if (!window.__SF_ACE){
+      box.innerHTML = "";
+      // Ensure Ace can find its dynamic modules if it needs them.
+      try{ ace.config.set('basePath', 'https://cdn.jsdelivr.net/npm/ace-builds@1.36.0/src-min-noconflict'); }catch(_e){}
+      window.__SF_ACE = ace.edit(box);
 
-      var ed = document.getElementById('sfmlEditor');
-      var gut = document.getElementById('sfmlGutter');
+      // Define a tiny SFML mode (local) for syntax highlighting.
+      try{
+        ace.define('ace/mode/sfml_highlight_rules', ['require','exports','module','ace/lib/oop','ace/mode/text_highlight_rules'], function(require, exports, module){
+          var oop = require('ace/lib/oop');
+          var TextHighlightRules = require('ace/mode/text_highlight_rules').TextHighlightRules;
+          var SfmlHighlightRules = function(){
+            // Keep rules very simple (no lookbehind; mobile-Safari safe)
+            this.$rules = {
+              start: [
+                { token: 'comment', regex: '^\\s*#.*$' },
 
-      function rerenderFromEditor(){
-        try{
-          var caret = __sfmlGetCaretOffset(ed);
-          var txt = __sfmlGetText(ed);
-          window.__SF_PROD.sfml = txt;
-          // rebuild highlighted HTML
-          var lines = txt.split("\n");
-          gut.textContent = lines.map(function(_l,i){ return String(i+1); }).join("\n");
-          ed.innerHTML = lines.map(function(l){ return '<div class="sfmlLine">'+__sfmlHiliteLine(l)+'</div>'; }).join('');
-          __sfmlSetCaretByOffset(ed, caret);
-        }catch(_e){}
+                // Block headers: cast:, and future blocks like meta:
+                { token: ['text','keyword'], regex: '^(\\s*)([a-z][a-z0-9_-]*:)\\s*$' },
+
+                // Scene header: highlight keyword + scene id
+                { token: ['text','keyword','text','variable','text'],
+                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(.*)$' },
+
+                // Cast mapping: "  Name: voice_id"
+                { token: ['text','variable','punctuation.operator','text','variable'],
+                  regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
+
+                // Speaker tags: highlight the name inside brackets
+                { token: ['text','paren.lparen','variable','paren.rparen'],
+                  regex: '^(\\s*)(\\[)([^\\]]+)(\\])' },
+
+                // Quoted strings (titles etc)
+                { token: 'string', regex: '"[^"]*"' },
+              ]
+            };
+            this.normalizeRules();
+          };
+          oop.inherits(SfmlHighlightRules, TextHighlightRules);
+          exports.SfmlHighlightRules = SfmlHighlightRules;
+        });
+        ace.define('ace/mode/sfml', ['require','exports','module','ace/lib/oop','ace/mode/text','ace/mode/sfml_highlight_rules'], function(require, exports, module){
+          var oop = require('ace/lib/oop');
+          var TextMode = require('ace/mode/text').Mode;
+          var SfmlHighlightRules = require('ace/mode/sfml_highlight_rules').SfmlHighlightRules;
+          var Mode = function(){
+            this.HighlightRules = SfmlHighlightRules;
+            this.$id = 'ace/mode/sfml';
+          };
+          oop.inherits(Mode, TextMode);
+          (function(){ this.lineCommentStart = '#'; }).call(Mode.prototype);
+          exports.Mode = Mode;
+        });
+      }catch(_e){}
+
+      // Theme: try the more blue-tinted variant to match StoryForge.
+      try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night_blue'); }
+      catch(_e){ try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night'); }catch(__e){} }
+
+      // Mode: SFML (prefer constructing directly so it can't silently fail)
+      try{
+        var SfmlMode = ace.require('ace/mode/sfml').Mode;
+        window.__SF_ACE.session.setMode(new SfmlMode());
+      }catch(_e){
+        try{ window.__SF_ACE.session.setMode('ace/mode/sfml'); }
+        catch(__e){ try{ window.__SF_ACE.session.setMode('ace/mode/text'); }catch(__e2){} }
       }
 
-      // input handling
-      ed.addEventListener('input', function(){
-        try{
-          if (window.__SF_SFML_ED.t) clearTimeout(window.__SF_SFML_ED.t);
-          rerenderFromEditor();
-          window.__SF_SFML_ED.t = setTimeout(function(){
-            try{
-              var v = String(window.__SF_PROD.sfml||'');
-              if (v !== window.__SF_SFML_ED.last){
-                window.__SF_SFML_ED.last = v;
-                prodSfmlSaveNow(v);
-              }
-            }catch(_e){}
-          }, 2000);
-        }catch(_e){}
+      window.__SF_ACE.setOptions({
+        fontSize: '12px',
+        showPrintMargin: false,
+        wrap: true,
+        useWorker: false,
+        displayIndentGuides: true,
+        showGutter: true,
       });
+      try{ window.__SF_ACE.renderer.setShowGutter(true); }catch(_e){}
+      window.__SF_ACE.session.setUseWrapMode(true);
+      window.__SF_ACE.session.setTabSize(2);
+      window.__SF_ACE.session.setUseSoftTabs(true);
 
-      ed.addEventListener('keydown', function(ev){
-        try{
-          if (!ev) return;
-          if (ev.key === 'Tab'){
-            ev.preventDefault();
-            document.execCommand('insertText', false, '  ');
-          }
-        }catch(_e){}
-      });
-
-      ed.addEventListener('blur', function(){
-        try{
-          var v = String(window.__SF_PROD.sfml||'');
-          if (v && v !== window.__SF_SFML_ED.last){
-            window.__SF_SFML_ED.last = v;
+      // Autosave on pause
+      window.__SF_ACE_SAVE_T = null;
+      window.__SF_ACE.on('change', function(){
+        try{ if (window.__SF_ACE_SAVE_T) clearTimeout(window.__SF_ACE_SAVE_T); }catch(_e){}
+        window.__SF_ACE_SAVE_T = setTimeout(function(){
+          try{
+            var v = String(window.__SF_ACE.getValue()||'');
+            window.__SF_PROD.sfml = v;
             prodSfmlSaveNow(v);
-          }
+          }catch(_e){}
+        }, 2000);
+      });
+      window.__SF_ACE.on('blur', function(){
+        try{
+          var v = String(window.__SF_ACE.getValue()||'');
+          window.__SF_PROD.sfml = v;
+          prodSfmlSaveNow(v);
         }catch(_e){}
       });
     }
 
-    // initial render
-    var ed2 = document.getElementById('sfmlEditor');
-    var gut2 = document.getElementById('sfmlGutter');
-    if (!ed2 || !gut2) return;
-    var lines2 = raw.split("\n");
-    gut2.textContent = lines2.map(function(_l,i){ return String(i+1); }).join("\n");
-    ed2.innerHTML = lines2.map(function(l){ return '<div class="sfmlLine">'+__sfmlHiliteLine(l)+'</div>'; }).join('');
+    // Only set if different, to preserve cursor position.
+    try{
+      if (String(window.__SF_ACE.getValue()||'') !== raw){
+        var pos = window.__SF_ACE.getCursorPosition();
+        window.__SF_ACE.setValue(raw, -1);
+        try{ window.__SF_ACE.moveCursorToPosition(pos); }catch(_e){}
+      }
+    }catch(_e){
+      window.__SF_ACE.setValue(raw, -1);
+    }
 
   }catch(e){}
 }
@@ -3128,7 +3070,7 @@ try{ bindMonitorClose(); }catch(e){}
 function renderGpus(b){
   const el = document.getElementById('monGpus');
   if (!el) return;
-  const gpus = Array.isArray(b && b.gpus) ? b.gpus : ((b && b.gpu) ? [b.gpu] : []);
+  const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
   if (!gpus.length){
     el.innerHTML = '<div class="muted">No GPU data</div>';
     return;
@@ -3179,12 +3121,12 @@ function renderGpus(b){
 function updateDockFromMetrics(m){
   const el = document.getElementById('dockStats');
   if (!el) return;
-  const b = (m && m.body) ? m.body : (m || {});
+  const b = m?.body || m || {};
   const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
   const rt = Number(b.ram_total_mb||0); const ru = Number(b.ram_used_mb||0);
   const rp = rt ? (ru/rt*100) : 0;
   const ram = rt ? rp.toFixed(1)+'%' : '-';
-  const gpus = Array.isArray(b && b.gpus) ? b.gpus : ((b && b.gpu) ? [b.gpu] : []);
+  const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
   let maxGpu = null;
   if (gpus.length){
     maxGpu = 0;
@@ -3200,7 +3142,7 @@ function updateDockFromMetrics(m){
 
 function updateMonitorFromMetrics(m){
   // m is the /api/metrics response: {status, body}
-  const b = (m && m.body) ? m.body : (m || {});
+  const b = m?.body || m || {};
   const cpu = Number(b.cpu_pct || 0);
   document.getElementById('monCpu').textContent = fmtPct(cpu);
   setBar('barCpu', cpu);
