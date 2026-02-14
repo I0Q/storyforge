@@ -2493,43 +2493,41 @@ function prodRenderSfml(sfml){
 
     function hilite(line){
       var s = String(line||'');
-      var t = s.trim();
+      // Preserve indentation (2-space blocks) in the viewer.
+      var lead = '';
+      try{ if (s.startsWith('  ')) lead = '  '; }catch(_e){}
+      var t = s.trimStart();
       if (!t) return '';
-      if (t.startsWith('#')) return span('tok-c', esc(s));
+      if (t.startsWith('#')) return esc(lead) + span('tok-c', esc(t));
 
       // SFML v1: casting block header
       if (t.toLowerCase()==='cast:'){
-        return span('tok-kw','cast') + ':';
+        return esc(lead) + span('tok-kw','cast') + ':';
       }
 
       // SFML v1: cast mapping line: Name: voice_id (indented)
       // e.g. "  Maris: lunar-violet"
-      if (t.indexOf(':') > 0 && s.startsWith('  ')){
+      if (t.indexOf(':') > 0 && lead){
         var i2 = t.indexOf(':');
         var nm = t.slice(0, i2).trim();
         var val = t.slice(i2+1).trim();
         if (nm && val){
-          return span('tok-id', esc(nm)) + span('tok-a', ':') + ' ' + span('tok-id', esc(val));
+          return esc(lead) + span('tok-id', esc(nm)) + span('tok-a', ':') + ' ' + span('tok-id', esc(val));
         }
       }
 
       // SFML v1: scene header: scene <id> "Title":
       if (t.toLowerCase().startsWith('scene ')){
-        // keep full header but highlight keyword + id and quoted title
         var rest = t.slice(5).trim();
-        var out = span('tok-kw','scene') + ' ';
-        // id is first token
+        var out = esc(lead) + span('tok-kw','scene') + ' ';
         var parts = rest.split(' ').filter(Boolean);
         if (parts.length){
           out += span('tok-id', esc(parts[0]));
           var tail = rest.slice(parts[0].length).trim();
-          if (tail){
-            // keep quotes as string-ish
-            out += ' ' + span('tok-s', esc(tail));
-          }
+          if (tail) out += ' ' + span('tok-s', esc(tail));
           return out;
         }
-        return span('tok-kw','scene') + ' ' + esc(rest);
+        return esc(lead) + span('tok-kw','scene') + ' ' + esc(rest);
       }
 
       // speaker line: [Name] text (indented or not)
@@ -2538,7 +2536,7 @@ function prodRenderSfml(sfml){
         if (rb>0){
           var nm = t.slice(1, rb).trim();
           var rest = t.slice(rb+1).trim();
-          var out = '[' + span('tok-id', esc(nm)) + ']';
+          var out = esc(lead) + '[' + span('tok-id', esc(nm)) + ']';
           if (rest) out += ' ' + esc(rest);
           return out;
         }
@@ -2579,7 +2577,7 @@ function prodRenderSfml(sfml){
         if (rb>0){
           var nm = t.slice(1, rb).trim();
           var rest = t.slice(rb+1).trim();
-          var out = '[' + span('tok-id', esc(nm)) + ']';
+          var out = esc(lead) + '[' + span('tok-id', esc(nm)) + ']';
           if (rest) out += ' ' + esc(rest);
           return out;
         }
