@@ -6381,20 +6381,28 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     cmap['NARRATOR'] = v
                     break
 
+        # Scene policy: default to 1 scene for short stories; otherwise allow up to 3.
+        story_chars = len(story_md or '')
+        story_words = len((story_md or '').split())
+        max_scenes = 1 if (story_chars < 1200 and story_words < 220) else 3
+
         prompt = {
             'format': 'SFML',
             'version': 0,
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
+            'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
                 'First emit a casting block at the top with one line per character: voice [Name] = voice_id',
-                'Then emit one or more scenes using: scene id=scene-1 title="..."',
+                'Then emit scenes using: scene id=scene-1 title="..."',
                 'For story lines, use speaker lines: [Name] text',
                 'Every [Name] used in the body MUST have a corresponding voice [Name] mapping at the top.',
                 'Always include narrator as: voice [Narrator] = <voice_id> and use [Narrator] lines.',
                 'Do not invent voice ids; only use voice ids from casting_map values.',
                 'Keep each speaker line to a single line; split long paragraphs into multiple lines.',
+                'SCENES: If max_scenes=1, output exactly ONE scene (scene-1).',
+                'SCENES: Otherwise, output at most max_scenes scenes; do not create scenes for minor mood shifts.',
                 'Do not output JSON.',
             ],
             'example': (
