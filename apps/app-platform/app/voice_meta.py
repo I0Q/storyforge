@@ -13,6 +13,15 @@ import requests
 from .db import db_connect, db_init
 
 
+# Curated hints for Tortoise named voices.
+# We should prefer explicit provider metadata when available, but Tortoise doesn't provide it.
+_TORTOISE_GENDER_HINTS: dict[str, str] = {
+    # Known StoryForge tortoise refs (best-effort; can be adjusted as we learn)
+    'snakes': 'male',
+    'freeman': 'male',
+}
+
+
 def _now() -> int:
     return int(time.time())
 
@@ -339,8 +348,9 @@ def analyze_voice_metadata(
     }
 
     # LLM: use measured audio features + known engine params.
+    # IMPORTANT: We do NOT ask the model to decide gender; we keep it unknown unless sourced from provider hints.
     prompt = {
-        "task": "Label voice traits for a TTS voice using the provided measured audio features and engine parameters. If unknown, use 'unknown' or '' (do not invent accents).",
+        "task": "Label voice traits for a TTS voice using the provided measured audio features and engine parameters. If unknown, use 'unknown' or '' (do not invent accents). Do NOT guess gender.",
         "engine": engine,
         "voice_ref": voice_ref,
         "tortoise": {
@@ -353,7 +363,7 @@ def analyze_voice_metadata(
         "output": {
             "format": "STRICT_JSON",
             "schema": {
-                "gender": "female|male|neutral|unknown",
+                "gender": "unknown (do not guess)",
                 "age": "child|teen|adult|elder|unknown",
                 "pitch": "low|medium|high|unknown",
                 "tone": "array of short tags like warm, bright, calm, stern (max 8)",
@@ -489,9 +499,21 @@ def analyze_voice_metadata(
         except Exception:
             pass
 
-        # Prefer explicit tortoise_gender if provided
-        if tortoise_gender and out_traits["gender"] in ("", "unknown"):
-            out_traits["gender"] = _norm(tortoise_gender, 16).lower()
+        # Gender: do NOT infer from pitch; it's too error-prone.
+        # Only set gender when we have a strong source:
+        #  - explicit tortoise_gender from UI/provider
+        #  - curated tortoise voice hint
+        out_traits["gender"] = "unknown"
+        if tortoise_gender:
+            out_traits["gender"] = _norm(tortoise_gender, 16).lower() or "unknown"
+        elif engine == 'tortoise':
+            try:
+                k = (tortoise_voice or voice_ref or '').strip().lower()
+                g = _TORTOISE_GENDER_HINTS.get(k)
+                if g:
+                    out_traits['gender'] = str(g).strip().lower()[:16]
+            except Exception:
+                pass
 
         # Persist
         _set_voice_traits_json(voice_id, out_traits, measured=measured)
