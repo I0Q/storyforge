@@ -1632,9 +1632,11 @@ function renderJobs(jobs){
 
   el.innerHTML = jobs.map(job=>{
     const total = Number(job.total_segments||0);
-    const done = Number(job.segments_done||0);
-    const pct = total ? Math.max(0, Math.min(100, (done/total*100))) : 0;
+    let done = Number(job.segments_done||0);
     const isDone = (String(job.state||'') === 'completed' || String(job.state||'') === 'failed');
+    // Defensive: if worker only reported total (or Safari missed updates), show 100% on terminal states.
+    if (isDone && total && (!done || done < 0)) done = total;
+    const pct = total ? Math.max(0, Math.min(100, (done/total*100))) : 0;
     const progText = total ? `${done} / ${total} (${pct.toFixed(0)}%)` : '-';
     const progBar = (!isDone && total) ? `<div class='bar small' style='margin-top:6px'><div style='width:${pct.toFixed(1)}%'></div></div>` : '';
 
