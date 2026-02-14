@@ -2130,24 +2130,34 @@ function loadVoices(){
         }
 
         var chips = '';
+        var sep = "<span style='color:rgba(255,255,255,0.18);margin:0 4px'>•</span>";
+
+        // gender chip (no label)
         var g = String(vt.gender||'unknown');
-        if (g && g!=='unknown') chips += chip('gender ' + g, g==='male'?'male':(g==='female'?'female':''));
+        if (g && g!=='unknown') chips += chip(String(g), g==='male'?'male':(g==='female'?'female':''));
 
+        // age chip (no label)
         var a = String(vt.age||'unknown');
-        if (a && a!=='unknown') chips += chip('age ' + a, 'age-' + a);
+        if (a && a!=='unknown') chips += sep + chip(String(a), 'age-' + a);
 
+        // pitch chip
         var pitch = String(vt.pitch||'');
-        if (pitch && pitch!=='unknown') chips += chip('pitch ' + pitch, '');
+        if (pitch && pitch!=='unknown') chips += sep + chip('pitch ' + pitch, '');
 
+        // f0 chip
         if (f && f.f0_hz_median!=null){
-          chips += chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
+          chips += sep + chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
         }
 
+        // tone chips (no "tone" label)
         if (Array.isArray(vt.tone) && vt.tone.length){
-          for (var i=0;i<Math.min(3, vt.tone.length);i++) chips += chip('tone ' + String(vt.tone[i]), '');
+          for (var i=0;i<Math.min(3, vt.tone.length);i++){
+            chips += sep + chip(String(vt.tone[i]), '');
+          }
         }
 
-        if (v.voice_ref) chips += chip('ref ' + String(v.voice_ref), '');
+        // ref chip
+        if (v.voice_ref) chips += sep + chip('ref ' + String(v.voice_ref), '');
 
         traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
       }catch(e){ traitsHtml=''; }
