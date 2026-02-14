@@ -216,11 +216,22 @@ def analyze_voice_metadata(
             txt = ""
         if not txt:
             return {"ok": False, "error": "llm_empty", "measured": measured}
-        # Extract JSON
+        # Extract JSON (handle ```json fenced blocks and trailing text)
         import re
 
-        m = re.search(r"\{[\s\S]*\}\s*$", txt)
-        raw = m.group(0) if m else txt
+        raw = ''
+        try:
+            # Prefer outermost {...} anywhere in the content
+            i0 = txt.find('{')
+            i1 = txt.rfind('}')
+            if i0 != -1 and i1 != -1 and i1 > i0:
+                raw = txt[i0 : i1 + 1]
+            else:
+                m = re.search(r"\{[\s\S]*\}", txt)
+                raw = m.group(0) if m else txt
+        except Exception:
+            raw = txt
+
         try:
             traits = json.loads(raw)
         except Exception:
