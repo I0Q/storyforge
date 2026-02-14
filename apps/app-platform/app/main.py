@@ -1746,6 +1746,14 @@ function renderProviders(providers){
 
       "<div class='provSection'>LLM service</div>"+
       "<div class='provHint'>Choose a model and which GPU(s) it can use.</div>"+
+      "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model' style='width:220px;max-width:100%;min-width:0'>"+
+          enabledModels.map(function(m){
+            var sel = (String(m.id)===llmModel) ? 'selected' : '';
+            return "<option value='"+escAttr(m.id)+"' "+sel+">"+escapeHtml(m.label)+"</option>";
+          }).join('')+
+        "</select>"+
+        "<div id='llmReload_"+escAttr(id)+"' class='muted hide' style='margin-top:8px'>Reloading LLM…</div>"+
+      "</div>"+
       "<div class='k'>LLM GPUs</div><div>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"'/>"+
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
@@ -1756,14 +1764,6 @@ function renderProviders(providers){
             return "<button type='button' class='"+cls+"' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"'>GPU "+n+"</button>";
           }).join('')+
         "</div>"+
-      "</div>"+
-      "<div class='k'>LLM model</div><div><select data-pid='"+escAttr(id)+"' data-k='llm_model' style='width:220px;max-width:100%;min-width:0'>"+
-          enabledModels.map(function(m){
-            var sel = (String(m.id)===llmModel) ? 'selected' : '';
-            return "<option value='"+escAttr(m.id)+"' "+sel+">"+escapeHtml(m.label)+"</option>";
-          }).join('')+
-        "</select>"+
-        "<div id='llmReload_"+escAttr(id)+"' class='muted hide' style='margin-top:8px'>Reloading LLM…</div>"+
       "</div>"+
     "</div>";
 
