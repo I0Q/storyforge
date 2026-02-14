@@ -136,7 +136,7 @@ def register_library_viewer(app: FastAPI) -> None:
                 f"<div class='cname'>{html.escape(nm)}{pill}</div>"
                 f"{desc_html}"
                 "</div></div>"
-                "</div></div>"
+                "</div></div></div>"
             )
 
         chars_html = (
