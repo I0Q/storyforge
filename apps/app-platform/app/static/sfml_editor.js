@@ -64,8 +64,6 @@
     var t = '';
     try{ t = ed && ed.innerText ? String(ed.innerText) : ''; }catch(e){ t = ''; }
     t = normalizeNewlines(t);
-    // contenteditable often adds trailing newline
-    if (t.length && t.charAt(t.length-1) === '\n') t = t.slice(0, -1);
     return t;
   }
 
@@ -152,19 +150,17 @@
     return leadEsc + '<span class="sfmlTokBase">' + escHtml(t) + '</span>';
   }
 
-  function render(root, gut, ed, text){
+  function render(ed, text){
     text = normalizeNewlines(text);
     var lines = text.split('\n');
-
-    // gutter
-    var g = [];
-    for (var i=0;i<lines.length;i++) g.push(String(i+1));
-    gut.textContent = g.join('\n');
 
     // highlighted html
     var h = [];
     for (var j=0;j<lines.length;j++){
-      h.push('<div class="sfmlLine">' + hiliteLine(lines[j]) + '</div>');
+      var ln = lines[j];
+      // ensure empty lines remain "editable" (some browsers collapse empty blocks)
+      var body = ln.length ? hiliteLine(ln) : '<span class="sfmlTokBase"><br></span>';
+      h.push('<div class="sfmlLine">' + body + '</div>');
     }
     ed.innerHTML = h.join('');
   }
@@ -179,9 +175,6 @@
     var root = document.createElement('div');
     root.className = 'sfmlEditorRoot';
 
-    var gut = document.createElement('div');
-    gut.className = 'sfmlEditorGutter';
-
     var ed = document.createElement('div');
     ed.className = 'sfmlEditorPane';
     ed.setAttribute('contenteditable', 'true');
@@ -190,14 +183,12 @@
     ed.setAttribute('autocomplete', 'off');
     ed.setAttribute('autocorrect', 'off');
 
-    root.appendChild(gut);
     root.appendChild(ed);
 
     hostEl.innerHTML = '';
     hostEl.appendChild(root);
 
     this.root = root;
-    this.gut = gut;
     this.ed = ed;
 
     var self = this;
@@ -205,7 +196,7 @@
     function rerenderFromDom(){
       var caret = getCaretOffset(ed);
       var txt = getTextFromEditor(ed);
-      render(root, gut, ed, txt);
+      render(ed, txt);
       setCaretByOffset(ed, caret);
       return txt;
     }
@@ -243,10 +234,23 @@
       try{
         ev = ev || window.event;
         if (!ev) return;
+
         if (ev.key === 'Tab'){
           ev.preventDefault();
           // insert two spaces
           if (document.execCommand) document.execCommand('insertText', false, '  ');
+          return;
+        }
+
+        if (ev.key === 'Enter'){
+          // iOS Safari can be flaky inserting new block nodes in a highlighted contenteditable.
+          // Force a literal newline, then our input handler will re-render into line DIVs.
+          ev.preventDefault();
+          if (document.execCommand) {
+            // insertText is more reliable than insertHTML
+            document.execCommand('insertText', false, '\n');
+          }
+          return;
         }
       }catch(_e){}
     });
@@ -254,7 +258,7 @@
 
   Editor.prototype.setValue = function(text){
     text = normalizeNewlines(text);
-    render(this.root, this.gut, this.ed, text);
+    render(this.ed, text);
   };
 
   Editor.prototype.getValue = function(){

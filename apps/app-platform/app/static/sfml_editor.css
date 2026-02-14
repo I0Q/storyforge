@@ -3,20 +3,7 @@
 */
 
 .sfmlEditorRoot{
-  display:grid;
-  grid-template-columns:44px 1fr;
-  gap:12px;
   padding:10px 12px;
-}
-
-.sfmlEditorGutter{
-  color:rgba(168,179,216,0.55);
-  text-align:right;
-  user-select:none;
-  white-space:pre;
-  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
-  font-size:12px;
-  line-height:1.35;
 }
 
 .sfmlEditorPane{
@@ -28,9 +15,27 @@
   font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
   font-size:12px;
   line-height:1.35;
+  counter-reset: sfml_ln;
 }
 
-.sfmlLine{display:block;}
+/* Each line is a block; wrapped text stays within the same line (no extra numbers) */
+.sfmlLine{
+  display:block;
+  position:relative;
+  padding-left:56px; /* gutter width + gap */
+  min-height:1.35em;
+}
+
+.sfmlLine:before{
+  counter-increment: sfml_ln;
+  content: counter(sfml_ln);
+  position:absolute;
+  left:0;
+  width:44px;
+  text-align:right;
+  color:rgba(168,179,216,0.55);
+  user-select:none;
+}
 
 /* tokens */
 .sfmlTokBase{color:var(--text);}
