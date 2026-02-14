@@ -1189,9 +1189,28 @@ function safeJson(s){
   try{ if(!s) return null; return JSON.parse(String(s)); }catch(e){ return null; }
 }
 
+function pauseJobsStream(ms){
+  try{
+    ms = parseInt(String(ms||'0'),10) || 0;
+    window.__SF_JOBS_STREAM_PAUSED_UNTIL = Date.now() + Math.max(0, ms);
+    try{ if (jobsES){ jobsES.close(); jobsES=null; } }catch(e){}
+    if (ms>0){
+      setTimeout(function(){
+        try{
+          if (Date.now() >= (window.__SF_JOBS_STREAM_PAUSED_UNTIL||0)) startJobsStream();
+        }catch(e){}
+      }, ms+50);
+    }
+  }catch(e){}
+}
+
 function jobPlay(jobId, url){
   try{
     if (!url || !jobId) return;
+
+    // Jobs page uses SSE and re-renders the list, which can kill inline audio.
+    // Pause the jobs stream while audio is playing.
+    try{ pauseJobsStream(5*60*1000); }catch(e){}
 
     // Close any other open players
     try{
@@ -1217,6 +1236,8 @@ function jobPlay(jobId, url){
     a.controls=true;
     a.style.width='100%';
     a.src=String(url);
+    a.onended = function(){ try{ window.__SF_JOBS_STREAM_PAUSED_UNTIL = 0; startJobsStream(); }catch(e){} };
+    a.onpause = function(){ try{ /* allow manual pause without restarting immediately */ }catch(e){} };
 
     box.appendChild(a);
     card.appendChild(box);
@@ -1343,6 +1364,7 @@ function loadHistory(){
 // Live job updates
 let jobsES = null;
 function startJobsStream(){
+  try{ if ((window.__SF_JOBS_STREAM_PAUSED_UNTIL||0) > Date.now()) return; }catch(e){}
   try{ if (jobsES){ jobsES.close(); jobsES=null; } }catch(e){}
   try{
     jobsES = new EventSource('/api/jobs/stream');
