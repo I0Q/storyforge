@@ -398,8 +398,8 @@ VOICE_EDIT_EXTRA_CSS = base_css("""\
     .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);font-weight:950;font-size:12px;}
     .chip.bad{border-color:rgba(255,90,90,0.35);color:var(--bad);}
     .chip.ok{border-color:rgba(80,200,120,0.35);}
-    .chip.male{border-color:rgba(80,160,255,0.45);background:rgba(80,160,255,0.14);}
-    .chip.female{border-color:rgba(255,120,200,0.45);background:rgba(255,120,200,0.14);}
+    .chip.male{border-color:rgba(80,160,255,0.75);background:rgba(80,160,255,0.26);color:rgba(210,235,255,0.98);}
+    .chip.female{border-color:rgba(255,120,200,0.75);background:rgba(255,120,200,0.26);color:rgba(255,225,245,0.98);}
     .chip.age-child{border-color:rgba(255,210,80,0.45);background:rgba(255,210,80,0.14);}
     .chip.age-teen{border-color:rgba(160,120,255,0.45);background:rgba(160,120,255,0.14);}
     .chip.age-adult{border-color:rgba(80,200,120,0.45);background:rgba(80,200,120,0.12);}
@@ -2193,7 +2193,6 @@ function loadVoices(){
         }
 
         var chips = '';
-        var sep = "<span style='color:rgba(255,255,255,0.18);margin:0 4px'>•</span>";
 
         // gender chip (no label)
         var g = String(vt.gender||'unknown');
@@ -2201,26 +2200,22 @@ function loadVoices(){
 
         // age chip (no label)
         var a = String(vt.age||'unknown');
-        if (a && a!=='unknown') chips += sep + chip(String(a), 'age-' + a);
-
-        // pitch chip
-        var pitch = String(vt.pitch||'');
-        if (pitch && pitch!=='unknown') chips += sep + chip('pitch ' + pitch, '');
-
-        // f0 chip
-        if (f && f.f0_hz_median!=null){
-          chips += sep + chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
-        }
+        if (a && a!=='unknown') chips += chip(String(a), 'age-' + a);
 
         // tone chips (no "tone" label)
         if (Array.isArray(vt.tone) && vt.tone.length){
-          for (var i=0;i<Math.min(3, vt.tone.length);i++){
-            chips += sep + chip(String(vt.tone[i]), '');
-          }
+          for (var i=0;i<Math.min(3, vt.tone.length);i++) chips += chip(String(vt.tone[i]), '');
         }
 
-        // ref chip
-        if (v.voice_ref) chips += sep + chip('ref ' + String(v.voice_ref), '');
+        // pitch/f0/ref chips
+        var pitch = String(vt.pitch||'');
+        if (pitch && pitch!=='unknown') chips += chip('pitch ' + pitch, '');
+
+        if (f && f.f0_hz_median!=null){
+          chips += chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
+        }
+
+        if (v.voice_ref) chips += chip('ref ' + String(v.voice_ref), '');
 
         traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
       }catch(e){ traitsHtml=''; }
