@@ -1720,7 +1720,7 @@ function renderProviders(providers){
     "</div>";
 
     var body = "<div class='kvs provKvs' style='margin-top:10px'>"+
-      (kind==='tinybox' ? ("<div class='k'>Gateway base</div><div><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' style='width:100%;min-width:0' /></div>") : "")+
+      (kind==='tinybox' ? ("<div class='k'>Gateway</div><div style='min-width:0'><input data-pid='"+escAttr(id)+"' data-k='gateway_base' value='"+escAttr(gatewayBase)+"' placeholder='http://159.65.251.41:8791' style='display:block;max-width:100%;width:100%;box-sizing:border-box;min-width:0' /></div>") : "")+
       "<div class='k'>System monitor</div><div><label class='switch'><input type='checkbox' data-pid='"+escAttr(id)+"' data-k='monitoring_enabled' "+(monOn?'checked':'')+" onchange='onProvMonitorToggle(this); event.stopPropagation();'/><span class='slider'></span></label></div>"+
 
       "<div class='provSection'>Voice service</div>"+
