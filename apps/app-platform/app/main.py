@@ -5609,6 +5609,111 @@ def api_library_story_update(story_id: str, payload: dict[str, Any]):
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
+@app.post('/api/library/story/{story_id}/identify_characters')
+def api_library_story_identify_characters(story_id: str, payload: dict[str, Any] | None = None):
+    """Use the Tinybox LLM service to extract characters from a story and persist them."""
+    try:
+        story_id = validate_story_id(story_id)
+        conn = db_connect()
+        try:
+            db_init(conn)
+            existing = get_story_db(conn, story_id)
+        finally:
+            conn.close()
+
+        title = str((existing.get('meta') or {}).get('title') or story_id)
+        story_md = str(existing.get('story_md') or '')
+
+        # Build prompt (no system role for gemma/vLLM)
+        instr = (
+            "You are extracting story characters for a story library. "
+            "Return STRICT JSON only, no markdown. "
+            "Schema: {\"characters\": [{\"name\": str, \"role\": str, \"description\": str}]}. "
+            "Include only characters that matter to the plot. 2-8 characters. "
+            "Use short descriptions. Role examples: protagonist, antagonist, narrator, side character. "
+        )
+
+        # Limit story to keep token usage bounded.
+        s = story_md
+        if len(s) > 8000:
+            s = s[:8000]
+
+        req = {
+            'model': 'google/gemma-2-9b-it',
+            'messages': [
+                {
+                    'role': 'user',
+                    'content': instr + "\n\nTITLE: " + title + "\n\nSTORY:\n" + s,
+                }
+            ],
+            'max_tokens': 600,
+            'temperature': 0.2,
+        }
+
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
+        j = None
+        try:
+            j = r.json()
+        except Exception:
+            j = None
+        if not isinstance(j, dict):
+            return {'ok': False, 'error': 'llm_bad_response'}
+
+        # Parse completion
+        txt = ''
+        try:
+            choices = j.get('choices') or []
+            if choices and isinstance(choices, list):
+                msg = choices[0].get('message') if isinstance(choices[0], dict) else None
+                if isinstance(msg, dict) and msg.get('content'):
+                    txt = str(msg.get('content') or '')
+                elif choices[0].get('text'):
+                    txt = str(choices[0].get('text') or '')
+        except Exception:
+            txt = ''
+        txt = txt.strip()
+
+        # Extract JSON object from text (best-effort)
+        try:
+            i1 = txt.find('{')
+            i2 = txt.rfind('}')
+            if i1 >= 0 and i2 > i1:
+                txt2 = txt[i1 : i2 + 1]
+            else:
+                txt2 = txt
+            obj = json.loads(txt2)
+        except Exception as e:
+            return {'ok': False, 'error': f'bad_json_from_llm: {str(e)[:120]}', 'raw': txt[:400]}
+
+        chars = obj.get('characters') if isinstance(obj, dict) else None
+        if not isinstance(chars, list):
+            return {'ok': False, 'error': 'bad_characters_shape'}
+
+        # Normalize
+        out_chars: list[dict[str, Any]] = []
+        for c in chars:
+            if not isinstance(c, dict):
+                continue
+            name = str(c.get('name') or '').strip()
+            if not name:
+                continue
+            role = str(c.get('role') or '').strip()[:60]
+            desc = str(c.get('description') or '').strip()[:400]
+            out_chars.append({'name': name, 'role': role, 'description': desc})
+        out_chars = out_chars[:12]
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            upsert_story_db(conn, story_id, title, story_md, out_chars)
+        finally:
+            conn.close()
+
+        return {'ok': True, 'characters': out_chars}
+    except Exception as e:
+        return {'ok': False, 'error': f'identify_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
 @app.delete('/api/library/story/{story_id}')
 def api_library_story_delete(story_id: str):
     try:

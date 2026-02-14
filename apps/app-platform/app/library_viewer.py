@@ -142,6 +142,24 @@ function toastShowNow(msg, kind, ms){{
   try{{ window.__sfToastInit && window.__sfToastInit(); }}catch(e){{}}
 }}
 
+function identifyCharacters(){{
+  try{{
+    var out=$('charsOut');
+    if (out) out.textContent='Identifying…';
+    fetch('/api/library/story/' + encodeURIComponent(String(window.__STORY_ID||'')) + '/identify_characters', {{method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'include', body: JSON.stringify({{}})}})
+      .then(function(r){{ return r.json().catch(function(){{ return {{ok:false,error:'bad_json'}}; }}); }})
+      .then(function(j){{
+        if (!j || !j.ok) throw new Error((j&&j.error)||'identify_failed');
+        try{{ toastShowNow('Characters updated', 'ok', 1800); }}catch(e){{}}
+        window.location.reload();
+      }})
+      .catch(function(e){{
+        if (out) out.innerHTML = '<div class="err">'+String(e&&e.message?e.message:e)+'</div>';
+        try{{ toastShowNow('Identify failed', 'err', 2200); }}catch(_e){{}}
+      }});
+  }}catch(e){{}}
+}}
+
 function __sfToastInit(){{
   // Create container once
   var el = document.getElementById('sfToast');
@@ -397,7 +415,11 @@ if ($('mdCode')) {{
                 "",
                 "<div id='vp-chars' class='vPane hide'>",
                 "  <div class='card'>",
-                "    <div class='fw950'>Characters</div>",
+                "    <div class='row rowBetweenCenter'>",
+                "      <div class='fw950'>Characters</div>",
+                "      <button class='secondary' type='button' onclick=\"identifyCharacters()\">Identify characters</button>",
+                "    </div>",
+                "    <div id='charsOut' class='muted' style='margin-top:8px'></div>",
                 f"    {chars_html}",
                 "  </div>",
                 "</div>",
