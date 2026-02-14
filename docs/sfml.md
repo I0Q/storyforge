@@ -37,13 +37,14 @@ This document defines **SFML v0**.
 
 ---
 
-## 2) Core directives
+## 2) Core directives / line types
 
-SFML v0 supports these directives/line types:
+SFML v0 supports these line types:
 
-- `scene` — declares a new scene
-- `voice` — declares a casting mapping (character → voice_id)
-- **speaker lines** — dialogue/narration lines tagged with `[Character]`
+- **Casting block delimiters**: `<<CAST>>` and `<<ENDCAST>>`
+- **Casting mappings**: `voice [Name] = voice_id`
+- **Scene tags**: `<<SCENE id=... title="...">>`
+- **Speaker lines**: `[Name] text`
 
 ---
 
@@ -75,9 +76,11 @@ voice [<Character>] = <voice_id>
 
 ### Example
 ```
+<<CAST>>
 voice [Narrator] = terracotta-glow
 voice [Maris] = lunar-violet
 voice [Ocean] = solar-sands
+<<ENDCAST>>
 ```
 
 ---

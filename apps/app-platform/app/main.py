@@ -6480,6 +6480,29 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         txt = re.sub(r'^```[a-zA-Z0-9_-]*\s*', '', txt).strip()
         txt = re.sub(r'```\s*$', '', txt).strip()
 
+        # Normalize common tag mistakes so exported SFML is consistent.
+        # (LLMs sometimes emit single chevrons or forget the closing '>>'.)
+        try:
+            lines = []
+            for ln in (txt or '').splitlines():
+                t = (ln or '').strip()
+                # CAST delimiters
+                if t.upper() in ('<CAST>', 'CAST', '<<CAST>'):
+                    ln = '<<CAST>>'
+                elif t.upper() in ('<ENDCAST>', 'ENDCAST', '<<ENDCAST>'):
+                    ln = '<<ENDCAST>>'
+
+                # SCENE tag
+                if t.upper().startswith('<SCENE') and not t.upper().startswith('<<SCENE'):
+                    ln = '<<' + t[1:]
+                if t.upper().startswith('<<SCENE') and not t.endswith('>>'):
+                    # ensure closing
+                    ln = (ln.rstrip('>') + '>>')
+                lines.append(ln)
+            txt = '\n'.join(lines).strip()
+        except Exception:
+            pass
+
         # Cap size
         if len(txt) > 20000:
             txt = txt[:20000]
