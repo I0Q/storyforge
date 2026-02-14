@@ -523,11 +523,11 @@ function loadAudio(){{
         var items = j.items || [];
         if (!items.length){{ if (out) out.innerHTML = '<div class="muted">No audio yet. Produce a render, then Save from Jobs.</div>'; return; }}
         // stash items to avoid brittle quoting in inline onclick
-        try{ window.__AUDIO_ITEMS = items; }catch(e){}
+        try{{ window.__AUDIO_ITEMS = items; }}catch(e){{}}
 
         var html='';
-        for (var i=0;i<items.length;i++){
-          var it=items[i]||{};
+        for (var i=0;i<items.length;i++){{
+          var it=items[i]||{{}};
           var label=String(it.label||'');
           var url=String(it.mp3_url||'');
           html += "<div class='audioItem'>"+
@@ -537,41 +537,41 @@ function loadAudio(){{
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+
             "</div>"+
           "</div>";
-        }
+        }}
         if (out) out.innerHTML = html;
       }})
       .catch(function(e){{ if (out) out.innerHTML = '<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; }});
   }}catch(e){{}}
 }}
 
-function playAudioByIndex(i){
-  try{
+function playAudioByIndex(i){{
+  try{{
     i = parseInt(String(i||'0'),10) || 0;
     var items = window.__AUDIO_ITEMS || [];
     var it = (items && items[i]) ? items[i] : null;
     var url = String((it && it.mp3_url) || '');
     playAudio(url);
-  }catch(e){}
-}
+  }}catch(e){{}}
+}}
 
-function playAudio(url){
-  try{
+function playAudio(url){{
+  try{{
     url = String(url||'');
     if (!url) return;
     var out=$('audioOut');
     if (!out) return;
     // Replace existing player
-    try{
+    try{{
       var olds = out.querySelectorAll('audio');
-      for (var i=0;i<olds.length;i++){ try{ olds[i].pause(); }catch(_e){} try{ olds[i].remove(); }catch(_e){} }
-    }catch(_e){}
+      for (var i=0;i<olds.length;i++){{ try{{ olds[i].pause(); }}catch(_e){{}} try{{ olds[i].remove(); }}catch(_e){{}} }}
+    }}catch(_e){{}}
 
     var a = document.createElement('audio');
     a.controls=true; a.style.width='100%'; a.src=url;
     out.insertBefore(a, out.firstChild);
-    try{ a.play(); }catch(e){}
-  }catch(e){}
-}
+    try{{ a.play(); }}catch(e){{}}
+  }}catch(e){{}}
+}}
 
 (function initVTab(){{
   try{{
