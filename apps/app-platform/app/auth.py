@@ -141,6 +141,13 @@ def register_passphrase_auth(app: FastAPI) -> None:
                 if got and hmac.compare_digest(got, token):
                     return await call_next(request)
 
+        # Allow deploy-status hooks when token is provided (used by CI/CD).
+        if request.url.path.startswith('/api/deploy/'):
+            dtok = (os.environ.get('SF_DEPLOY_TOKEN') or '').strip()
+            got = (request.headers.get('x-sf-deploy-token') or '').strip()
+            if dtok and got and hmac.compare_digest(got, dtok):
+                return await call_next(request)
+
         # For API calls, always return JSON so the frontend can handle it.
         if request.url.path.startswith('/api/'):
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
