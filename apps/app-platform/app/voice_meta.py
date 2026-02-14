@@ -364,7 +364,7 @@ def analyze_voice_metadata(
             "format": "STRICT_JSON",
             "schema": {
                 "gender": "unknown (do not guess)",
-                "age": "child|adult|elder|unknown",
+                "age": "child|teen|adult|elder|unknown",
                 "pitch": "low|medium|high|unknown",
                 "tone": "array of short tags like warm, bright, calm, stern (max 8)",
                 "accent": "string or ''",
@@ -474,7 +474,7 @@ def analyze_voice_metadata(
         # Start with LLM suggestions
         out_traits = {
             "gender": _norm(traits.get("gender"), 16).lower() or "unknown",
-            "age": (lambda a: (a if a in ('child','adult','elder') else 'unknown'))(_norm(traits.get("age"), 16).lower() or "unknown"),
+            "age": (lambda a: (a if a in ('child','teen','adult','elder') else 'unknown'))(_norm(traits.get("age"), 16).lower() or "unknown"),
             "pitch": _norm(traits.get("pitch"), 16).lower() or "unknown",
             "accent": _norm(traits.get("accent"), 80),
             "tone": [],
