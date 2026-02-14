@@ -2550,10 +2550,16 @@ function __sfmlHiliteLine(line){
   // comment
   if (t.trim().startsWith('#')) return escLead + '<span class="sfmlTokComment">'+esc(t)+'</span>';
 
-  // block header (e.g., cast:)
-  if (/^[a-z][a-z0-9_-]*:\s*$/i.test(t.trim())){
-    return escLead + '<span class="sfmlTokKw">'+esc(t.trim())+'</span>';
-  }
+  // block header (e.g., cast:, meta:, settings:)
+  try{
+    var hh = t.trim();
+    if (hh.endsWith(':')){
+      var nm0 = hh.slice(0, -1);
+      if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(nm0)){
+        return escLead + '<span class="sfmlTokKw">'+esc(hh)+'</span>';
+      }
+    }
+  }catch(_e){}
 
   // cast mapping: Name: voice_id (indented)
   if (lead && t.indexOf(':')>0){
