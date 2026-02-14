@@ -6189,6 +6189,96 @@ def _require_job_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail='unauthorized')
 
 
+@app.post('/api/jobs/claim')
+def api_jobs_claim(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Claim the oldest queued job for a kind.
+
+    Used by external workers (Tinybox). This atomically transitions a job from
+    queued -> running and sets started_at.
+
+    Auth: x-sf-job-token
+    Payload: {kind: "produce_audio"}
+    """
+    _require_job_token(request)
+    try:
+        kind = str((payload or {}).get('kind') or '').strip()
+        if not kind:
+            return {'ok': False, 'error': 'missing_kind'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            # Atomic claim (Postgres): select + lock one queued job
+            cur.execute('BEGIN')
+            cur.execute(
+                "SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at "
+                "FROM jobs WHERE state='queued' AND kind=%s ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED",
+                (kind,),
+            )
+            row = cur.fetchone()
+            if not row:
+                conn.commit()
+                return {'ok': True, 'job': None}
+
+            job_id = str(row[0])
+            now = int(time.time())
+            cur.execute("UPDATE jobs SET state=%s, started_at=%s, updated_at=%s WHERE id=%s", ('running', now, now, job_id))
+            conn.commit()
+
+            job = {
+                'id': row[0],
+                'title': row[1],
+                'kind': row[2] or '',
+                'meta_json': row[3] or '',
+                'state': 'running',
+                'started_at': now,
+                'finished_at': int(row[6] or 0),
+                'total_segments': int(row[7] or 0),
+                'segments_done': int(row[8] or 0),
+                'mp3_url': row[9] or '',
+                'sfml_url': row[10] or '',
+                'created_at': int(row[11] or 0),
+            }
+            return {'ok': True, 'job': job}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {'ok': False, 'error': f'claim_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.get('/api/production/sfml/{story_id}')
+def api_production_sfml(request: Request, story_id: str):
+    """Fetch persisted SFML for a story (worker use).
+
+    Auth: x-sf-job-token
+    """
+    _require_job_token(request)
+    try:
+        sid = str(story_id or '').strip()
+        if not sid:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute('SELECT id, title, sfml_text FROM sf_stories WHERE id=%s', (sid,))
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return {'ok': False, 'error': 'story_not_found'}
+        title = str(row[1] or sid)
+        sfml = str(row[2] or '')
+        if not sfml.strip():
+            return {'ok': False, 'error': 'missing_sfml'}
+        return {'ok': True, 'story_id': sid, 'title': title, 'sfml_text': sfml}
+    except Exception as e:
+        return {'ok': False, 'error': f'sfml_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
 @app.post('/api/jobs/update')
 def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Update a job record (used by external workers like Tinybox).
