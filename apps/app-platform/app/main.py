@@ -2542,16 +2542,23 @@ function prodRenderSfml(sfml){
             this.$rules = {
               start: [
                 { token: 'comment', regex: '^\\s*#.*$' },
-                { token: 'keyword', regex: '^\\s*cast:\\s*$' },
-                // cast mapping: "  Name: voice_id"
-                { token: ['text','variable','punctuation.operator','text','constant.language'],
+
+                // Block headers: cast:, and future blocks like meta:
+                { token: ['text','keyword'], regex: '^(\\s*)([a-z][a-z0-9_-]*:)\\s*$' },
+
+                // Cast mapping: "  Name: voice_id"
+                { token: ['text','variable.parameter','punctuation.operator','text','constant.language'],
                   regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
-                // scene keyword (keep it simple/robust)
-                { token: ['text','keyword'], regex: '^(\\s*)(scene)(?=\\s)' },
-                // quoted title strings (simple; avoid tricky escapes that break tokenizer)
-                { token: 'string', regex: '"[^"]*"' },
-                // speaker tags
+
+                // Scene header: scene <id> "Title":
+                { token: ['text','keyword','text','constant.numeric','string'],
+                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(\\s+"[^"]*"\\s*:?)?\\s*$' },
+
+                // Speaker tags: [Name]
                 { token: 'variable.parameter', regex: '\\[[^\\]]+\\]' },
+
+                // Quoted strings (fallback)
+                { token: 'string', regex: '"[^"]*"' },
               ]
             };
             this.normalizeRules();
