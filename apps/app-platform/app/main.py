@@ -5958,6 +5958,13 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                     },
                 )
             except Exception as e:
+                det = ''
+                try:
+                    import traceback
+
+                    det = traceback.format_exc(limit=6)
+                except Exception:
+                    det = ''
                 _job_patch(
                     job_id,
                     {
@@ -5965,7 +5972,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                         'finished_at': int(time.time()),
                         'segments_done': 0,
                         'mp3_url': '',
-                        'sfml_url': f"error: {type(e).__name__}: {str(e)[:200]}",
+                        'sfml_url': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
                     },
                 )
 
