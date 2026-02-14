@@ -1189,19 +1189,38 @@ function safeJson(s){
   try{ if(!s) return null; return JSON.parse(String(s)); }catch(e){ return null; }
 }
 
-function jobPlay(url){
+function jobPlay(jobId, url){
   try{
-    if (!url) return;
-    var a=document.getElementById('jobAudio');
-    if (!a){
-      a=document.createElement('audio');
-      a.id='jobAudio';
-      a.controls=true;
-      a.style.width='100%';
-      a.style.marginTop='8px';
-      document.body.appendChild(a);
-    }
+    if (!url || !jobId) return;
+
+    // Close any other open players
+    try{
+      var olds=document.querySelectorAll('.jobPlayer');
+      for (var i=0;i<olds.length;i++){
+        try{ var a0=olds[i].querySelector('audio'); if (a0) a0.pause(); }catch(e){}
+        try{ olds[i].remove(); }catch(e){}
+      }
+    }catch(e){}
+
+    var card=document.querySelector('[data-jobid="'+String(jobId)+'"]');
+    if (!card) return;
+
+    var box=document.createElement('div');
+    box.className='jobPlayer';
+    box.style.marginTop='10px';
+    box.style.padding='10px';
+    box.style.border='1px solid rgba(255,255,255,0.10)';
+    box.style.borderRadius='12px';
+    box.style.background='rgba(255,255,255,0.03)';
+
+    var a=document.createElement('audio');
+    a.controls=true;
+    a.style.width='100%';
     a.src=String(url);
+
+    box.appendChild(a);
+    card.appendChild(box);
+
     try{ a.play(); }catch(e){}
   }catch(e){}
 }
@@ -1260,7 +1279,7 @@ function renderJobs(jobs){
 
     const actions = (isSample && playable) ? (
       `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
-      + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.mp3_url||'')}')">Play</button>`
+      + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.id||'')}','${escAttr(job.mp3_url||'')}')">Play</button>`
       + (function(){
           try{
             var saved = false;
