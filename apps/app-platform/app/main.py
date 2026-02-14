@@ -1281,13 +1281,28 @@ function saveJobToRoster(jobId){
   }catch(e){ alert('Save failed'); }
 }
 
+function ensureJobsStream(on){
+  try{
+    on = !!on;
+    if (!on){
+      try{ if (jobsES){ jobsES.close(); jobsES=null; } }catch(e){}
+      return;
+    }
+    try{ startJobsStream(); }catch(e){}
+  }catch(e){}
+}
+
 function renderJobs(jobs){
   const el=document.getElementById('jobs');
   if (!el) return;
   if (!jobs || !jobs.length){
     el.innerHTML = "<div class='muted'>No jobs yet.</div>";
+    try{ ensureJobsStream(false); }catch(e){}
     return;
   }
+
+  const hasRunning = jobs.some(j => String(j.state||'')==='running');
+  try{ ensureJobsStream(hasRunning); }catch(e){}
 
   el.innerHTML = jobs.map(job=>{
     const total = Number(job.total_segments||0);
