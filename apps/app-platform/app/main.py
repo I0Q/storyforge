@@ -2548,7 +2548,8 @@ function prodRenderSfml(sfml){
                   regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
                 // scene keyword (keep it simple/robust)
                 { token: ['text','keyword'], regex: '^(\\s*)(scene)(?=\\s)' },
-                { token: 'string', regex: '"(?:[^"\\\\]|\\\\.)*"' },
+                // quoted title strings (simple; avoid tricky escapes that break tokenizer)
+                { token: 'string', regex: '"[^"]*"' },
                 // speaker tags
                 { token: 'variable.parameter', regex: '\\[[^\\]]+\\]' },
               ]
