@@ -5681,7 +5681,8 @@ def _split_tts_text(text: str, max_chars: int = 420, max_chunks: int = 8) -> lis
     # Normalize whitespace a bit, but keep punctuation.
     t = re.sub(r"[	 ]+", " ", t)
     # Split into sentence-ish parts.
-    parts = re.split(r"(?<=[\.!\?])\s+|\n+", t)
+    # Rule: split only on strong boundaries: . ; ! ? : (and newlines). Do NOT split on commas.
+    parts = re.split(r"(?<=[\.;!\?:])\s+|\n+", t)
     parts = [p.strip() for p in parts if p and p.strip()]
     out: list[str] = []
     cur = ""
