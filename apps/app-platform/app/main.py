@@ -390,6 +390,16 @@ VOICE_EDIT_EXTRA_CSS = base_css("""\
     .switch input:checked + .slider{background:#1f6feb;border-color:rgba(31,111,235,.35);}
     .switch input:checked + .slider:before{transform:translateX(22px);}
 
+    /* traits */
+    .traitsGrid{display:grid;grid-template-columns:110px 1fr;gap:8px 10px;margin-top:10px;}
+    .traitsGrid .k{color:var(--muted);font-size:12px;}
+    .traitsGrid .v{min-width:0;}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);font-weight:950;font-size:12px;}
+    .chip.bad{border-color:rgba(255,90,90,0.35);color:var(--bad);}
+    .chip.ok{border-color:rgba(80,200,120,0.35);}
+    details.rawBox summary{cursor:pointer;color:var(--muted);}
+
 """)
 
 VOICE_NEW_EXTRA_CSS = base_css("""\
@@ -2930,7 +2940,12 @@ def voices_edit_page(voice_id: str, response: Response):
       <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
     </div>
     <div class='muted'>Auto-generated metadata for matching characters to voices.</div>
-    <pre class='term' id='voice_traits' style='margin-top:10px;white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
+    <input id='voice_traits_json' type='hidden' value='__VTRAITS__' />
+    <div id='traitsBox' class='term' style='margin-top:10px'>Loading…</div>
+    <details class='rawBox' style='margin-top:10px'>
+      <summary>Raw JSON</summary>
+      <pre class='term' style='white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
+    </details>
   </div>
 
   <div class='card'>
@@ -2950,6 +2965,7 @@ function $(id){ return document.getElementById(id); }
 function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
 
+renderTraits();
 function updateSampleTextCount(){
   try{
     var ta=$('sampleText');
@@ -2980,6 +2996,82 @@ function deleteThisVoice(){
 
 
 function analyzeMeta(){
+function renderTraits(){
+  try{
+    var box=$('traitsBox');
+    var hid=$('voice_traits_json');
+    if (!box || !hid) return;
+    var raw = String(hid.value||'').trim();
+    if (!raw || raw==='—'){
+      box.innerHTML = '<div class="muted">No metadata yet. Tap <b>Analyze voice</b>.</div>';
+      return;
+    }
+    // raw is JSON string stored in DB; it's HTML-escaped in the template but should still be valid JSON.
+    var obj=null;
+    try{ obj = JSON.parse(raw); }catch(e){
+      // try unescape common entities
+      try{
+        var tmp=document.createElement('textarea');
+        tmp.innerHTML = raw;
+        obj = JSON.parse(tmp.value);
+      }catch(_e){ obj=null; }
+    }
+    if (!obj){
+      box.innerHTML = '<div class="err">Could not parse voice traits JSON.</div>';
+      return;
+    }
+
+    var vt = obj.voice_traits || {};
+    var m = obj.measured || {};
+    var f = m.features || {};
+
+    function fmtNum(x, d){
+      try{
+        var n = Number(x);
+        if (!isFinite(n)) return '';
+        return n.toFixed(d==null?2:d);
+      }catch(e){ return ''; }
+    }
+    function chip(txt, cls){
+      txt = String(txt||'').trim();
+      if (!txt) return '';
+      return '<span class="chip '+(cls||'')+'">'+escapeHtml(txt)+'</span>';
+    }
+
+    var tone = Array.isArray(vt.tone) ? vt.tone : [];
+    var toneHtml = tone.length ? tone.map(t=>chip(t,'')).join('') : '<span class="muted">—</span>';
+
+    var dur = (m.duration_s!=null) ? fmtNum(m.duration_s,2)+'s' : '';
+    var lufs = (m.lufs_i!=null) ? fmtNum(m.lufs_i,1)+' LUFS' : '';
+
+    var f0 = (f.f0_hz_median!=null) ? fmtNum(f.f0_hz_median,0)+' Hz' : '';
+    var f0r = (f.f0_hz_p10!=null && f.f0_hz_p90!=null) ? (fmtNum(f.f0_hz_p10,0)+'–'+fmtNum(f.f0_hz_p90,0)+' Hz') : '';
+
+    var hasFfmpeg = (m.has_ffmpeg===true);
+    var hasFfprobe = (m.has_ffprobe===true);
+
+    var toolChips = '';
+    toolChips += chip('ffmpeg '+(hasFfmpeg?'ok':'missing'), hasFfmpeg?'ok':'bad');
+    toolChips += chip('ffprobe '+(hasFfprobe?'ok':'missing'), hasFfprobe?'ok':'bad');
+
+    box.innerHTML = ''
+      + '<div class="traitsGrid">'
+      + '<div class="k">gender</div><div class="v">'+escapeHtml(String(vt.gender||'unknown'))+'</div>'
+      + '<div class="k">age</div><div class="v">'+escapeHtml(String(vt.age||'unknown'))+'</div>'
+      + '<div class="k">pitch</div><div class="v">'+escapeHtml(String(vt.pitch||'unknown'))+(f0?(' • '+escapeHtml(f0)):'')+(f0r?(' <span class="muted">('+escapeHtml(f0r)+')</span>'):'')+'</div>'
+      + '<div class="k">accent</div><div class="v">'+escapeHtml(String(vt.accent||''))+'</div>'
+      + '<div class="k">tone</div><div class="v"><div class="chips">'+toneHtml+'</div></div>'
+      + '<div class="k">duration</div><div class="v">'+(dur?escapeHtml(dur):'<span class="muted">—</span>')+'</div>'
+      + '<div class="k">loudness</div><div class="v">'+(lufs?escapeHtml(lufs):'<span class="muted">—</span>')+'</div>'
+      + '<div class="k">engine</div><div class="v">'+escapeHtml(String(m.engine||''))+'</div>'
+      + '<div class="k">voice_ref</div><div class="v">'+escapeHtml(String(m.voice_ref||''))+'</div>'
+      + (m.tortoise_voice?('<div class="k">tortoise</div><div class="v">'+escapeHtml(String(m.tortoise_voice||''))+'</div>'):'')
+      + '<div class="k">tools</div><div class="v"><div class="chips">'+toolChips+'</div></div>'
+      + '</div>';
+  }catch(e){}
+}
+
+
   try{
     var out=$('out'); if(out) out.textContent='Analyzing voice…';
     fetch('/api/voices/__VID_RAW__/analyze_metadata', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
