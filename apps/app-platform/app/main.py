@@ -52,6 +52,7 @@ APP_BUILD = int(os.environ.get("SF_BUILD", "0") or 0) or int(time.time())
 GATEWAY_BASE = os.environ.get("GATEWAY_BASE", "http://10.108.0.3:8791").rstrip("/")
 GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
 SF_JOB_TOKEN = os.environ.get("SF_JOB_TOKEN", "").strip()
+# SF_DEPLOY_TOKEN reserved for future deploy pipeline rework
 SF_DEPLOY_TOKEN = os.environ.get("SF_DEPLOY_TOKEN", "").strip()
 
 VOICE_SERVERS: list[dict[str, Any]] = []
@@ -890,12 +891,7 @@ def index(response: Response):
   <div class='top'>
     <div>
       <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div id='pageName' class='pageName'>Jobs</div></div>
-      <div id='updateBar' class='updateBar hide'>
-        <div class='muted' style='font-weight:950'>Updating StoryForge…</div>
-        <div class='updateTrack'><div id='updateProg' class='updateProg'></div></div>
-        <div id='updateSub' class='muted'>Reconnecting…</div>
-      </div>
-
+      <!-- deploy/update bar removed -->
     </div>
     <div class='row rowEnd'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
@@ -3113,131 +3109,7 @@ try{
   if (__bootText) __bootText.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
 }catch(_e){}
 
-function setUpdateBar(on, msg){
-  try{
-    var bar=document.getElementById('updateBar');
-    var sub=document.getElementById('updateSub');
-    if (!bar) return;
-    if (on){
-      bar.classList.remove('hide');
-      if (sub) sub.textContent = msg || 'Reconnecting…';
-    }else{
-      bar.classList.add('hide');
-    }
-  }catch(e){}
-}
-
-function startUpdateWatch(){
-  try{
-    var cur = String(window.__SF_BUILD||'');
-    var checkedOnce = false;
-
-    // Always show a small progress bar while we check build status.
-    // This disappears once we confirm we're on the current build.
-    setUpdateBar(true, 'Checking for updates…');
-
-    // Safety: if checks succeed but something goes sideways (navigation timing), hide after a moment.
-    try{
-      setTimeout(function(){
-        try{
-          var bar=document.getElementById('updateBar');
-          if (!bar) return;
-          var lastFail = Number(window.__SF_LAST_API_FAIL||0);
-          if (!lastFail || (Date.now()-lastFail) > 15000){
-            // If we're not actively deploying, don't leave the bar stuck.
-            fetch('/api/deploy/status', {cache:'no-store'}).then(r=>r.json()).then(function(j){
-              if (j && j.ok && String(j.state||'idle') !== 'deploying') setUpdateBar(false, '');
-            }).catch(function(_e){ setUpdateBar(false, ''); });
-          }
-        }catch(_e){}
-      }, 8000);
-    }catch(_e){}
-
-    function tick(){
-      var deployState = 'unknown';
-      var deployMsg = '';
-      var deployUpdatedAt = 0;
-
-      // Poll deploy status first (this is what the deploy pipeline will toggle).
-      fetch('/api/deploy/status', {cache:'no-store'}).then(function(r){
-        if (!r.ok) throw new Error('HTTP '+r.status);
-        return r.json();
-      }).then(function(j){
-        if (j && j.ok){
-          deployState = String(j.state||'idle');
-          deployMsg = String(j.message||'');
-          deployUpdatedAt = Number(j.updated_at||0);
-        }
-      }).catch(function(_e){
-        // ignore; fall back to build checks
-      }).then(function(){
-        // If a deploy is flagged, show bar and keep it visible.
-        if (deployState === 'deploying'){
-          setUpdateBar(true, deployMsg || 'Deploying…');
-        }
-
-        // Also show a non-blocking updating bar when the app is temporarily failing.
-        try{
-          var lastFail = Number(window.__SF_LAST_API_FAIL||0);
-          if (lastFail && (Date.now()-lastFail) < 15000){
-            setUpdateBar(true, 'Updating… reconnecting');
-          }else if (checkedOnce && deployState !== 'deploying'){
-            // Only hide after we've successfully checked at least once.
-            setUpdateBar(false, '');
-          }
-        }catch(_e){}
-
-        // Poll build. If changed, auto-reload with ?v=<new>.
-        fetch('/api/build', {cache:'no-store'}).then(function(r){
-          if (!r.ok) throw new Error('HTTP '+r.status);
-          return r.json();
-        }).then(function(j){
-          if (!j || !j.ok || !j.build) return;
-          checkedOnce = true;
-          var srv = String(j.build||'');
-          if (srv && cur && srv !== cur){
-            setUpdateBar(true, 'Update deployed. Reloading…');
-            setTimeout(function(){
-              try{
-                var u = new URL(window.location.href);
-                u.searchParams.set('v', srv);
-                window.location.replace(u.toString());
-              }catch(_e){
-                window.location.reload();
-              }
-            }, 700);
-            return;
-          }
-
-          // If deploy was flagged and is no longer deploying, reload once to pick up changes.
-          try{
-            var lastSeen = Number(localStorage.getItem('sf_deploy_last')||'0');
-            if (deployUpdatedAt && deployUpdatedAt > lastSeen){
-              localStorage.setItem('sf_deploy_last', String(deployUpdatedAt));
-              if (deployState !== 'deploying' && lastSeen){
-                setUpdateBar(true, 'Deploy complete. Refreshing…');
-                setTimeout(function(){ window.location.reload(); }, 700);
-                return;
-              }
-            }
-          }catch(_e){}
-
-          // Current build: hide bar if no recent errors.
-          try{
-            var lastFail = Number(window.__SF_LAST_API_FAIL||0);
-            if ((!lastFail || (Date.now()-lastFail) >= 15000) && deployState !== 'deploying') setUpdateBar(false, '');
-          }catch(_e){}
-        }).catch(function(_e){
-          try{ window.__SF_LAST_API_FAIL = Date.now(); }catch(__e){}
-          setUpdateBar(true, 'Updating… reconnecting');
-        });
-      });
-    }
-
-    tick();
-    setInterval(tick, 5000);
-  }catch(e){}
-}
+// deploy/update watch removed (will be rebuilt from scratch)
 
 var initTab = getTabFromHash() || getQueryParam('tab');
 if (initTab==='library' || initTab==='history' || initTab==='voices' || initTab==='production' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
@@ -3252,7 +3124,7 @@ loadVoices();
 // Jobs SSE will only run while jobs are in state=running.
 try{ startJobsStream(); }catch(e){}
 reloadProviders();
-try{ startUpdateWatch(); }catch(e){}
+// startUpdateWatch removed
 
 try{
   var __bootText2 = __sfEnsureBootBanner();
@@ -6066,107 +5938,7 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
 
 
 
-@app.get('/api/build')
-def api_build():
-    """Public build/version endpoint for non-blocking deploy UX."""
-    return {'ok': True, 'build': int(APP_BUILD)}
-
-
-def _require_deploy_token(request: Request) -> None:
-    if not SF_DEPLOY_TOKEN:
-        raise HTTPException(status_code=500, detail='SF_DEPLOY_TOKEN not configured')
-    tok = (request.headers.get('x-sf-deploy-token') or '').strip()
-    if not tok or tok != SF_DEPLOY_TOKEN:
-        raise HTTPException(status_code=401, detail='unauthorized')
-
-
-@app.get('/api/deploy/status')
-def api_deploy_status():
-    """Public deploy status so the UI can show a progress bar during deployments."""
-    try:
-        conn = db_connect()
-        try:
-            db_init(conn)
-            cur = conn.cursor()
-            cur.execute("SELECT value_json, updated_at FROM sf_settings WHERE key='deploy_state'")
-            row = cur.fetchone()
-        finally:
-            conn.close()
-        if not row:
-            return {'ok': True, 'state': 'idle', 'updated_at': 0}
-        vraw = str(row[0] or '').strip()
-        v = {}
-        try:
-            v = json.loads(vraw) if vraw else {}
-        except Exception:
-            v = {}
-        st = str(v.get('state') or 'idle')
-        msg = str(v.get('message') or '')
-        started_at = int(v.get('started_at') or 0)
-        finished_at = int(v.get('finished_at') or 0)
-        return {
-            'ok': True,
-            'state': st,
-            'message': msg,
-            'started_at': started_at,
-            'finished_at': finished_at,
-            'updated_at': int(row[1] or 0),
-        }
-    except Exception as e:
-        return {'ok': True, 'state': 'unknown', 'message': f'error: {type(e).__name__}', 'updated_at': 0}
-
-
-@app.post('/api/deploy/start')
-def api_deploy_start(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
-    """Mark deployment as started. Intended to be called by the deploy pipeline."""
-    _require_deploy_token(request)
-    msg = str((payload or {}).get('message') or 'Deploying…')
-    now = int(time.time())
-    v = {'state': 'deploying', 'message': msg, 'started_at': now, 'finished_at': 0}
-    conn = db_connect()
-    try:
-        db_init(conn)
-        cur = conn.cursor()
-        cur.execute(
-            """
-INSERT INTO sf_settings (key,value_json,updated_at)
-VALUES ('deploy_state', %s, %s)
-ON CONFLICT (key)
-DO UPDATE SET value_json=EXCLUDED.value_json, updated_at=EXCLUDED.updated_at
-""",
-            (json.dumps(v, separators=(',', ':')), now),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    return {'ok': True}
-
-
-@app.post('/api/deploy/end')
-def api_deploy_end(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
-    """Mark deployment as finished. Intended to be called by the deploy pipeline."""
-    _require_deploy_token(request)
-    msg = str((payload or {}).get('message') or 'Deployed')
-    now = int(time.time())
-    v = {'state': 'idle', 'message': msg, 'started_at': int((payload or {}).get('started_at') or 0), 'finished_at': now}
-    conn = db_connect()
-    try:
-        db_init(conn)
-        cur = conn.cursor()
-        cur.execute(
-            """
-INSERT INTO sf_settings (key,value_json,updated_at)
-VALUES ('deploy_state', %s, %s)
-ON CONFLICT (key)
-DO UPDATE SET value_json=EXCLUDED.value_json, updated_at=EXCLUDED.updated_at
-""",
-            (json.dumps(v, separators=(',', ':')), now),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    return {'ok': True}
-
+# Deploy/update pipeline endpoints removed (will be rebuilt from scratch)
 
 @app.get('/api/voices')
 def api_voices_list():
