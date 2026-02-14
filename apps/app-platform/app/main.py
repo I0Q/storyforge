@@ -1016,8 +1016,11 @@ def index(response: Response):
       <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
         <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
         <button type='button' class='secondary' onclick='prodCopySfml()'>Copy SFML</button>
+        <button type='button' class='secondary' onclick='prodToggleSfmlEdit()'>Edit SFML</button>
       </div>
 
+      <div id='prodSfmlSaveNote' class='muted hide' style='margin-top:8px'>Autosave on pause/blur.</div>
+      <textarea id='prodSfmlEditor' class='term hide' style='margin-top:10px;min-height:45vh;white-space:pre;'></textarea>
       <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px'></div>
     </div>
   </div>
@@ -2419,6 +2422,102 @@ function prodCopySfml(){
     try{ toastShowNow('Copied SFML', 'ok', 1400); }catch(_e){}
   }catch(e){}
 }
+
+window.__SF_SFML_EDIT = window.__SF_SFML_EDIT || { on:false, t:null, last:'' };
+
+function prodToggleSfmlEdit(){
+  try{
+    var ed=document.getElementById('prodSfmlEditor');
+    var box=document.getElementById('prodSfmlBox');
+    var note=document.getElementById('prodSfmlSaveNote');
+    if (!ed || !box) return;
+
+    var st = window.__SF_PROD || {};
+    var cur = String(st.sfml||'');
+
+    if (!window.__SF_SFML_EDIT.on){
+      // enter edit mode
+      window.__SF_SFML_EDIT.on = true;
+      window.__SF_SFML_EDIT.last = cur;
+      ed.value = cur;
+      ed.classList.remove('hide');
+      if (note) note.classList.remove('hide');
+      box.classList.add('hide');
+      try{ ed.focus(); }catch(_e){}
+    }else{
+      // exit edit mode (save if changed)
+      window.__SF_SFML_EDIT.on = false;
+      ed.classList.add('hide');
+      if (note) note.classList.add('hide');
+      box.classList.remove('hide');
+      var v = String(ed.value||'');
+      window.__SF_PROD.sfml = v;
+      prodRenderSfml(v);
+      if (v !== window.__SF_SFML_EDIT.last) prodSfmlSaveNow(v);
+    }
+  }catch(e){}
+}
+
+function prodSfmlSaveNow(sfmlText){
+  try{
+    var out=document.getElementById('prodOut');
+    var st = window.__SF_PROD || {};
+    var sid = String(st.story_id||'').trim();
+    if (!sid) return;
+
+    if (out) out.textContent='Saving SFML…';
+    fetchJsonAuthed('/api/production/sfml_save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid, sfml_text:String(sfmlText||'')})})
+      .then(function(j){
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'sfml_save_failed'); }
+        if (out) out.textContent='';
+        try{ toastShowNow('SFML saved', 'ok', 1200); }catch(_e){}
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodSfmlAutosaveArm(){
+  try{
+    if (!window.__SF_SFML_EDIT.on) return;
+    var ed=document.getElementById('prodSfmlEditor');
+    if (!ed) return;
+    var v = String(ed.value||'');
+    window.__SF_PROD.sfml = v;
+    if (window.__SF_SFML_EDIT.t) clearTimeout(window.__SF_SFML_EDIT.t);
+    window.__SF_SFML_EDIT.t = setTimeout(function(){
+      try{
+        if (!window.__SF_SFML_EDIT.on) return;
+        var vv = String(ed.value||'');
+        if (vv !== window.__SF_SFML_EDIT.last){
+          window.__SF_SFML_EDIT.last = vv;
+          prodSfmlSaveNow(vv);
+        }
+      }catch(_e){}
+    }, 900);
+  }catch(e){}
+}
+
+try{
+  document.addEventListener('input', function(ev){
+    try{
+      if (!ev || !ev.target) return;
+      if (ev.target.id==='prodSfmlEditor') prodSfmlAutosaveArm();
+    }catch(_e){}
+  });
+  document.addEventListener('focusout', function(ev){
+    try{
+      if (!ev || !ev.target) return;
+      if (ev.target.id==='prodSfmlEditor'){
+        var ed=document.getElementById('prodSfmlEditor');
+        var vv = String((ed&&ed.value)||'');
+        if (vv && vv !== window.__SF_SFML_EDIT.last){
+          window.__SF_SFML_EDIT.last = vv;
+          prodSfmlSaveNow(vv);
+        }
+      }
+    }catch(_e){}
+  });
+}catch(_e){}
 
 function prodRenderSfml(sfml){
   try{
@@ -6698,6 +6797,31 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         return {'ok': True, 'sfml': txt}
     except Exception as e:
         return {'ok': False, 'error': f'sfml_generate_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/production/sfml_save')
+def api_production_sfml_save(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Persist edited SFML text for a story."""
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        sfml_text = str((payload or {}).get('sfml_text') or '')
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        # Best-effort: store as-is. Parsing/validation can come later.
+        now = int(time.time())
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute('UPDATE sf_stories SET sfml_text=%s, updated_at=%s WHERE id=%s', (sfml_text, now, story_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'sfml_save_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.post('/api/production/casting_save')
