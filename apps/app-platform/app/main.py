@@ -876,6 +876,7 @@ def index(response: Response):
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
     <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
     <button id='tab-voices' class='tab' onclick='showTab("voices")'>Voices</button>
+    <button id='tab-production' class='tab' onclick='showTab("production")'>Production</button>
         <button id='tab-advanced' class='tab' onclick='showTab("advanced")'>Settings</button>
   </div>
 
@@ -950,6 +951,24 @@ def index(response: Response):
       </div>
 
       <div id='voicesList' style='margin-top:10px' class='muted'>Loading…</div>
+    </div>
+  </div>
+
+  <div id='pane-production' class='hide'>
+    <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Production</div>
+      <div class='muted'>Step 1: select a library story. Step 2: suggest voice casting from roster.</div>
+
+      <div class='muted' style='margin-top:12px'>1) Story</div>
+      <select id='prodStorySel' style='margin-top:8px;width:100%'></select>
+
+      <div class='muted' style='margin-top:12px'>2) Voice casting suggestion</div>
+      <div class='row' style='margin-top:8px;justify-content:flex-end'>
+        <button type='button' onclick='prodSuggestCasting()'>Suggest casting</button>
+      </div>
+
+      <div id='prodOut' class='muted' style='margin-top:10px'></div>
+      <div id='prodCast' class='term' style='margin-top:10px;white-space:pre-wrap;display:none'></div>
     </div>
   </div>
 
@@ -1054,8 +1073,8 @@ try{ __sfToastInit(); }catch(e){}
 
 function showTab(name, opts){
   opts = opts || {};
-  for (var i=0;i<['history','library','voices','advanced'].length;i++){
-    var n=['history','library','voices','advanced'][i];
+  for (var i=0;i<['history','library','voices','production','advanced'].length;i++){
+    var n=['history','library','voices','production','advanced'][i];
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
@@ -1067,13 +1086,14 @@ function showTab(name, opts){
     }
   }catch(_e){}
 
-  try{ var pn=document.getElementById('pageName'); if(pn){ pn.textContent = (name==='history'?'Jobs':(name==='library'?'Library':(name==='voices'?'Voices':'Settings'))); } }catch(e){}
+  try{ var pn=document.getElementById('pageName'); if(pn){ pn.textContent = (name==='history'?'Jobs':(name==='library'?'Library':(name==='voices'?'Voices':(name==='production'?'Production':'Settings')))); } }catch(e){}
 
   // lazy-load tab content
   try{
     if (name==='history') { try{ bindJobsLazyScroll(); }catch(e){}; loadHistory(true); }
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
+    else if (name==='production') loadProduction();
   }catch(_e){}
 }
 
@@ -1083,6 +1103,7 @@ function getTabFromHash(){
     if (h==='tab-history') return 'history';
     if (h==='tab-library') return 'library';
     if (h==='tab-voices') return 'voices';
+    if (h==='tab-production') return 'production';
     if (h==='tab-advanced') return 'advanced';
   }catch(e){}
   return '';
@@ -2101,6 +2122,48 @@ function removeProvider(id){
   arr = arr.filter(function(p){ return String(p.id||'')!==String(id||''); });
   window.__SF_PROVIDERS = arr;
   renderProviders(arr);
+}
+
+function loadProduction(){
+  try{
+    var sel=document.getElementById('prodStorySel');
+    var out=document.getElementById('prodOut');
+    var cast=document.getElementById('prodCast');
+    if (out) out.textContent='Loading stories…';
+    if (cast){ cast.style.display='none'; cast.textContent=''; }
+
+    return fetchJsonAuthed('/api/library/stories').then(function(j){
+      if (!j || !j.ok){ throw new Error((j&&j.error)||'library_failed'); }
+      var stories = j.stories || [];
+      if (!sel) return;
+      sel.innerHTML = stories.map(function(st){
+        var id = String(st.id||'');
+        var title = String(st.title||st.id||'');
+        return "<option value='"+escAttr(id)+"'>"+escapeHtml(title)+"</option>";
+      }).join('');
+      if (out) out.textContent = stories.length ? '' : 'No stories found.';
+    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodSuggestCasting(){
+  try{
+    var sel=document.getElementById('prodStorySel');
+    var out=document.getElementById('prodOut');
+    var cast=document.getElementById('prodCast');
+    if (cast){ cast.style.display='none'; cast.textContent=''; }
+    var storyId = sel ? String(sel.value||'').trim() : '';
+    if (!storyId){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+    if (out) out.textContent='Suggesting casting…';
+
+    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
+      .then(function(j){
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'suggest_failed'); }
+        if (out) out.textContent='';
+        if (cast){ cast.style.display='block'; cast.textContent = JSON.stringify(j.suggestions||{}, null, 2); }
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
 }
 
 function loadVoices(){
@@ -5676,6 +5739,114 @@ def api_voices_analyze_metadata(voice_id: str):
         return {'ok': True, 'job_id': job_id}
     except Exception as e:
         return {'ok': False, 'error': f'analyze_failed: {type(e).__name__}: {e}'}
+
+
+@app.post('/api/production/suggest_casting')
+def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Suggest a voice roster assignment for each character in a story."""
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            st = get_story_db(conn, story_id)
+            voices = list_voices_db(conn, limit=500)
+        finally:
+            conn.close()
+
+        chars = list(st.get('characters') or [])
+        # ensure narrator present + first
+        has_narr = any(str((c or {}).get('role') or '').lower() == 'narrator' or str((c or {}).get('name') or '').strip().lower() == 'narrator' for c in chars)
+        if not has_narr:
+            chars = ([{'name': 'Narrator', 'role': 'narrator', 'description': ''}] + chars)
+        chars.sort(key=lambda c: (0 if str((c or {}).get('role') or '').lower() == 'narrator' or str((c or {}).get('name') or '').strip().lower() == 'narrator' else 1, str((c or {}).get('name') or '')))
+
+        # Build compact voice roster summary
+        vrows = []
+        for v in voices:
+            vid = str(v.get('id') or '')
+            if not vid:
+                continue
+            dn = str(v.get('display_name') or vid)
+            eng = str(v.get('engine') or '')
+            vtj = str(v.get('voice_traits_json') or '').strip()
+            traits = {}
+            try:
+                if vtj:
+                    traits = json.loads(vtj).get('voice_traits') or {}
+            except Exception:
+                traits = {}
+            vrows.append({
+                'id': vid,
+                'name': dn,
+                'engine': eng,
+                'gender': str(traits.get('gender') or 'unknown'),
+                'age': str(traits.get('age') or 'unknown'),
+                'pitch': str(traits.get('pitch') or 'unknown'),
+                'tone': traits.get('tone') if isinstance(traits.get('tone'), list) else [],
+                'ref': str(v.get('voice_ref') or ''),
+            })
+
+        # Prompt LLM
+        prompt = {
+            'task': 'Suggest voice casting from a roster for a story.',
+            'story': {'id': story_id, 'title': (st.get('title') or story_id)},
+            'characters': [{
+                'name': str((c or {}).get('name') or ''),
+                'role': str((c or {}).get('role') or ''),
+                'description': str((c or {}).get('description') or ''),
+                'voice_traits': (c or {}).get('voice_traits') if isinstance((c or {}).get('voice_traits'), dict) else {},
+            } for c in chars],
+            'roster': vrows,
+            'rules': [
+                'Return STRICT JSON only. No markdown.',
+                'Output shape: {"assignments": [{"character":"Name","voice_id":"id","reason":"short"}] }',
+                'Every character must have exactly one assignment.',
+                'Prefer matching gender/age/pitch/tone when known, otherwise pick a distinct voice.',
+                'Narrator must be included.',
+            ],
+        }
+
+        req = {
+            'model': 'google/gemma-2-9b-it',
+            'messages': [{'role': 'user', 'content': 'Return ONLY strict JSON.\n\n' + json.dumps(prompt, separators=(',', ':'))}],
+            'temperature': 0.3,
+            'max_tokens': 700,
+        }
+
+        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=120)
+        r.raise_for_status()
+        j = r.json()
+        txt = ''
+        try:
+            ch0 = (((j or {}).get('choices') or [])[0] or {})
+            msg = ch0.get('message') or {}
+            txt = str(msg.get('content') or ch0.get('text') or '')
+        except Exception:
+            txt = ''
+        txt = (txt or '').strip()
+        if not txt:
+            return {'ok': False, 'error': 'empty_llm_output'}
+
+        # Extract JSON
+        i0 = txt.find('{')
+        i1 = txt.rfind('}')
+        raw = txt[i0:i1+1] if i0 != -1 and i1 != -1 and i1 > i0 else txt
+        raw = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", raw)
+        raw = re.sub(r"```\s*$", "", raw).strip()
+        raw = re.sub(r",\s*([}\]])", r"\1", raw)
+
+        out = json.loads(raw)
+        assigns = out.get('assignments') if isinstance(out, dict) else None
+        if not isinstance(assigns, list):
+            return {'ok': False, 'error': 'bad_llm_shape'}
+
+        return {'ok': True, 'suggestions': out}
+    except Exception as e:
+        return {'ok': False, 'error': f'suggest_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.get('/api/voices/{voice_id}')
