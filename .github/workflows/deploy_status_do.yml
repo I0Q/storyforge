@@ -1,0 +1,121 @@
+name: StoryForge deploy status → in-app bar
+
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: storyforge-deploy-status-main
+  cancel-in-progress: false
+
+jobs:
+  deploy_status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STORYFORGE_URL: https://storyforge.i0q.com
+      DO_APP_ID: 11f8a3b9-7dda-4890-b1c7-b459aa050c2b
+
+    steps:
+      - name: Mark deploy started (StoryForge)
+        env:
+          SF_DEPLOY_TOKEN: ${{ secrets.SF_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SF_DEPLOY_TOKEN:-}" ]; then
+            echo "Missing secrets.SF_DEPLOY_TOKEN" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$STORYFORGE_URL/api/deploy/start" \
+            -H "content-type: application/json" \
+            -H "x-sf-deploy-token: $SF_DEPLOY_TOKEN" \
+            -d '{"message":"Deploying (GitHub push '"${GITHUB_SHA:0:7}"'")}'
+
+      - name: Wait for DigitalOcean App Platform deployment to finish
+        id: wait_do
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIGITALOCEAN_TOKEN:-}" ]; then
+            echo "Missing secrets.DIGITALOCEAN_TOKEN" >&2
+            exit 1
+          fi
+
+          api="https://api.digitalocean.com/v2/apps/$DO_APP_ID/deployments"
+          auth=(-H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H "Content-Type: application/json")
+
+          # Capture the current top deployment id (before this push's autodeploy starts)
+          before_id=$(curl -fsS "${auth[@]}" "$api?per_page=1" | jq -r '.deployments[0].id // empty')
+          echo "Before deployment id: ${before_id:-<none>}"
+
+          echo "Waiting for a new deployment to appear…"
+          new_id=""
+          for i in $(seq 1 120); do
+            top_id=$(curl -fsS "${auth[@]}" "$api?per_page=1" | jq -r '.deployments[0].id // empty')
+            if [ -n "$top_id" ] && [ "$top_id" != "$before_id" ]; then
+              new_id="$top_id"
+              break
+            fi
+            sleep 5
+          done
+
+          if [ -z "$new_id" ]; then
+            echo "Timed out waiting for a new deployment id" >&2
+            exit 2
+          fi
+
+          echo "New deployment id: $new_id"
+          echo "deployment_id=$new_id" >> "$GITHUB_OUTPUT"
+
+          echo "Polling deployment phase…"
+          phase=""
+          for i in $(seq 1 360); do
+            # Fetch latest info for this deployment id
+            j=$(curl -fsS "${auth[@]}" "$api?per_page=20")
+            phase=$(echo "$j" | jq -r --arg id "$new_id" '.deployments[] | select(.id==$id) | (.phase // .status // .progress.phase // "")')
+            created=$(echo "$j" | jq -r --arg id "$new_id" '.deployments[] | select(.id==$id) | (.created_at // "")')
+            echo "[$i] phase=$phase created_at=$created"
+
+            # Heuristic terminal states
+            case "$phase" in
+              ACTIVE|SUCCEEDED|SUCCESS|COMPLETED)
+                echo "Deployment completed successfully."
+                echo "result=success" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              ERROR|FAILED|CANCELED|CANCELLED)
+                echo "Deployment failed: phase=$phase" >&2
+                echo "result=failure" >> "$GITHUB_OUTPUT"
+                exit 3
+                ;;
+              "")
+                # Some API shapes might not include phase; keep polling.
+                ;;
+              *)
+                # In-progress
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for deployment to finish" >&2
+          echo "result=timeout" >> "$GITHUB_OUTPUT"
+          exit 4
+
+      - name: Mark deploy ended (StoryForge)
+        if: always()
+        env:
+          SF_DEPLOY_TOKEN: ${{ secrets.SF_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          res="${{ steps.wait_do.outputs.result || 'unknown' }}"
+          msg="Deployed"
+          if [ "$res" = "success" ]; then msg="Deployed"; fi
+          if [ "$res" = "failure" ]; then msg="Deploy failed"; fi
+          if [ "$res" = "timeout" ]; then msg="Deploy timed out"; fi
+          curl -fsS -X POST "$STORYFORGE_URL/api/deploy/end" \
+            -H "content-type: application/json" \
+            -H "x-sf-deploy-token: $SF_DEPLOY_TOKEN" \
+            -d '{"message":"'"$msg"' (GitHub push '"${GITHUB_SHA:0:7}"'")}' || true
