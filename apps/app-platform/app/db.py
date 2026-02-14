@@ -120,17 +120,30 @@ CREATE TABLE IF NOT EXISTS sf_todos (
     conn.commit()
 
 
-def db_list_jobs(conn, limit: int = 60):
+def db_list_jobs(conn, limit: int = 60, before: int | None = None):
+    """List jobs ordered by created_at desc.
+
+    If before is provided, returns jobs with created_at < before.
+    """
     cur = conn.cursor()
     try:
         cur.execute("SET statement_timeout = '5000'")
     except Exception:
         pass
-    cur.execute(
-        'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '
-        'FROM jobs ORDER BY created_at DESC LIMIT %s',
-        (int(limit),),
-    )
+
+    if before is not None:
+        cur.execute(
+            'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '
+            'FROM jobs WHERE created_at < %s ORDER BY created_at DESC LIMIT %s',
+            (int(before), int(limit)),
+        )
+    else:
+        cur.execute(
+            'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '
+            'FROM jobs ORDER BY created_at DESC LIMIT %s',
+            (int(limit),),
+        )
+
     rows = cur.fetchall()
     return [
         {
@@ -138,14 +151,14 @@ def db_list_jobs(conn, limit: int = 60):
             'title': r[1],
             'kind': r[2] or '',
             'meta_json': r[3] or '',
-            'state': r[4],
-            'started_at': r[5],
-            'finished_at': r[6],
-            'total_segments': r[7],
-            'segments_done': r[8],
-            'mp3_url': r[9],
-            'sfml_url': r[10],
-            'created_at': r[11],
+            'state': r[4] or '',
+            'started_at': int(r[5] or 0),
+            'finished_at': int(r[6] or 0),
+            'total_segments': int(r[7] or 0),
+            'segments_done': int(r[8] or 0),
+            'mp3_url': r[9] or '',
+            'sfml_url': r[10] or '',
+            'created_at': int(r[11] or 0),
         }
         for r in rows
     ]

@@ -1042,7 +1042,7 @@ function showTab(name, opts){
 
   // lazy-load tab content
   try{
-    if (name==='history') loadHistory();
+    if (name==='history') { try{ bindJobsLazyScroll(); }catch(e){}; loadHistory(true); }
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
   }catch(_e){}
@@ -1362,18 +1362,57 @@ function renderJobs(jobs){
   }).join('');
 }
 
-function loadHistory(){
+let __SF_JOBS = [];
+let __SF_JOBS_NEXT_BEFORE = null;
+let __SF_JOBS_LOADING = false;
+let __SF_JOBS_DONE = false;
+
+function loadHistory(reset){
   const el=document.getElementById('jobs');
-  if (el) el.textContent='Loading…';
-  return fetchJsonAuthed('/api/history?limit=60').then(function(j){
-    if (!j.ok){
-      if (el) el.innerHTML=`<div class='muted'>Error: ${j.error||'unknown'}</div>`;
+  if (reset){
+    __SF_JOBS = [];
+    __SF_JOBS_NEXT_BEFORE = null;
+    __SF_JOBS_LOADING = false;
+    __SF_JOBS_DONE = false;
+    if (el) el.textContent='Loading…';
+  }
+  if (__SF_JOBS_LOADING || __SF_JOBS_DONE) return Promise.resolve();
+  __SF_JOBS_LOADING = true;
+
+  var url = '/api/history?limit=30';
+  if (__SF_JOBS_NEXT_BEFORE){ url += '&before=' + encodeURIComponent(String(__SF_JOBS_NEXT_BEFORE)); }
+
+  return fetchJsonAuthed(url).then(function(j){
+    __SF_JOBS_LOADING = false;
+    if (!j || !j.ok){
+      if (el && !__SF_JOBS.length) el.innerHTML=`<div class='muted'>Error: ${(j&&j.error)||'unknown'}</div>`;
       return;
     }
-    renderJobs(j.jobs || []);
+    var arr = (j.jobs || []);
+    if (!arr.length){
+      __SF_JOBS_DONE = true;
+      return;
+    }
+    __SF_JOBS = __SF_JOBS.concat(arr);
+    __SF_JOBS_NEXT_BEFORE = j.next_before || null;
+    renderJobs(__SF_JOBS);
   }).catch(function(e){
-    if (el) el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
+    __SF_JOBS_LOADING = false;
+    if (el && !__SF_JOBS.length) el.innerHTML = `<div class='muted'>Loading failed: ${String(e)}</div>`;
   });
+}
+
+function bindJobsLazyScroll(){
+  try{
+    if (window.__SF_JOBS_LAZY_BOUND) return;
+    window.__SF_JOBS_LAZY_BOUND = true;
+    window.addEventListener('scroll', function(){
+      try{
+        var near = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 800);
+        if (near) loadHistory(false);
+      }catch(e){}
+    }, {passive:true});
+  }catch(e){}
 }
 
 // Live job updates
@@ -2509,9 +2548,11 @@ refreshAll();
 // Start streaming immediately so the Metrics tab is instant.
 setMonitorEnabled(loadMonitorPref());
 setDebugUiEnabled(loadDebugPref());
-loadHistory();
+try{ bindJobsLazyScroll(); }catch(e){}
+loadHistory(true);
 loadVoices();
-startJobsStream();
+// Jobs SSE will only run while jobs are in state=running.
+try{ startJobsStream(); }catch(e){}
 reloadProviders();
 
 try{
@@ -5585,17 +5626,27 @@ def api_library_story_delete(story_id: str):
 
 
 @app.get('/api/history')
-def api_history(limit: int = 60):
+def api_history(limit: int = 30, before: int | None = None):
+    """Job history (paged).
+
+    - limit: page size
+    - before: created_at cursor (exclusive)
+    """
     try:
         conn = db_connect()
         try:
             db_init(conn)
-            jobs = db_list_jobs(conn, limit=limit)
+            jobs = db_list_jobs(conn, limit=int(limit), before=int(before) if before is not None else None)
         finally:
             conn.close()
-        return {'ok': True, 'jobs': jobs}
+        next_before = None
+        try:
+            if jobs:
+                next_before = int(jobs[-1].get('created_at') or 0)
+        except Exception:
+            next_before = None
+        return {'ok': True, 'jobs': jobs, 'next_before': next_before}
     except Exception as e:
-        # Avoid leaking DATABASE_URL or secrets; keep message short.
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
