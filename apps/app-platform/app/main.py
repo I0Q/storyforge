@@ -1823,6 +1823,16 @@ function setDebugUiEnabled(on){
 
   var btn=document.getElementById('dbgToggle');
   if (btn){ btn.textContent = on ? 'Disable debug' : 'Enable debug'; btn.classList.toggle('secondary', on); }
+
+  // When toggling debug back on, re-kick background streams/watchers.
+  // (Some mobile browsers may drop EventSource connections while the UI is hidden.)
+  try{
+    if (on){
+      try{ if (typeof __sfStartDeployWatch==='function') __sfStartDeployWatch(); }catch(e){}
+      try{ if (typeof startJobsStream==='function') startJobsStream(); }catch(e){}
+      try{ if (typeof startMetricsStream==='function' && (typeof monitorEnabled==='undefined' || monitorEnabled)) startMetricsStream(); }catch(e){}
+    }
+  }catch(_e){}
 }
 
 function toggleDebugUi(){
