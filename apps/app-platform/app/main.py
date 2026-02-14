@@ -5820,7 +5820,7 @@ def api_voice_sample_text_random(payload: dict[str, Any] | None = None):
         themes = [
             "a confident tech product intro",
             "a cozy bedtime narrator line",
-            "a warm customer support greeting",
+            "a fantasy story narrator line",
             "a dramatic audiobook hook",
             "a calm meditation instruction",
             "a playful cartoon announcement",
