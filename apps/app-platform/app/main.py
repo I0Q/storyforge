@@ -481,19 +481,24 @@ window.__SF_BUILD = '__BUILD__';
 window.__SF_BOOT_TS = Date.now();
 window.__SF_LAST_ERR = '';
 
-// Cache-bust HTML on iOS/Safari/CF edge caching: force a one-time reload with ?v=<build>
+// Cache-bust HTML on iOS/Safari/CF edge caching: only when Debug UI is enabled.
 try{
-  var u = new URL(window.location.href);
-  var v = u.searchParams.get('v');
-  if (String(v||'') !== String(window.__SF_BUILD||'')){
-    var key = 'sf_reload_v_' + String(window.__SF_BUILD||'');
-    var did = false;
-    try{ did = (sessionStorage.getItem(key) === '1'); }catch(e){}
-    if (!did){
-      try{ sessionStorage.setItem(key, '1'); }catch(e){}
-      u.searchParams.set('v', String(window.__SF_BUILD||''));
-      // preserve hash
-      window.location.replace(u.toString());
+  var dbg = null;
+  try{ dbg = localStorage.getItem('sf_debug_ui'); }catch(e){}
+  var debugOn = (dbg===null || dbg==='' || dbg==='1');
+  if (debugOn){
+    var u = new URL(window.location.href);
+    var v = u.searchParams.get('v');
+    if (String(v||'') !== String(window.__SF_BUILD||'')){
+      var key = 'sf_reload_v_' + String(window.__SF_BUILD||'');
+      var did = false;
+      try{ did = (sessionStorage.getItem(key) === '1'); }catch(e){}
+      if (!did){
+        try{ sessionStorage.setItem(key, '1'); }catch(e){}
+        u.searchParams.set('v', String(window.__SF_BUILD||''));
+        // preserve hash
+        window.location.replace(u.toString());
+      }
     }
   }
 }catch(e){}
