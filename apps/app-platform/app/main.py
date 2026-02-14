@@ -1531,31 +1531,27 @@ function onGpuToggle(cb){
       }
     }catch(e){}
 
-    // Reservation pass: LLM GPUs are not available for voice (disable + uncheck)
+    // Update visual claim state (no disabling; last-click-wins via peer-uncheck above).
     var llm = selList('llm');
+    var v = selList('voice');
+
     var voiceEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="voice"]');
     for (var k=0;k<voiceEls.length;k++){
       var n2=parseInt(String(voiceEls[k].getAttribute('data-gpu')||''),10);
-      var dis = (llm.indexOf(n2)>=0);
-      voiceEls[k].disabled = dis;
-      if (dis) voiceEls[k].checked = false;
+      var claimed = (llm.indexOf(n2)>=0);
       try{
         var lab = voiceEls[k].parentElement;
-        if (lab) lab.style.opacity = dis ? '0.45' : '1';
+        if (lab) lab.style.opacity = claimed ? '0.55' : '1';
       }catch(e){}
     }
 
-    // Symmetric reservation UI: Voice-selected GPUs are not available for LLM.
-    var v = selList('voice');
     var llmEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="llm"]');
     for (var q=0;q<llmEls.length;q++){
       var n3=parseInt(String(llmEls[q].getAttribute('data-gpu')||''),10);
-      var dis2 = (v.indexOf(n3)>=0);
-      llmEls[q].disabled = dis2;
-      if (dis2) llmEls[q].checked = false;
+      var claimed2 = (v.indexOf(n3)>=0);
       try{
         var lab2 = llmEls[q].parentElement;
-        if (lab2) lab2.style.opacity = dis2 ? '0.45' : '1';
+        if (lab2) lab2.style.opacity = claimed2 ? '0.55' : '1';
       }catch(e){}
     }
 
@@ -1625,9 +1621,9 @@ function renderProviders(providers){
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
           [0,1,2,3].map(function(n){
             var on = (voiceG.indexOf(n)>=0);
-            var dis = (llmG.indexOf(n)>=0);
-            var op = dis ? 0.45 : 1;
-            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" "+(dis?'disabled':'')+" onchange='onGpuToggle(this); event.stopPropagation();' style='display:none'/>GPU "+n+"</label>";
+            var claimed = (llmG.indexOf(n)>=0);
+            var op = claimed ? 0.55 : 1;
+            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this); event.stopPropagation();' style='display:none'/>GPU "+n+"</label>";
           }).join('')+
         "</div>"+
       "</div>"+
