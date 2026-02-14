@@ -155,8 +155,8 @@ def register_passphrase_auth(app: FastAPI) -> None:
             if dtok and got and hmac.compare_digest(got, dtok):
                 return await call_next(request)
 
-        # Allow worker APIs (jobs + SFML fetch + voice roster) when token is provided.
-        if request.url.path.startswith('/api/jobs') or request.url.path.startswith('/api/production/sfml') or request.url.path.startswith('/api/voices'):
+        # Allow worker APIs (jobs + SFML fetch + voice roster + settings) when token is provided.
+        if request.url.path.startswith('/api/jobs') or request.url.path.startswith('/api/production/sfml') or request.url.path.startswith('/api/voices') or request.url.path.startswith('/api/settings/providers'):
             # 1) dedicated job token
             jt = (os.environ.get('SF_JOB_TOKEN') or '').strip()
             gotj = (request.headers.get('x-sf-job-token') or '').strip()
