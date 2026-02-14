@@ -1497,6 +1497,7 @@ function parseGpuList(s){
 function onGpuToggle(cb){
   try{
     if (!cb) return;
+    if (cb.disabled) return;
     var pid = String(cb.getAttribute('data-pid')||'');
     if (!pid) return;
 
@@ -1623,8 +1624,9 @@ function renderProviders(providers){
 
     var gatewayBase = String(p.gateway_base || '');
 
-    var voiceG = Array.isArray(p.voice_gpus) ? p.voice_gpus : [0,1];
-    var llmG = Array.isArray(p.llm_gpus) ? p.llm_gpus : [2];
+    // TEMP: disable GPU selection UI (force unchecked) for testing
+    var voiceG = [];
+    var llmG = [];
     var llmModel = String(p.llm_model || 'google/gemma-2-9b-it');
 
     var header = "<div class='row provHead' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)' style='justify-content:space-between;cursor:pointer;'>"+
@@ -1646,7 +1648,7 @@ function renderProviders(providers){
             var on = (voiceG.indexOf(n)>=0);
             var claimed = (llmG.indexOf(n)>=0);
             var op = claimed ? 0.55 : 1;
-            return "<label class='pill' style='cursor:pointer;user-select:none;opacity:"+op+"'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
+            return "<label class='pill' style='cursor:not-allowed;user-select:none;opacity:0.45'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='voice' data-gpu='"+n+"' disabled onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
           }).join('')+
         "</div>"+
       "</div>"+
@@ -1658,7 +1660,7 @@ function renderProviders(providers){
         "<div class='row' style='gap:8px;flex-wrap:wrap'>"+
           [0,1,2,3].map(function(n){
             var on = (llmG.indexOf(n)>=0);
-            return "<label class='pill' style='cursor:pointer;user-select:none'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' "+(on?'checked':'')+" onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
+            return "<label class='pill' style='cursor:not-allowed;user-select:none;opacity:0.45'><input type='checkbox' class='gpuCb' data-pid='"+escAttr(id)+"' data-role='llm' data-gpu='"+n+"' disabled onchange='onGpuToggle(this);' style='display:none'/>GPU "+n+"</label>";
           }).join('')+
         "</div>"+
       "</div>"+
