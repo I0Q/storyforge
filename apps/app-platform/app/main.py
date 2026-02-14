@@ -1352,25 +1352,58 @@ function renderJobs(jobs){
       `<div class='k'>error</div><div class='term' style='white-space:pre-wrap'>${escapeHtml(String(job.sfml_url||'').slice(0,1600))}</div>`
     ) : '';
 
-    const sfmlRow = isSample ? '' : (
-      `<div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`
-    );
+    const isVoiceMeta = (String(job.kind||'') === 'voice_meta');
 
+    // Common fields for all jobs
+    let rows = ''
+      + `<div class='k'>id</div><div>${escapeHtml(String(job.id||''))}</div>`
+      + `<div class='k'>started</div><div>${fmtTs(job.started_at)}</div>`
+      + `<div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>`
+      + `<div class='k'>progress</div><div>${progText}${progBar}</div>`;
+
+    // Variable fields by job type
+    if (isSample){
+      rows += `<div class='k'>audio</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+    } else if (isVoiceMeta){
+      try{
+        const vid2 = (meta && meta.voice_id) ? String(meta.voice_id) : '';
+        const eng2 = (meta && meta.engine) ? String(meta.engine) : '';
+        const vref2 = (meta && meta.voice_ref) ? String(meta.voice_ref) : '';
+        if (vid2) rows += `<div class='k'>voice</div><div><a href='/voices/${encodeURIComponent(vid2)}/edit' style='color:var(--text);text-decoration:underline'>${escapeHtml(vid2)}</a></div>`;
+        if (eng2) rows += `<div class='k'>engine</div><div>${escapeHtml(eng2)}</div>`;
+        if (vref2) rows += `<div class='k'>voice_ref</div><div class='fadeLine'><div class='fadeText' title='${escapeHtml(vref2)}'>${escapeHtml(vref2)}</div></div>`;
+      }catch(e){}
+    } else {
+      // Generic jobs: only show URLs when present
+      if (job.mp3_url){
+        rows += `<div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+      }
+      if (job.sfml_url){
+        rows += `<div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+      }
+    }
+
+    // Status-specific fields
+    rows += errRow;
+
+    // Variable action buttons
+    const metaActions = isVoiceMeta ? (function(){
+      try{
+        const vid2 = (meta && meta.voice_id) ? String(meta.voice_id) : '';
+        if (!vid2) return '';
+        return `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
+          + `<a href='/voices/${encodeURIComponent(vid2)}/edit'><button type='button' class='secondary'>Open voice</button></a>`
+          + `</div>`;
+      }catch(e){ return ''; }
+    })() : '';
     return `<div class='job' data-jobid='${escAttr(job.id||'')}' data-url='${escAttr(job.mp3_url||'')}' data-meta='${escAttr(job.meta_json||'')}'>
       <div class='row' style='justify-content:space-between;'>
         <div class='title'>${escapeHtml(cardTitle)}</div>
         <div>${pill(job.state)}</div>
       </div>
-      <div class='kvs'>
-        <div class='k'>id</div><div>${job.id}</div>
-        <div class='k'>started</div><div>${fmtTs(job.started_at)}</div>
-        <div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>
-        <div class='k'>progress</div><div>${progText}${progBar}</div>
-        <div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>
-        ${errRow}
-        ${sfmlRow}
-      </div>
+      <div class='kvs'>${rows}</div>
       ${actions}
+      ${metaActions}
     </div>`;
   }).join('');
 }
