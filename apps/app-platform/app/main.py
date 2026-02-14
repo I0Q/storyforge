@@ -2968,7 +2968,6 @@ function $(id){ return document.getElementById(id); }
 function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
 
-renderTraits();
 function updateSampleTextCount(){
   try{
     var ta=$('sampleText');
@@ -2998,8 +2997,8 @@ function deleteThisVoice(){
 }
 
 
-function analyzeMeta(){
 function renderTraits(){
+
   try{
     var box=$('traitsBox');
     var hid=$('voice_traits_json');
@@ -3074,6 +3073,7 @@ function renderTraits(){
   }catch(e){}
 }
 
+function analyzeMeta(){
 
   try{
     var out=$('out'); if(out) out.textContent='Analyzing voice…';
@@ -3174,6 +3174,8 @@ function copyVoiceRef(){
     try{ if (typeof toastSet==='function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(_e){}
   }catch(e){}
 }
+
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(e){} }); }catch(e){}
 </script>
 
 
