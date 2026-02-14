@@ -2380,16 +2380,40 @@ function prodRenderSfml(sfml){
     function esc(s){ return escapeHtml(String(s||'')); }
 
     function hilite(s){
-      var x = esc(s);
+      var raw = String(s||'');
+      var t = raw.trim();
+
       // comments
-      if (x.trim().startsWith('#')) return '<span class="tok-comment">'+x+'</span>';
+      if (t.startsWith('#')) return '<span class="tok-comment">'+esc(raw)+'</span>';
+
+      // Highlight character id in: say <character_id> ...
+      // Do this BEFORE HTML escaping, to avoid brittle regex over HTML.
+      var sayChar = '';
+      if (t.toLowerCase().startsWith('say ')){
+        try{
+          var parts = t.split(/\s+/);
+          if (parts.length >= 2) sayChar = String(parts[1]||'');
+        }catch(_e){}
+      }
+
+      var x = esc(raw);
+
       // keywords + attrs
       x = x.replace(/\b(scene|say)\b/g, '<span class="tok-kw">$1</span>');
       x = x.replace(/\b(voice|id|title)=/g, '<span class="tok-attr">$1</span>=');
+
       // quoted strings
       x = x.replace(/&quot;([^&]*)&quot;/g, '<span class="tok-str">&quot;$1&quot;</span>');
-      // ids after say
-      x = x.replace(/(<span class=\"tok-kw\">say<\/span>\s+)([a-zA-Z0-9_\-]+)/, '$1<span class="tok-id">$2</span>');
+
+      // character id token (best-effort)
+      if (sayChar){
+        var escId = esc(sayChar);
+        // replace only the first occurrence of the token after the highlighted 'say'
+        x = x.replace(/(<span class="tok-kw">say<\/span>\s+)/, '$1@@ID@@');
+        x = x.replace('@@ID@@'+escId, '@@ID@@<span class="tok-id">'+escId+'</span>');
+        x = x.replace('@@ID@@', '');
+      }
+
       return x;
     }
 
