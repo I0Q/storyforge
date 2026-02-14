@@ -480,6 +480,39 @@ def analyze_voice_metadata(
             "tone": [],
         }
 
+        # Age: prefer dedicated regressor endpoint (Tinybox) when available.
+        try:
+            ar = requests.post(
+                gateway_base + '/v1/audio/age',
+                json={'url': sample_url},
+                headers=headers,
+                timeout=120,
+            )
+            if int(getattr(ar, 'status_code', 0) or 0) == 200:
+                aj = {}
+                try:
+                    aj = ar.json()
+                except Exception:
+                    aj = {}
+                if isinstance(aj, dict) and aj.get('ok') and aj.get('age_years') is not None:
+                    try:
+                        agey = float(aj.get('age_years'))
+                    except Exception:
+                        agey = None
+                    if agey is not None:
+                        # bucket
+                        if agey < 13:
+                            out_traits['age'] = 'child'
+                        elif agey < 20:
+                            out_traits['age'] = 'teen'
+                        elif agey < 60:
+                            out_traits['age'] = 'adult'
+                        else:
+                            out_traits['age'] = 'elder'
+                        measured['age_years'] = agey
+        except Exception:
+            pass
+
         # Override with measured pitch bucket if available
         try:
             pb = str(((measured.get('features') or {}).get('pitch_bucket') or '')).strip().lower()
