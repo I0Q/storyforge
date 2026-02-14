@@ -2126,7 +2126,7 @@ function loadVoices(){
         function chip(txt, cls){
           txt = String(txt||'').trim();
           if (!txt) return '';
-          return "<span class='chip "+(cls||"")+"'>"+escapeHtml(txt)+"</span>";
+          return "<span class='chip "+(cls||"")+"' style='margin-right:8px;margin-bottom:8px'>"+escapeHtml(txt)+"</span>";
         }
 
         var chips = '';
