@@ -2778,6 +2778,16 @@ function $(id){ return document.getElementById(id); }
 function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
 function chk(id){ var el=$(id); return !!(el && el.checked); }
 
+function updateSampleTextCount(){
+  try{
+    var ta=$('sampleText');
+    var c=$('sampleTextCount');
+    if (!ta || !c) return;
+    var n = (String(ta.value||'')||'').length;
+    c.textContent = String(n) + ' chars';
+  }catch(e){}
+}
+
 function deleteThisVoice(){
   try{
     if (!confirm('Delete this voice? This also deletes any associated sample/clip in Spaces.')) return;
@@ -3353,7 +3363,10 @@ def voices_new_page(response: Response):
       </div>
     </div>
 
-    <div class='k'>Sample text</div>
+    <div class='row' style='justify-content:space-between;align-items:baseline'>
+      <div class='k'>Sample text</div>
+      <div class='muted' id='sampleTextCount'>0 chars</div>
+    </div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <textarea id='sampleText' placeholder='Hello…' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
       <button type='button' class='copyBtn' onclick='genSampleText()' aria-label='Random sample text' title='Random sample text' style='align-self:stretch'>
@@ -3670,11 +3683,13 @@ function genSampleText(){
   function startAnim(){
     try{
       if (ta){ ta.disabled=true; ta.value = frames[0]; }
+      try{ updateSampleTextCount(); }catch(e){}
       if (btn){ btn.disabled=true; }
       timer = setInterval(function(){
         try{
           i = (i+1) % frames.length;
           if (ta) ta.value = frames[i];
+          try{ updateSampleTextCount(); }catch(e){}
         }catch(e){}
       }, 350);
     }catch(e){}
@@ -3799,6 +3814,8 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   var tg=$('tortoiseGender'); if(tg) tg.addEventListener('change', function(){ try{ loadTortoiseVoices(); }catch(e){} });
   try{ loadTortoiseVoices(); }catch(e){}
   try{ setEngineUi(); }catch(e){}
+  try{ updateSampleTextCount(); }catch(e){}
+  try{ var st=$('sampleText'); if (st) st.addEventListener('input', updateSampleTextCount); }catch(e){}
 
   // Suggest a random voice name on first load (only if empty)
   try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
