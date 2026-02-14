@@ -1545,7 +1545,24 @@ function onGpuToggle(cb){
       }catch(e){}
     }
 
+    // Symmetric reservation UI: Voice-selected GPUs are not available for LLM.
     var v = selList('voice');
+    var llmEls=document.querySelectorAll('.gpuCb[data-pid="'+pid+'"][data-role="llm"]');
+    for (var q=0;q<llmEls.length;q++){
+      var n3=parseInt(String(llmEls[q].getAttribute('data-gpu')||''),10);
+      var dis2 = (v.indexOf(n3)>=0);
+      llmEls[q].disabled = dis2;
+      if (dis2) llmEls[q].checked = false;
+      try{
+        var lab2 = llmEls[q].parentElement;
+        if (lab2) lab2.style.opacity = dis2 ? '0.45' : '1';
+      }catch(e){}
+    }
+
+    // Recompute after potential unchecks
+    llm = selList('llm');
+    v = selList('voice');
+
     var vHidden=document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="voice_gpus"]');
     if (vHidden) vHidden.value = v.join(',');
     var lHidden=document.querySelector('input[type=hidden][data-pid="'+pid+'"][data-k="llm_gpus"]');
