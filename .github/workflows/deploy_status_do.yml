@@ -3,6 +3,12 @@ name: StoryForge deploy status → in-app bar
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this was triggered"
+        required: false
+        default: "manual"
 
 concurrency:
   group: storyforge-deploy-status-main
