@@ -288,27 +288,50 @@ def analyze_voice_metadata(
         except Exception as e:
             return {"ok": False, "error": f"download_failed: {type(e).__name__}: {str(e)[:160]}"}
 
-        # Always try to get something useful even if ffmpeg/ffprobe aren't installed.
+        # Prefer remote analysis (Tinybox) via gateway: cloud containers often lack ffmpeg.
         dur = _ffprobe_duration_s(in_path)
         lufs = _ffmpeg_lufs(in_path)
 
         feats: dict[str, Any] = {}
+
+        # 1) Try remote analyze first (best)
         try:
-            if _audio_to_wav16k(in_path, wav_path):
+            ra = requests.post(
+                gateway_base + '/v1/audio/analyze',
+                json={'url': sample_url},
+                headers=headers,
+                timeout=120,
+            )
+            if int(getattr(ra, 'status_code', 0) or 0) == 200:
+                j = {}
+                try:
+                    j = ra.json()
+                except Exception:
+                    j = {}
+                if isinstance(j, dict) and j.get('ok'):
+                    dur = j.get('duration_s') if j.get('duration_s') is not None else dur
+                    lufs = j.get('lufs_i') if j.get('lufs_i') is not None else lufs
+                    feats = j.get('features') if isinstance(j.get('features'), dict) else feats
+        except Exception:
+            pass
+
+        # 2) Fallback: local extraction if tools exist
+        try:
+            if not feats and _audio_to_wav16k(in_path, wav_path):
                 feats = _extract_wav_features(wav_path) or {}
                 if dur is None:
                     dur = _wav_duration_s(wav_path)
         except Exception:
-            feats = {}
+            feats = feats or {}
 
     measured = {
         "duration_s": dur,
         "lufs_i": lufs,
-        "features": feats,
+        "features": feats or {},
         # deterministic metadata
         "engine": engine,
         "voice_ref": voice_ref,
-        "tortoise_voice": tortoise_voice,
+        "tortoise_voice": tortoise_voice or (voice_ref if engine == 'tortoise' else ''),
         "tortoise_gender": tortoise_gender,
         "tortoise_preset": tortoise_preset,
         "has_ffmpeg": bool(shutil.which('ffmpeg')),
