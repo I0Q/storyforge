@@ -6182,11 +6182,22 @@ def api_jobs_stream():
 
 
 def _require_job_token(request: Request) -> None:
-    if not SF_JOB_TOKEN:
-        raise HTTPException(status_code=500, detail='SF_JOB_TOKEN not configured')
+    """Auth for external workers.
+
+    Prefer x-sf-job-token (SF_JOB_TOKEN). For operator convenience we also
+    accept x-sf-todo-token (TODO_API_TOKEN) since it's already provisioned.
+    """
     tok = (request.headers.get('x-sf-job-token') or '').strip()
-    if not tok or tok != SF_JOB_TOKEN:
-        raise HTTPException(status_code=401, detail='unauthorized')
+    if tok and SF_JOB_TOKEN and tok == SF_JOB_TOKEN:
+        return
+
+    # Fallback: allow TODO API token
+    todo_err = _todo_api_check(request)
+    if todo_err is None:
+        return
+
+    # If neither token passes, reject.
+    raise HTTPException(status_code=401, detail='unauthorized')
 
 
 @app.post('/api/jobs/claim')
