@@ -1009,6 +1009,12 @@ def index(response: Response):
         <button type='button' id='prodSaveBtn' onclick='prodSaveCasting()' disabled>Save casting</button>
       </div>
 
+      <div id='prodBusy' class='updateBar hide' style='margin-top:10px'>
+        <div class='muted' style='font-weight:950' id='prodBusyTitle'>Working…</div>
+        <div class='updateTrack'><div class='updateProg'></div></div>
+        <div id='prodBusySub' class='muted'>Please wait</div>
+      </div>
+
       <div id='prodOut' class='muted' style='margin-top:10px'></div>
       <div id='prodAssignments' style='margin-top:10px'></div>
 
@@ -2231,8 +2237,9 @@ function prodLoadCasting(storyId){
     var out=document.getElementById('prodOut');
     var sid = String(storyId||'').trim();
     if (!sid) return;
+    prodSetBusy(true, 'Loading…', 'Fetching saved casting and SFML');
     fetchJsonAuthed('/api/production/casting/'+encodeURIComponent(sid)).then(function(j){
-      if (!j || !j.ok) return;
+      if (!j || !j.ok) { prodSetBusy(false); return; }
       window.__SF_PROD.story_id = sid;
       window.__SF_PROD.roster = j.roster || [];
       window.__SF_PROD.assignments = (j.assignments||[]).map(function(a){ return {character:String(a.character||''), voice_id:String(a.voice_id||''), reason:String(a.reason||''), _editing:false}; });
@@ -2254,11 +2261,30 @@ function prodLoadCasting(storyId){
         }).catch(function(_e){});
       }catch(_e){}
 
-    }).catch(function(_e){});
+      prodSetBusy(false);
+
+    }).catch(function(_e){ prodSetBusy(false); });
   }catch(e){}
 }
 
-window.__SF_PROD = window.__SF_PROD || { roster:[], assignments:[], story_id:'', saved:false };
+window.__SF_PROD = window.__SF_PROD || { roster:[], assignments:[], story_id:'', saved:false, sfml:'' };
+
+function prodSetBusy(on, title, sub){
+  try{
+    var box=document.getElementById('prodBusy');
+    var t=document.getElementById('prodBusyTitle');
+    var s=document.getElementById('prodBusySub');
+    if (!box) return;
+    if (on){
+      box.classList.remove('hide');
+      if (t) t.textContent = title || 'Working…';
+      if (s) s.textContent = sub || 'Please wait';
+    }else{
+      box.classList.add('hide');
+    }
+  }catch(e){}
+}
+
 
 function prodRenderAssignments(){
   try{
@@ -2348,12 +2374,14 @@ function prodSuggestCasting(){
     var saveBtn=document.getElementById('prodSaveBtn');
     var storyId = sel ? String(sel.value||'').trim() : '';
     if (!storyId){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
-    if (out) out.textContent='Suggesting casting…';
+    prodSetBusy(true, 'Suggesting casting…', 'Asking the LLM to match voices to characters');
+    if (out) out.textContent='';
     if (saveBtn) saveBtn.disabled = true;
 
     fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'suggest_failed'); }
+        prodSetBusy(false);
         if (out) out.textContent='';
         window.__SF_PROD.story_id = storyId;
         window.__SF_PROD.roster = j.roster || [];
@@ -2363,7 +2391,7 @@ function prodSuggestCasting(){
         window.__SF_PROD.saved = false;
         prodRenderAssignments();
       })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+      .catch(function(e){ prodSetBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
@@ -2376,12 +2404,14 @@ function prodSaveCasting(){
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
     if (!assigns.length){ if(out) out.innerHTML='<div class="err">No assignments</div>'; return; }
 
-    if (out) out.textContent='Saving casting…';
+    prodSetBusy(true, 'Saving casting…', 'Persisting your casting choices');
+    if (out) out.textContent='';
     var payload = { story_id: String(st.story_id), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
 
     fetchJsonAuthed('/api/production/casting_save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
+        prodSetBusy(false);
         if (out) out.textContent='Saved.';
         window.__SF_PROD.saved = true;
         window.__SF_PROD.sfml = '';
@@ -2390,7 +2420,7 @@ function prodSaveCasting(){
         try{ if (box){ box.classList.add('hide'); box.innerHTML=''; } }catch(_e){}
         prodRenderAssignments();
       })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+      .catch(function(e){ prodSetBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
@@ -2402,15 +2432,17 @@ function prodGenerateSfml(){
     var sid = String(st.story_id||'').trim();
     if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
 
-    if (out) out.textContent='Generating SFML…';
+    prodSetBusy(true, 'Generating SFML…', 'Asking the LLM to produce a full script');
+    if (out) out.textContent='';
     fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
       .then(function(j){
         if (!j || !j.ok || !j.sfml){ throw new Error((j&&j.error)||'sfml_failed'); }
+        prodSetBusy(false);
         window.__SF_PROD.sfml = String(j.sfml||'');
         if (out) out.textContent='';
         prodRenderSfml(window.__SF_PROD.sfml);
       })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+      .catch(function(e){ prodSetBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 
