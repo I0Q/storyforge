@@ -6893,13 +6893,28 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                             gpu = allowed_gpus[i % len(allowed_gpus)]
                         futs.append(ex.submit(do_one, i, chunk, gpu))
 
+                    last_prog_ts = 0.0
                     for fut in as_completed(futs):
                         i, b, g = fut.result()
                         wavs[i] = b
                         if g is not None:
                             gpus_used.append(int(g))
                         seg_done += 1
+
+                        # Throttle DB writes: progress updates at most ~1/sec.
+                        try:
+                            now_ts = time.time()
+                            if (now_ts - last_prog_ts) >= 0.9:
+                                _job_patch(job_id, {'segments_done': int(seg_done)})
+                                last_prog_ts = now_ts
+                        except Exception:
+                            pass
+
+                    # Ensure final progress is recorded for stage 2.
+                    try:
                         _job_patch(job_id, {'segments_done': int(seg_done)})
+                    except Exception:
+                        pass
 
                 # stage 3: upload concatenated wav to Spaces
                 from .spaces_upload import upload_bytes
