@@ -39,14 +39,39 @@ This document defines **SFML v0**.
 
 ## 2) Core directives
 
-SFML v0 intentionally supports only two directives:
+SFML v0 supports these directives/line types:
 
 - `scene` — declares a new scene
-- `say` — declares a spoken line
+- `voice` — declares a casting mapping (character → voice_id)
+- **speaker lines** — dialogue/narration lines tagged with `[Character]`
 
 ---
 
-## 3) `scene` directive
+## 3) Casting (`voice` lines)
+
+### Purpose
+Define the voice roster id to use for each character. This makes an exported SFML file **self-contained** (no DB lookups needed to know casting).
+
+### Syntax
+```
+voice [<Character>] = <voice_id>
+```
+
+### Requirements
+- Must include at least one narrator mapping:
+  - `voice [Narrator] = <voice_id>`
+- `voice_id` must be a valid StoryForge roster id (`sf_voices.id`).
+
+### Example
+```
+voice [Narrator] = terracotta-glow
+voice [Maris] = lunar-violet
+voice [Ocean] = solar-sands
+```
+
+---
+
+## 4) `scene` directive
 
 ### Syntax
 ```
@@ -65,34 +90,27 @@ scene id=<scene_id> title="<title>"
 
 ---
 
-## 4) `say` directive
+## 5) Speaker lines (`[Character] ...`)
 
 ### Syntax
 ```
-say <character_id> voice=<voice_id>: <text>
+[<Character>] <text>
 ```
 
-### Required fields
-- `character_id` (string)
-- `voice=<voice_id>` (string; must exist in the voice roster)
-- `text` (string; single-line)
+### Requirements
+- `<Character>` must have a corresponding `voice [<Character>] = ...` mapping above.
+- `<text>` must be single-line.
 
-### Narrator
-Narrator lines use:
-- `character_id = narrator`
-
-Example:
+### Examples
 ```
-say narrator voice=indigo-dawn: The lighthouse stood silent on the cliff.
+[Narrator] The lighthouse stood silent on the cliff.
+[Maris] I am proud.
+[Ocean] The tide remembers every footstep.
 ```
-
-### Text rules
-- `text` must be single-line.
-- Split long paragraphs into multiple `say` lines.
 
 ---
 
-## 5) Minimal valid file
+## 6) Minimal valid file
 
 A valid SFML file must include:
 - at least one `scene`
@@ -102,22 +120,27 @@ A valid SFML file must include:
 Example:
 ```
 # SFML v0
+voice [Narrator] = indigo-dawn
+voice [Maris] = lunar-violet
+
 scene id=scene-1 title="Intro"
 
-say narrator voice=indigo-dawn: The lighthouse stood silent on the cliff.
-say maris voice=lunar-violet: I can hear the sea breathing below.
+[Narrator] The lighthouse stood silent on the cliff.
+[Maris] I can hear the sea breathing below.
 ```
 
 ---
 
-## 6) LLM generation contract (recommended)
+## 7) LLM generation contract (recommended)
 
 When asking an LLM to generate SFML:
 
 - Output **plain SFML text only** (no markdown, no code fences).
-- Use only `scene` and `say`.
-- Always include narrator lines (`say narrator ...`).
-- Use only voice ids from a provided casting map.
+- Emit a **casting block at the top** using `voice [Name] = voice_id` lines.
+- Then emit one or more `scene ...` blocks.
+- For dialogue/narration, use **speaker lines** like `[Name] text...`.
+- Always include narrator mapping + narrator lines.
+- Do not invent voice ids; only use roster ids provided.
 - Do not output JSON.
 
 ---

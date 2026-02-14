@@ -2424,6 +2424,26 @@ function prodRenderSfml(sfml){
       if (!t) return '';
       if (t.startsWith('#')) return span('tok-c', esc(s));
 
+      // voice mapping: voice [Name] = voice_id
+      if (t.toLowerCase().startsWith('voice ')){
+        // best-effort parse: voice [Name] = id
+        var out = span('tok-kw','voice') + ' ';
+        var lb = t.indexOf('[');
+        var rb = t.indexOf(']');
+        if (lb>=0 && rb>lb){
+          out += '[' + span('tok-id', esc(t.slice(lb+1, rb).trim())) + ']';
+          out += ' ';
+          var eq = t.indexOf('=', rb);
+          if (eq>=0){
+            out += '= ' + span('tok-id', esc(t.slice(eq+1).trim()));
+          }else{
+            out += esc(t.slice(rb+1));
+          }
+          return out;
+        }
+        return span('tok-kw','voice') + ' ' + esc(t.slice(5));
+      }
+
       // scene
       if (t.toLowerCase().startsWith('scene ')){
         var rest = t.slice(5).trim();
@@ -2439,7 +2459,19 @@ function prodRenderSfml(sfml){
         return out;
       }
 
-      // say
+      // speaker line: [Name] text
+      if (t.startsWith('[')){
+        var rb = t.indexOf(']');
+        if (rb>0){
+          var nm = t.slice(1, rb).trim();
+          var rest = t.slice(rb+1).trim();
+          var out = '[' + span('tok-id', esc(nm)) + ']';
+          if (rest) out += ' ' + esc(rest);
+          return out;
+        }
+      }
+
+      // legacy say (keep supported)
       if (t.toLowerCase().startsWith('say ')){
         var colon = t.indexOf(':');
         var head = (colon>=0)?t.slice(0,colon).trim():t;
@@ -2447,7 +2479,6 @@ function prodRenderSfml(sfml){
         var parts = head.split(' ').filter(Boolean);
         var out = span('tok-kw','say');
         if (parts.length>1) out += ' ' + span('tok-id', esc(parts[1]));
-        // voice=...
         for (var i=2;i<parts.length;i++){
           var p=String(parts[i]||'');
           if (p.startsWith('voice=')) out += ' ' + span('tok-a','voice')+'='+span('tok-id', esc(p.slice(6)));
@@ -6295,11 +6326,12 @@ def api_production_casting_get(story_id: str):
 def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Generate SFML (StoryForge Markup Language) from story + saved casting.
 
-    SFML v0 directives:
-      - scene id=<id> title="..."
-      - say <character_id> voice=<voice_id>: <text>
+    SFML v0 directives/lines:
+      - voice [Name] = <voice_id>        (casting block at top)
+      - scene id=<id> title="..."      (scene header)
+      - [Name] <text>                   (speaker line)
 
-    The output is plain text.
+    The output is plain text and is intended to be exportable/self-contained.
     """
     try:
         import re
@@ -6329,8 +6361,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         story_md = str(st.get('story_md') or '')
         title = str(st.get('title') or story_id)
 
-        # Build a strict casting map (character -> voice_id)
-        cmap = {}
+        # Build a strict casting map (character -> voice_id) preserving human-facing names.
+        cmap: dict[str, str] = {}
         for a in assigns:
             try:
                 ch = str((a or {}).get('character') or '').strip()
@@ -6341,13 +6373,12 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 pass
 
         # Ensure narrator exists in map
-        if 'Narrator' in cmap and 'narrator' not in cmap:
-            cmap['narrator'] = cmap['Narrator']
-        if 'narrator' not in cmap:
-            # best-effort: take any assignment whose character is narrator-ish
+        if 'Narrator' in cmap and 'NARRATOR' not in cmap:
+            cmap['NARRATOR'] = cmap['Narrator']
+        if 'NARRATOR' not in cmap:
             for k, v in list(cmap.items()):
                 if str(k).strip().lower() == 'narrator':
-                    cmap['narrator'] = v
+                    cmap['NARRATOR'] = v
                     break
 
         prompt = {
@@ -6357,19 +6388,24 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'casting_map': cmap,
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
-                'Use only directives: scene, say.',
-                'At least one scene.',
-                'Every say line MUST include voice=<voice_id> from casting_map values.',
-                'Narrator lines use character_id=narrator and voice=cmap["narrator"].',
-                'Keep each say line to a single line; split long paragraphs into multiple say lines.',
-                'Do not invent voice ids.',
-                'Do not include JSON in the output.',
+                'First emit a casting block at the top with one line per character: voice [Name] = voice_id',
+                'Then emit one or more scenes using: scene id=scene-1 title="..."',
+                'For story lines, use speaker lines: [Name] text',
+                'Every [Name] used in the body MUST have a corresponding voice [Name] mapping at the top.',
+                'Always include narrator as: voice [Narrator] = <voice_id> and use [Narrator] lines.',
+                'Do not invent voice ids; only use voice ids from casting_map values.',
+                'Keep each speaker line to a single line; split long paragraphs into multiple lines.',
+                'Do not output JSON.',
             ],
             'example': (
                 '# SFML v0\n'
+                'voice [Narrator] = indigo-dawn\n'
+                'voice [Maris] = lunar-violet\n'
+                '\n'
                 'scene id=scene-1 title="Intro"\n'
-                'say narrator voice=indigo-dawn: The lighthouse stood silent on the cliff.\n'
-                'say maris voice=lunar-violet: I can hear the sea breathing below.\n'
+                '\n'
+                '[Narrator] The lighthouse stood silent on the cliff.\n'
+                '[Maris] I can hear the sea breathing below.\n'
             ),
         }
 
