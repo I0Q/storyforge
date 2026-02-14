@@ -37,6 +37,14 @@ VIEWER_EXTRA_CSS = """
 .pill.ml6{margin-left:6px;}
 .desc.mt4{margin-top:4px;}
 
+./* swipe-delete */
+.swipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.swipe::-webkit-scrollbar{display:none;}
+.swipeInner{display:flex;min-width:100%;}
+.swipeMain{min-width:100%;}
+.swipeKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;pointer-events:auto;}
+.swipeDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;pointer-events:auto;}
+
 .charCard{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;background:#0b1020;margin-top:8px}
 .charCard .sw{width:18px;height:18px;border-radius:6px;flex:0 0 auto;margin-top:3px}
 .charCard .cname{font-weight:950}
@@ -120,11 +128,18 @@ def register_library_viewer(app: FastAPI) -> None:
                 else ""
             )
             char_cards.append(
+                "<div class='swipe'><div class='swipeInner'>"
+                "<div class='swipeMain'>"
                 "<div class='charCard' onclick=\"openCharEdit(" + str(idx) + ")\">"
                 f"<div class='sw' style='background:{color}'></div>"
                 "<div class='cbody'>"
                 f"<div class='cname'>{html.escape(nm)}{pill}</div>"
                 f"{desc_html}"
+                "</div></div>"
+                "</div>"
+                "<div class='swipeKill'>"
+                "<button class='swipeDelBtn' type='button' onclick=\"deleteCharBtn(event, " + str(idx) + ")\">Delete</button>"
+                "</div>"
                 "</div></div>"
             )
 
@@ -170,6 +185,38 @@ function openCharEdit(idx){{
 
 function closeCharEdit(){{
   try{{ $('charEdit').classList.add('hide'); }}catch(e){{}}
+}}
+
+function deleteCharBtn(ev, idx){{
+  try{{
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    if (ev && ev.preventDefault) ev.preventDefault();
+  }}catch(e){{}}
+  try{{
+    idx = parseInt(String(idx||'0'),10) || 0;
+    var chars = window.__CHARS || [];
+    if (!chars[idx]) return;
+    var nm = String((chars[idx]||{{}}).name||'character');
+    if (!confirm('Delete ' + nm + '?')) return;
+    chars.splice(idx, 1);
+    fetch('/api/library/story/' + encodeURIComponent(String(window.__STORY_ID||'')) + '/characters', {{
+      method:'PUT',
+      headers:{{'Content-Type':'application/json'}},
+      credentials:'include',
+      body: JSON.stringify({{characters: chars}})
+    }})
+    .then(function(r){{ return r.json().catch(function(){{return {{ok:false,error:'bad_json'}};}}); }})
+    .then(function(j){{
+      if (!j || !j.ok) throw new Error((j&&j.error)||'delete_failed');
+      window.__CHARS = (j.characters||chars);
+      window.location.reload();
+    }})
+    .catch(function(e){{
+      var out=$('charsOut');
+      if (out) out.innerHTML = '<div class="err">'+String(e&&e.message?e.message:e)+'</div>';
+      try{{ toastShowNow('Delete failed', 'err', 2200); }}catch(_e){{}}
+    }});
+  }}catch(e){{}}
 }}
 
 function saveCharEdit(){{
