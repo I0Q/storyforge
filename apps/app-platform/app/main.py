@@ -2851,6 +2851,10 @@ def voices_edit_page(voice_id: str, response: Response):
       <span class='slider'></span>
     </label>
     <div class='muted' style='margin-top:6px'>Show in curated list</div>
+
+    <div class='row' style='margin-top:12px;justify-content:flex-end'>
+      <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze metadata</button>
+    </div>
   </div>
 
   <div class='card'>
