@@ -179,11 +179,12 @@ INDEX_BASE_CSS = base_css("""\
     .term{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.25;white-space:pre;}
 
     /* SFML code viewer (line numbers + basic highlighting) */
-    .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;overflow:auto;}
+    .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;max-height:55vh;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
     .codeLine{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:2px 12px;}
     .codeLn{color:rgba(168,179,216,0.55);text-align:right;user-select:none;}
-    .codeTxt{white-space:pre;}
+    /* Wrap long lines so vertical scrolling is natural on mobile */
+    .codeTxt{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;}
     .tok-c{color:rgba(168,179,216,0.55)}
     .tok-kw{color:#7dd3fc;font-weight:900}
     .tok-a{color:#a78bfa;font-weight:900}
