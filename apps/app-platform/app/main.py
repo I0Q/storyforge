@@ -1642,7 +1642,7 @@ function renderMetrics(m){
 function renderProc(m){
   const el = document.getElementById('monProc');
   if (!el) return;
-  const b = m?.body || m || {};
+  const b = (m && m.body) ? m.body : (m || {});
   const procs = b.processes || b.procs || null;
   if (!procs || !Array.isArray(procs) || procs.length===0){
     el.textContent = 'No process list available.';
@@ -1651,13 +1651,13 @@ function renderProc(m){
 
   // terminal-like table
   const rows = procs.slice(0, 18).map(p => ({
-    pid: String(p.pid ?? ''),
-    cpu: (p.cpu_pct!=null) ? Number(p.cpu_pct).toFixed(1) : '',
-    mem: (p.mem_pct!=null) ? Number(p.mem_pct).toFixed(1) : '',
-    gmem: (p.gpu_mem_mb!=null) ? Number(p.gpu_mem_mb).toFixed(0) : '',
-    et: String(p.elapsed ?? ''),
-    cmd: String(p.command ?? p.name ?? ''),
-    args: String(p.args ?? '')
+    pid: String((p && p.pid != null) ? p.pid : ''),
+    cpu: (p && p.cpu_pct!=null) ? Number(p.cpu_pct).toFixed(1) : '',
+    mem: (p && p.mem_pct!=null) ? Number(p.mem_pct).toFixed(1) : '',
+    gmem: (p && p.gpu_mem_mb!=null) ? Number(p.gpu_mem_mb).toFixed(0) : '',
+    et: String((p && p.elapsed != null) ? p.elapsed : ''),
+    cmd: String((p && p.command != null) ? p.command : ((p && p.name != null) ? p.name : '')),
+    args: String((p && p.args != null) ? p.args : '')
   }));
 
   const pad = (s, n) => (s.length >= n ? s.slice(0,n) : s + ' '.repeat(n - s.length));
@@ -3128,7 +3128,7 @@ try{ bindMonitorClose(); }catch(e){}
 function renderGpus(b){
   const el = document.getElementById('monGpus');
   if (!el) return;
-  const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
+  const gpus = Array.isArray(b && b.gpus) ? b.gpus : ((b && b.gpu) ? [b.gpu] : []);
   if (!gpus.length){
     el.innerHTML = '<div class="muted">No GPU data</div>';
     return;
@@ -3179,12 +3179,12 @@ function renderGpus(b){
 function updateDockFromMetrics(m){
   const el = document.getElementById('dockStats');
   if (!el) return;
-  const b = m?.body || m || {};
+  const b = (m && m.body) ? m.body : (m || {});
   const cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
   const rt = Number(b.ram_total_mb||0); const ru = Number(b.ram_used_mb||0);
   const rp = rt ? (ru/rt*100) : 0;
   const ram = rt ? rp.toFixed(1)+'%' : '-';
-  const gpus = Array.isArray(b?.gpus) ? b.gpus : (b?.gpu ? [b.gpu] : []);
+  const gpus = Array.isArray(b && b.gpus) ? b.gpus : ((b && b.gpu) ? [b.gpu] : []);
   let maxGpu = null;
   if (gpus.length){
     maxGpu = 0;
@@ -3200,7 +3200,7 @@ function updateDockFromMetrics(m){
 
 function updateMonitorFromMetrics(m){
   // m is the /api/metrics response: {status, body}
-  const b = m?.body || m || {};
+  const b = (m && m.body) ? m.body : (m || {});
   const cpu = Number(b.cpu_pct || 0);
   document.getElementById('monCpu').textContent = fmtPct(cpu);
   setBar('barCpu', cpu);
