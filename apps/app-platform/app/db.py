@@ -155,6 +155,17 @@ CREATE TABLE IF NOT EXISTS sf_settings (
 """
     )
 
+    # Production: per-story casting (character -> voice_id)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_castings (
+  story_id TEXT PRIMARY KEY,
+  casting JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
 
     # Internal TODO tracker (DB-backed, read-only UI)
     cur.execute(

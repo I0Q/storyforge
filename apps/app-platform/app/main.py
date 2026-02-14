@@ -957,18 +957,24 @@ def index(response: Response):
   <div id='pane-production' class='hide'>
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Production</div>
-      <div class='muted'>Step 1: select a library story. Step 2: suggest voice casting from roster.</div>
+      <div class='muted'>Step 1: select a library story. Step 2: suggest voice casting from roster. Step 3 unlocks after saving casting.</div>
 
       <div class='muted' style='margin-top:12px'>1) Story</div>
       <select id='prodStorySel' style='margin-top:8px;width:100%'></select>
 
       <div class='muted' style='margin-top:12px'>2) Voice casting suggestion</div>
-      <div class='row' style='margin-top:8px;justify-content:flex-end'>
-        <button type='button' onclick='prodSuggestCasting()'>Suggest casting</button>
+      <div class='row' style='margin-top:8px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+        <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
+        <button type='button' id='prodSaveBtn' onclick='prodSaveCasting()' disabled>Save casting</button>
       </div>
 
       <div id='prodOut' class='muted' style='margin-top:10px'></div>
-      <div id='prodCast' class='term' style='margin-top:10px;white-space:pre-wrap;display:none'></div>
+      <div id='prodAssignments' style='margin-top:10px'></div>
+
+      <div class='muted' style='margin-top:14px'>3) Generate markup</div>
+      <div class='row' style='margin-top:8px;justify-content:flex-end'>
+        <button type='button' id='prodStep3Btn' disabled onclick='alert("Step 3 not implemented yet")'>Generate markup</button>
+      </div>
     </div>
   </div>
 
@@ -2128,9 +2134,7 @@ function loadProduction(){
   try{
     var sel=document.getElementById('prodStorySel');
     var out=document.getElementById('prodOut');
-    var cast=document.getElementById('prodCast');
     if (out) out.textContent='Loading stories…';
-    if (cast){ cast.style.display='none'; cast.textContent=''; }
 
     return fetchJsonAuthed('/api/library/stories').then(function(j){
       if (!j || !j.ok){ throw new Error((j&&j.error)||'library_failed'); }
@@ -2142,25 +2146,177 @@ function loadProduction(){
         return "<option value='"+escAttr(id)+"'>"+escapeHtml(title)+"</option>";
       }).join('');
       if (out) out.textContent = stories.length ? '' : 'No stories found.';
+
+      // reset current state + render
+      try{ window.__SF_PROD.story_id = String(sel.value||''); window.__SF_PROD.assignments=[]; window.__SF_PROD.roster=[]; window.__SF_PROD.saved=false; }catch(_e){}
+      prodRenderAssignments();
+
+      // Load saved casting for initial selection
+      try{ prodLoadCasting(String(sel.value||'')); }catch(_e){}
+
+      // story change handler
+      try{
+        sel.onchange = function(){
+          var sid = String(sel.value||'');
+          window.__SF_PROD.story_id = sid;
+          window.__SF_PROD.assignments=[];
+          window.__SF_PROD.roster=[];
+          window.__SF_PROD.saved=false;
+          if (out) out.textContent='';
+          prodRenderAssignments();
+          prodLoadCasting(sid);
+        };
+      }catch(_e){}
+
     }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
+}
+
+function prodLoadCasting(storyId){
+  try{
+    var out=document.getElementById('prodOut');
+    var sid = String(storyId||'').trim();
+    if (!sid) return;
+    fetchJsonAuthed('/api/production/casting/'+encodeURIComponent(sid)).then(function(j){
+      if (!j || !j.ok) return;
+      window.__SF_PROD.story_id = sid;
+      window.__SF_PROD.roster = j.roster || [];
+      window.__SF_PROD.assignments = (j.assignments||[]).map(function(a){ return {character:String(a.character||''), voice_id:String(a.voice_id||''), reason:String(a.reason||''), _editing:false}; });
+      window.__SF_PROD.saved = !!j.saved;
+      if (out && j.saved) out.textContent='Casting loaded.';
+      prodRenderAssignments();
+    }).catch(function(_e){});
+  }catch(e){}
+}
+
+window.__SF_PROD = window.__SF_PROD || { roster:[], assignments:[], story_id:'', saved:false };
+
+function prodRenderAssignments(){
+  try{
+    var box=document.getElementById('prodAssignments');
+    var saveBtn=document.getElementById('prodSaveBtn');
+    var step3=document.getElementById('prodStep3Btn');
+    if (!box) return;
+
+    var st = window.__SF_PROD || {};
+    var roster = Array.isArray(st.roster) ? st.roster : [];
+    var assigns = Array.isArray(st.assignments) ? st.assignments : [];
+
+    // helper: roster option list
+    function optList(selected){
+      return roster.map(function(v){
+        var id=String(v.id||'');
+        var nm=String(v.name||v.id||'');
+        var t=[];
+        if (v.gender && v.gender!=='unknown') t.push(v.gender);
+        if (v.age && v.age!=='unknown') t.push(v.age);
+        if (v.pitch && v.pitch!=='unknown') t.push('pitch '+v.pitch);
+        var label = nm + (t.length?(' • '+t.join(' • ')):'');
+        var sel = (String(selected||'')===id) ? ' selected' : '';
+        return "<option value='"+escAttr(id)+"'"+sel+">"+escapeHtml(label)+"</option>";
+      }).join('');
+    }
+
+    function cardFor(a, idx){
+      var ch = String(a.character||'');
+      var vid = String(a.voice_id||'');
+      var reason = String(a.reason||'');
+      var editing = !!a._editing;
+      var voiceName = '';
+      try{
+        var v = roster.find(function(x){ return String(x.id||'')===vid; });
+        voiceName = v ? String(v.name||v.id||'') : vid;
+      }catch(_e){}
+
+      var top = "<div class='row' style='justify-content:space-between;gap:10px'>"
+        + "<div style='font-weight:950'>"+escapeHtml(ch||('Character '+(idx+1)))+"</div>"
+        + "<div>" + (editing ? "<button class='secondary' type='button' onclick='prodCancelEdit("+idx+")'>Cancel</button>" : "<button class='secondary' type='button' onclick='prodEditAssign("+idx+")'>Edit</button>") + "</div>"
+        + "</div>";
+
+      var body = '';
+      if (editing){
+        body += "<div class='muted' style='margin-top:8px'>Voice</div>";
+        body += "<select style='margin-top:6px;width:100%' onchange='prodSetVoice("+idx+", this.value)'>" + optList(vid) + "</select>";
+      }else{
+        body += "<div class='muted' style='margin-top:8px'>Voice</div>";
+        body += "<div style='margin-top:6px'>"+escapeHtml(voiceName||'—')+"</div>";
+      }
+      if (reason){
+        body += "<div class='muted' style='margin-top:8px'>Reason</div>";
+        body += "<div style='margin-top:6px'>"+escapeHtml(reason)+"</div>";
+      }
+
+      return "<div class='job' style='padding:14px'>" + top + body + "</div>";
+    }
+
+    if (!assigns.length){
+      box.innerHTML = "<div class='muted'>No casting yet.</div>";
+    }else{
+      box.innerHTML = assigns.map(cardFor).join("");
+    }
+
+    // Save enabled when we have assignments and not saved.
+    var canSave = (!!(st.story_id) && assigns.length);
+    try{ if (saveBtn) saveBtn.disabled = (!canSave); }catch(_e){}
+    try{ if (step3) step3.disabled = (!st.saved); }catch(_e){}
+  }catch(e){}
+}
+
+function prodEditAssign(i){
+  try{ window.__SF_PROD.assignments[i]._editing=true; window.__SF_PROD.saved=false; prodRenderAssignments(); }catch(e){}
+}
+function prodCancelEdit(i){
+  try{ window.__SF_PROD.assignments[i]._editing=false; prodRenderAssignments(); }catch(e){}
+}
+function prodSetVoice(i, voiceId){
+  try{ window.__SF_PROD.assignments[i].voice_id = String(voiceId||''); window.__SF_PROD.saved=false; }catch(e){}
 }
 
 function prodSuggestCasting(){
   try{
     var sel=document.getElementById('prodStorySel');
     var out=document.getElementById('prodOut');
-    var cast=document.getElementById('prodCast');
-    if (cast){ cast.style.display='none'; cast.textContent=''; }
+    var saveBtn=document.getElementById('prodSaveBtn');
     var storyId = sel ? String(sel.value||'').trim() : '';
     if (!storyId){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
     if (out) out.textContent='Suggesting casting…';
+    if (saveBtn) saveBtn.disabled = true;
 
     fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'suggest_failed'); }
         if (out) out.textContent='';
-        if (cast){ cast.style.display='block'; cast.textContent = JSON.stringify(j.suggestions||{}, null, 2); }
+        window.__SF_PROD.story_id = storyId;
+        window.__SF_PROD.roster = j.roster || [];
+        window.__SF_PROD.assignments = ((j.suggestions||{}).assignments || []).map(function(a){
+          return { character: String(a.character||''), voice_id: String(a.voice_id||''), reason: String(a.reason||''), _editing:false };
+        });
+        window.__SF_PROD.saved = false;
+        prodRenderAssignments();
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodSaveCasting(){
+  try{
+    var out=document.getElementById('prodOut');
+    var st = window.__SF_PROD || {};
+    if (!st.story_id) { if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+    var assigns = Array.isArray(st.assignments) ? st.assignments : [];
+    if (!assigns.length){ if(out) out.innerHTML='<div class="err">No assignments</div>'; return; }
+
+    if (out) out.textContent='Saving casting…';
+    var payload = { story_id: String(st.story_id), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
+
+    fetchJsonAuthed('/api/production/casting_save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+      .then(function(j){
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
+        if (out) out.textContent='Saved.';
+        window.__SF_PROD.saved = true;
+        // exit edit mode
+        try{ window.__SF_PROD.assignments.forEach(function(a){ a._editing=false; }); }catch(_e){}
+        prodRenderAssignments();
       })
       .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
@@ -5840,9 +5996,118 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
         if not isinstance(assigns, list):
             return {'ok': False, 'error': 'bad_llm_shape'}
 
-        return {'ok': True, 'suggestions': out}
+        # return roster + characters for UI rendering
+        return {'ok': True, 'suggestions': out, 'roster': vrows, 'characters': chars, 'story': {'id': story_id, 'title': (st.get('title') or story_id)}}
     except Exception as e:
         return {'ok': False, 'error': f'suggest_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.get('/api/production/casting/{story_id}')
+def api_production_casting_get(story_id: str):
+    """Get saved casting (if any) for a story, plus roster for rendering."""
+    try:
+        story_id = str(story_id or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            voices = list_voices_db(conn, limit=500)
+
+            # roster summary
+            vrows = []
+            for v in voices:
+                vid = str(v.get('id') or '')
+                if not vid:
+                    continue
+                dn = str(v.get('display_name') or vid)
+                eng = str(v.get('engine') or '')
+                vtj = str(v.get('voice_traits_json') or '').strip()
+                traits = {}
+                try:
+                    if vtj:
+                        traits = json.loads(vtj).get('voice_traits') or {}
+                except Exception:
+                    traits = {}
+                vrows.append(
+                    {
+                        'id': vid,
+                        'name': dn,
+                        'engine': eng,
+                        'gender': str(traits.get('gender') or 'unknown'),
+                        'age': str(traits.get('age') or 'unknown'),
+                        'pitch': str(traits.get('pitch') or 'unknown'),
+                        'tone': traits.get('tone') if isinstance(traits.get('tone'), list) else [],
+                        'ref': str(v.get('voice_ref') or ''),
+                    }
+                )
+
+            cur = conn.cursor()
+            cur.execute('SELECT casting, updated_at FROM sf_castings WHERE story_id=%s', (story_id,))
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return {'ok': True, 'saved': False, 'assignments': [], 'roster': vrows}
+
+        casting = row[0] or {}
+        assigns = []
+        try:
+            assigns = list((casting or {}).get('assignments') or [])
+        except Exception:
+            assigns = []
+        return {'ok': True, 'saved': True, 'assignments': assigns, 'roster': vrows}
+    except Exception as e:
+        return {'ok': False, 'error': f'casting_get_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/production/casting_save')
+def api_production_casting_save(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Save casting (character -> voice_id) for a story."""
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+        assigns = (payload or {}).get('assignments') or []
+        if not isinstance(assigns, list) or not assigns:
+            return {'ok': False, 'error': 'missing_assignments'}
+
+        # Normalize
+        norm = []
+        for a in assigns:
+            if not isinstance(a, dict):
+                continue
+            ch = str(a.get('character') or '').strip()
+            vid = str(a.get('voice_id') or '').strip()
+            if not ch or not vid:
+                continue
+            norm.append({'character': ch, 'voice_id': vid})
+        if not norm:
+            return {'ok': False, 'error': 'empty_assignments'}
+
+        now = int(time.time())
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+INSERT INTO sf_castings (story_id, casting, created_at, updated_at)
+VALUES (%s, %s::jsonb, %s, %s)
+ON CONFLICT (story_id)
+DO UPDATE SET casting=EXCLUDED.casting, updated_at=EXCLUDED.updated_at
+""",
+                (story_id, json.dumps({'assignments': norm}, separators=(',', ':')), now, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'casting_save_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.get('/api/voices/{voice_id}')
