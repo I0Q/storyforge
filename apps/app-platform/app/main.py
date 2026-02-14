@@ -5754,9 +5754,8 @@ def _get_tinybox_provider() -> dict[str, Any] | None:
     return None
 
 
-def _pick_voice_gpu_rr() -> int | None:
+def _get_allowed_voice_gpus() -> list[int]:
     p = _get_tinybox_provider() or {}
-    pid = str(p.get('id') or 'tinybox')
     vg = p.get('voice_gpus') if isinstance(p, dict) else None
     lg = p.get('llm_gpus') if isinstance(p, dict) else None
     if not isinstance(vg, list):
@@ -5767,10 +5766,24 @@ def _pick_voice_gpu_rr() -> int | None:
         reserved = {int(x) for x in lg}
     except Exception:
         reserved = set()
-    try:
-        allowed = [int(x) for x in vg if int(x) not in reserved]
-    except Exception:
-        allowed = []
+    out: list[int] = []
+    for x in vg:
+        try:
+            n = int(x)
+        except Exception:
+            continue
+        if n in reserved:
+            continue
+        if n not in out:
+            out.append(n)
+    out.sort()
+    return out
+
+
+def _pick_voice_gpu_rr() -> int | None:
+    p = _get_tinybox_provider() or {}
+    pid = str(p.get('id') or 'tinybox')
+    allowed = _get_allowed_voice_gpus()
     return _pick_rr_from_list('voice:' + pid, allowed)
 
 
@@ -6043,19 +6056,23 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 except Exception:
                     total2 = total
 
-                wavs: list[bytes] = []
+                import base64
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                wavs: list[bytes] = [b'' for _ in range(max(1, len(chunks)))]
                 gpus_used: list[int] = []
                 seg_done = 1
 
-                for chunk in chunks:
-                    seg_done += 1
+                allowed_gpus = []
+                try:
+                    allowed_gpus = _get_allowed_voice_gpus()
+                except Exception:
+                    allowed_gpus = []
 
-                    gpu = None
-                    try:
-                        gpu = _pick_voice_gpu_rr()
-                    except Exception:
-                        gpu = None
+                # Parallelize across enabled GPUs.
+                workers = max(1, len(allowed_gpus) or 1)
 
+                def do_one(i: int, chunk: str, gpu: int | None):
                     r = requests.post(
                         GATEWAY_BASE + '/v1/tts',
                         json={'engine': engine, 'voice': voice, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads},
@@ -6070,22 +6087,31 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                         if det:
                             err = err + ' :: ' + str(det)
                         raise RuntimeError(err)
-
-                    try:
-                        if j.get('gpu') is not None:
-                            gpus_used.append(int(j.get('gpu')))
-                    except Exception:
-                        pass
-
-                    if j.get('audio_b64'):
-                        import base64
-
-                        b = base64.b64decode(str(j.get('audio_b64') or ''), validate=False)
-                        wavs.append(b)
-                    else:
+                    if not j.get('audio_b64'):
                         raise RuntimeError('no_audio_b64')
+                    b = base64.b64decode(str(j.get('audio_b64') or ''), validate=False)
+                    g = j.get('gpu')
+                    try:
+                        g = int(g) if g is not None else None
+                    except Exception:
+                        g = None
+                    return (i, b, g)
 
-                    _job_patch(job_id, {'segments_done': int(seg_done)})
+                with ThreadPoolExecutor(max_workers=workers) as ex:
+                    futs = []
+                    for i, chunk in enumerate(chunks):
+                        gpu = None
+                        if allowed_gpus:
+                            gpu = allowed_gpus[i % len(allowed_gpus)]
+                        futs.append(ex.submit(do_one, i, chunk, gpu))
+
+                    for fut in as_completed(futs):
+                        i, b, g = fut.result()
+                        wavs[i] = b
+                        if g is not None:
+                            gpus_used.append(int(g))
+                        seg_done += 1
+                        _job_patch(job_id, {'segments_done': int(seg_done)})
 
                 # stage 3: upload concatenated wav to Spaces
                 from .spaces_upload import upload_bytes
