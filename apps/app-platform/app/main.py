@@ -6046,6 +6046,19 @@ def _require_deploy_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail='unauthorized')
 
 
+@app.get('/api/deploy/token_fingerprint')
+def api_deploy_token_fingerprint():
+    """Debug-only helper: returns a short fingerprint of SF_DEPLOY_TOKEN without revealing it."""
+    try:
+        import hashlib
+
+        v = (SF_DEPLOY_TOKEN or '').encode('utf-8')
+        h = hashlib.sha256(v).hexdigest()
+        return {'ok': True, 'sha256_8': h[:8], 'configured': bool(SF_DEPLOY_TOKEN)}
+    except Exception:
+        return {'ok': True, 'sha256_8': '', 'configured': bool(SF_DEPLOY_TOKEN)}
+
+
 @app.post('/api/deploy/start')
 def api_deploy_start(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Mark deploy as started. Call from your deploy hook/pipeline."""
