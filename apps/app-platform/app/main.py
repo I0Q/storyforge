@@ -2516,14 +2516,19 @@ function prodRenderSfml(sfml){
           var oop = require('ace/lib/oop');
           var TextHighlightRules = require('ace/mode/text_highlight_rules').TextHighlightRules;
           var SfmlHighlightRules = function(){
+            // Keep rules very simple (no lookbehind; mobile-Safari safe)
             this.$rules = {
               start: [
                 { token: 'comment', regex: '^\\s*#.*$' },
-                { token: 'keyword', regex: '^\\s*(cast:)(?:\\s*)$' },
-                { token: 'keyword', regex: '^\\s*(scene)\\b' },
-                { token: 'variable', regex: '^\\s{2,}[^:]+(?=\\s*:)'} ,
-                { token: 'constant.language', regex: '(?<=:)\\s*[a-z0-9][a-z0-9_-]*\\s*$' },
+                { token: 'keyword', regex: '^\\s*cast:\\s*$' },
+                // cast mapping: "  Name: voice_id"
+                { token: ['text','variable','punctuation.operator','text','constant.language'],
+                  regex: '^(\\s{2,})([^:]+)(:)(\\s*)([a-z0-9][a-z0-9_-]*)\\s*$' },
+                // scene header: scene scene-1 "Title":
+                { token: ['keyword','text','constant.numeric','text','string','text'],
+                  regex: '^(\\s*)(scene)(\\s+)([a-z0-9][a-z0-9_-]*)(.*)$' },
                 { token: 'string', regex: '"(?:[^"\\\\]|\\\\.)*"' },
+                // speaker tags
                 { token: 'variable.parameter', regex: '\\[[^\\]]+\\]' },
               ]
             };
@@ -2550,9 +2555,14 @@ function prodRenderSfml(sfml){
       try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night_blue'); }
       catch(_e){ try{ window.__SF_ACE.setTheme('ace/theme/tomorrow_night'); }catch(__e){} }
 
-      // Mode: SFML
-      try{ window.__SF_ACE.session.setMode('ace/mode/sfml'); }
-      catch(_e){ try{ window.__SF_ACE.session.setMode('ace/mode/text'); }catch(__e){} }
+      // Mode: SFML (prefer constructing directly so it can't silently fail)
+      try{
+        var SfmlMode = ace.require('ace/mode/sfml').Mode;
+        window.__SF_ACE.session.setMode(new SfmlMode());
+      }catch(_e){
+        try{ window.__SF_ACE.session.setMode('ace/mode/sfml'); }
+        catch(__e){ try{ window.__SF_ACE.session.setMode('ace/mode/text'); }catch(__e2){} }
+      }
 
       window.__SF_ACE.setOptions({
         fontSize: '12px',
