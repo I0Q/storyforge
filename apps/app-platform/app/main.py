@@ -6185,7 +6185,11 @@ def _require_job_token(request: Request) -> None:
     """Auth for external workers.
 
     Prefer x-sf-job-token (SF_JOB_TOKEN). For operator convenience we also
-    accept x-sf-todo-token (TODO_API_TOKEN) since it's already provisioned.
+    accept x-sf-todo-token (TODO_API_TOKEN). As a last-resort bootstrap path,
+    accept x-sf-deploy-token (SF_DEPLOY_TOKEN) so we can bring up workers even
+    if TODO/SF_JOB tokens are out of sync.
+
+    NOTE: SF_DEPLOY_TOKEN is more sensitive (CI deploy hook); keep usage minimal.
     """
     tok = (request.headers.get('x-sf-job-token') or '').strip()
     if tok and SF_JOB_TOKEN and tok == SF_JOB_TOKEN:
@@ -6196,7 +6200,11 @@ def _require_job_token(request: Request) -> None:
     if todo_err is None:
         return
 
-    # If neither token passes, reject.
+    # Last resort: deploy token
+    dtok = (request.headers.get('x-sf-deploy-token') or '').strip()
+    if dtok and SF_DEPLOY_TOKEN and dtok == SF_DEPLOY_TOKEN:
+        return
+
     raise HTTPException(status_code=401, detail='unauthorized')
 
 
