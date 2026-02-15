@@ -615,6 +615,19 @@ function updateMonitorFromMetrics(m){ var b=(m&&m.body)?m.body:(m||{}); var cpu=
 
 // Auto-reconnect SSE (iOS/Safari drops EventSource frequently)
 let metricsReconnectTimer=null; let metricsReconnectBackoffMs=900;
+let metricsIntervalSec=10; // closed dock default
+let monitorSheetOpen=false;
+function _metricsUrl(){ try{ return '/api/metrics/stream?interval=' + String(Math.max(1, Math.min(30, Number(metricsIntervalSec||10)))); }catch(e){ return '/api/metrics/stream?interval=10'; } }
+function setMetricsInterval(sec){
+  var s = 10;
+  try{ s = Number(sec||10); }catch(e){ s = 10; }
+  s = Math.max(1, Math.min(30, s));
+  if (Number(metricsIntervalSec||0) === Number(s||0)) return;
+  metricsIntervalSec = s;
+  if (!monitorEnabled) return;
+  // restart stream to apply interval
+  startMetricsStream();
+}
 function _metricsScheduleReconnect(label){
   try{ if(metricsReconnectTimer) return; }catch(e){}
   try{ stopMetricsStream(); }catch(e){}
@@ -636,15 +649,15 @@ function startMetricsStream(){
   try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){}
   try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting…'; }catch(e){}
   try{
-    metricsES=new EventSource('/api/metrics/stream');
+    metricsES=new EventSource(_metricsUrl());
     metricsES.onopen=function(){ metricsReconnectBackoffMs = 900; try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connected'; }catch(e){} };
     metricsES.onmessage=function(ev){ try{ var m=JSON.parse(ev.data||'{}'); lastMetrics=m; updateMonitorFromMetrics(m);}catch(e){} };
     metricsES.onerror=function(_e){ _metricsScheduleReconnect('Monitor reconnecting…'); };
   }catch(e){ _metricsScheduleReconnect('Monitor reconnecting…'); }
 }
 function setMonitorEnabled(on){ monitorEnabled=!!on; saveMonitorPref(monitorEnabled); try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){} if(!monitorEnabled){ stopMetricsStream(); try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){} try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; } startMetricsStream(); }
-function openMonitor(){ if(!monitorEnabled) return; var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.remove('hide'); b.style.display='block'; } if(sh){ sh.classList.remove('hide'); sh.style.display='block'; } try{ document.body.classList.add('sheetOpen'); }catch(e){} startMetricsStream(); if(lastMetrics) updateMonitorFromMetrics(lastMetrics); }
-function closeMonitor(){ var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.add('hide'); b.style.display='none'; } if(sh){ sh.classList.add('hide'); sh.style.display='none'; } try{ document.body.classList.remove('sheetOpen'); }catch(e){} }
+function openMonitor(){ if(!monitorEnabled) return; monitorSheetOpen=true; setMetricsInterval(1); var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.remove('hide'); b.style.display='block'; } if(sh){ sh.classList.remove('hide'); sh.style.display='block'; } try{ document.body.classList.add('sheetOpen'); }catch(e){} startMetricsStream(); if(lastMetrics) updateMonitorFromMetrics(lastMetrics); }
+function closeMonitor(){ monitorSheetOpen=false; setMetricsInterval(10); var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.add('hide'); b.style.display='none'; } if(sh){ sh.classList.add('hide'); sh.style.display='none'; } try{ document.body.classList.remove('sheetOpen'); }catch(e){} }
 function closeMonitorEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeMonitor(); return false; }
 function bindMonitorClose(){ try{ var btn=document.getElementById('monCloseBtn'); if(btn && !btn.__bound){ btn.__bound=true; btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false}); btn.addEventListener('click', function(ev){ closeMonitorEv(ev); }); } }catch(e){} }
 try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
@@ -5698,11 +5711,25 @@ def api_metrics():
 
 
 @app.get('/api/metrics/stream')
-async def api_metrics_stream():
+async def api_metrics_stream(request: Request):
     """SSE stream for metrics.
 
     IMPORTANT: this must be async to avoid exhausting worker threads.
+
+    Query params:
+      - interval: seconds between updates (clamped 1..30). Default: 2.
     """
+
+    # Client-controlled interval (used to make the sheet feel "live" without spamming
+    # updates when the dock is closed).
+    interval_s = 2.0
+    try:
+        raw = str(request.query_params.get('interval') or '').strip()
+        if raw:
+            interval_s = float(raw)
+    except Exception:
+        interval_s = 2.0
+    interval_s = max(1.0, min(30.0, float(interval_s or 2.0)))
 
     async def gen():
         import asyncio
@@ -5713,9 +5740,9 @@ async def api_metrics_stream():
                 m = await asyncio.to_thread(_get, '/v1/metrics', 6.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
-            except Exception as e:
-                yield f"data: {json.dumps({'ok': False, 'error': f'metrics_failed:{type(e).__name__}'})}\n\n"
-            await asyncio.sleep(2.0)
+            except Exception:
+                yield f"data: {json.dumps({'ok': False, 'error': 'metrics_failed'})}\n\n"
+            await asyncio.sleep(interval_s)
 
     headers = {
         'Cache-Control': 'no-store',
