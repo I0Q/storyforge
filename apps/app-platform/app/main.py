@@ -291,7 +291,21 @@ INDEX_BASE_CSS = base_css("""\
     /* iOS Safari: <input type=color> won't open when display:none.
        Keep the input offscreen, and use a <label for=...> as the visible swatch.
        This keeps the swatch clickable without layering UI on top of it. */
-    .colorPickOffscreen{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;}
+    .colorPickOffscreen{
+      position:absolute;
+      left:-9999px;
+      top:auto;
+      width:0;
+      height:0;
+      opacity:0;
+      pointer-events:none;
+      border:0;
+      padding:0;
+      margin:0;
+      background:transparent;
+      -webkit-appearance:none;
+      appearance:none;
+    }
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
