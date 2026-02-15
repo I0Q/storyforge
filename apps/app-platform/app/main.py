@@ -5162,9 +5162,9 @@ def todo_page(request: Request, response: Response):
     style_css = TODO_BASE_CSS
     body_top = (
         DEBUG_BANNER_BOOT_JS
-        + "\\n" + USER_MENU_JS
-        + "\\n" + DEBUG_PREF_APPLY_JS
-        + "\\n" + AUDIO_DOCK_JS
+        + "\n" + USER_MENU_JS
+        + "\n" + DEBUG_PREF_APPLY_JS
+        + "\n" + AUDIO_DOCK_JS
     )
 
     nav_html = (
