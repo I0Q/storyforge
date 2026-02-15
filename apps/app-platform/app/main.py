@@ -4101,8 +4101,36 @@ function setEditColorHex(h){
   }catch(e){}
 }
 
+function _startColorPoll(pk, onVal){
+  try{
+    if (!pk) return;
+    var start = String(pk.value||'');
+    var t0 = Date.now();
+    try{ if (window.__SF_COLOR_POLL) clearInterval(window.__SF_COLOR_POLL); }catch(_e){}
+    window.__SF_COLOR_POLL = setInterval(function(){
+      try{
+        var v = String(pk.value||'');
+        if (v && v !== start){
+          start = v;
+          try{ onVal(v); }catch(_e){}
+        }
+        // stop after 15s
+        if ((Date.now()-t0) > 15000){
+          try{ clearInterval(window.__SF_COLOR_POLL); }catch(_e){}
+          window.__SF_COLOR_POLL = null;
+        }
+      }catch(_e){}
+    }, 120);
+  }catch(e){}
+}
+
 function openColorPick(){
-  try{ var pk=$('colorPick'); if (pk) pk.click(); }catch(e){}
+  try{
+    var pk=$('colorPick');
+    if (!pk) return;
+    _startColorPoll(pk, function(v){ try{ setEditColorHex(v); }catch(_e){} });
+    pk.click();
+  }catch(e){}
 }
 
 function genEditVoiceName(){
@@ -4891,7 +4919,12 @@ function setVoiceSwatchHex(hex){
   }catch(e){}
 }
 function openVoiceColorPick(){
-  try{ var pk=document.getElementById('voiceColorPick'); if (pk) pk.click(); }catch(e){}
+  try{
+    var pk=document.getElementById('voiceColorPick');
+    if (!pk) return;
+    _startColorPoll(pk, function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
+    pk.click();
+  }catch(e){}
 }
 
 
