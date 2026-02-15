@@ -6173,8 +6173,9 @@ async def api_deploy_stream():
     async def gen():
         import asyncio
 
-        # Send an immediate byte so proxies don't buffer the headers forever.
-        yield ": boot\n\n"
+        # Send an immediate chunk so proxies (Cloudflare/iOS) don't buffer the stream.
+        # Some intermediaries won't flush tiny SSE frames.
+        yield ": boot " + (" " * 2048) + "\n\n"
 
         last_upd = None
         last_state = None
