@@ -290,7 +290,8 @@ INDEX_BASE_CSS = base_css("""\
     .hide{display:none}
     /* iOS Safari: <input type=color> won't open when display:none.
        Keep the input in DOM but visually hidden; tap the visible swatch and programmatically click(). */
-    .colorPickHidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;background:transparent;}
+    .colorPickWrap{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}
+    .colorPickHidden{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;background:transparent;}
     .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
     .colorPickHidden::-webkit-color-swatch{border:0;}
 
@@ -3985,7 +3986,9 @@ def voices_edit_page(voice_id: str, response: Response):
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
-      <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
+      <span id='colorPickWrap' class='colorPickWrap' style='display:none'>
+        <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='color_hex' type='hidden' value='__CHEX__' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4100,9 +4103,9 @@ function setEditColorHex(h){
   }catch(e){}
 }
 
-function _colorReturnSetup(pkId, applyFn){
+function _colorReturnSetup(pkId, wrapId, applyFn){
   try{
-    window.__SF_COLOR_RETURN = { pkId: String(pkId||''), apply: applyFn, prev: '' };
+    window.__SF_COLOR_RETURN = { pkId: String(pkId||''), wrapId: String(wrapId||''), apply: applyFn, prev: '' };
     try{ var el=document.getElementById(window.__SF_COLOR_RETURN.pkId); if (el) window.__SF_COLOR_RETURN.prev = String(el.value||''); }catch(_e){}
     if (!window.__SF_COLOR_RETURN_HOOKED){
       window.__SF_COLOR_RETURN_HOOKED = true;
@@ -4117,6 +4120,8 @@ function _colorReturnSetup(pkId, applyFn){
             st.prev = v;
             try{ st.apply(v); }catch(_e){}
           }
+          // hide again after the picker is dismissed
+          try{ var w = st.wrapId ? document.getElementById(st.wrapId) : null; if (w) w.style.display='none'; }catch(_e){}
         }catch(_e){}
       }, true);
     }
@@ -4127,7 +4132,8 @@ function openColorPick(){
   try{
     var pk=$('colorPick');
     if (!pk) return;
-    _colorReturnSetup('colorPick', function(v){ try{ setEditColorHex(v); }catch(_e){} });
+    var w=$('colorPickWrap'); if (w) w.style.display='block';
+    _colorReturnSetup('colorPick', 'colorPickWrap', function(v){ try{ setEditColorHex(v); }catch(_e){} });
     pk.focus();
     pk.click();
   }catch(e){}
@@ -4780,7 +4786,9 @@ def voices_new_page(response: Response):
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
-      <input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      <span id='voiceColorPickWrap' class='colorPickWrap' style='display:none'>
+        <input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='voiceColorHex' type='hidden' value='' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4924,7 +4932,8 @@ function openVoiceColorPick(){
   try{
     var pk=document.getElementById('voiceColorPick');
     if (!pk) return;
-    _colorReturnSetup('voiceColorPick', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
+    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='block';
+    _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
     pk.focus();
     pk.click();
   }catch(e){}
