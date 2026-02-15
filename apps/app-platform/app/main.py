@@ -668,6 +668,13 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
 DEBUG_BANNER_HTML = """
   <div id='boot' class='boot muted'>
     <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
+    <div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>
+      <div class='muted' style='font-weight:950'>StoryForge updating…</div>
+      <div class='updateTrack' style='margin-top:6px;position:relative'>
+        <div class='updateProg'></div>
+        <div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>
+      </div>
+    </div>
     <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
         <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
