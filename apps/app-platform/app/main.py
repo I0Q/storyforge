@@ -311,13 +311,6 @@ INDEX_BASE_CSS = base_css("""\
     .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
     .colorPickHidden::-webkit-color-swatch{border:0;border-radius:999px;}
 
-    /* Generate voice page: make the INPUT the actual tap target (iOS blocks programmatic opens).
-       Keep it visually invisible but laid out exactly over the swatch. */
-    .swatchPickWrap{position:relative;display:inline-block;width:16px;height:16px;flex:0 0 auto;}
-    .swatchPickWrap .swatch{position:absolute;inset:0;}
-    .colorPickOverlay{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;background:transparent;}
-    .colorPickOverlay::-webkit-color-swatch-wrapper{padding:0;border:0;}
-    .colorPickOverlay::-webkit-color-swatch{border:0;border-radius:999px;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -4829,9 +4822,9 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span class='swatchPickWrap' title='Pick color'>
-        <span id='voiceSwatch' class='swatch' style='background:#64748b;cursor:pointer'></span>
-        <input id='voiceColorPick' type='color' class='colorPickOverlay' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
+      <span id='voiceColorPickWrap' class='colorPickWrap' style='display:none'>
+        <input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
       </span>
       <input id='voiceColorHex' type='hidden' value='' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
@@ -4973,16 +4966,16 @@ function setVoiceSwatchHex(hex){
   }catch(e){}
 }
 function openVoiceColorPick(){
-  // Kept for backward compatibility (older builds/cached HTML).
   try{
     var pk=document.getElementById('voiceColorPick');
     if (!pk) return;
-    // If the input is directly tappable (preferred), no need for programmatic click.
-    // Still try to open for desktop.
+    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='inline-block';
+    _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
+    try{ pk.focus(); }catch(_e){}
     try{
       if (pk && typeof pk.showPicker === 'function') pk.showPicker();
       else pk.click();
-    }catch(_e){}
+    }catch(_e){ try{ pk.click(); }catch(__e){} }
   }catch(e){}
 }
 
