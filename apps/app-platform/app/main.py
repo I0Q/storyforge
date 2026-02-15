@@ -241,6 +241,11 @@ INDEX_BASE_CSS = base_css("""\
     .checkLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
     .checkLine input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
     .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);}
+
+    /* Notifications job kinds */
+    .notifKindRow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0;}
+    .notifKindRow input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
+    .notifKindName{font-weight:950;word-break:break-word;overflow-wrap:anywhere;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
@@ -1550,9 +1555,9 @@ function notifRenderKinds(selected){
     for (var i=0;i<kinds.length;i++){
       var k = kinds[i];
       var on = !!selected[k];
-      h += "<label style='display:flex;gap:10px;align-items:center;margin:8px 0'>"
+      h += "<label class='notifKindRow'>"
         + "<input type='checkbox' data-kind='"+escAttr(k)+"' " + (on?'checked':'') + " />"
-        + "<span style='font-weight:950'>"+escapeHtml(k)+"</span>"
+        + "<span class='notifKindName'>"+escapeHtml(k)+"</span>"
         + "</label>";
     }
     host.innerHTML = h;
@@ -8766,7 +8771,7 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                     'gateway_base': str(p.get('gateway_base') or '').strip()[:200],
                     'monitoring_enabled': bool(p.get('monitoring_enabled', False)),
                     'voice_enabled': bool(p.get('voice_enabled', False)),
-                    'voice_engines': [str(x).strip() for x in (p.get('voice_engines') or []) if str(x).strip() in ('xtts', 'tortoise')],
+                    'voice_engines': [str(x).strip() for x in (p.get('voice_engines') or []) if str(x).strip() in ('xtts', 'tortoise', 'styletts2')],
                     'voice_gpus': _ints(p.get('voice_gpus') or []),
                     'voice_threads': int(p.get('voice_threads') or 16) if str(p.get('voice_threads') or '').strip() else 16,
                     'tortoise_split_min_text': int(p.get('tortoise_split_min_text') or 100) if str(p.get('tortoise_split_min_text') or '').strip() else 100,
