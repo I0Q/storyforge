@@ -68,6 +68,10 @@ VIEWER_EXTRA_CSS = """
 .rowBetweenCenter{justify-content:space-between;align-items:center;}
 .fw950{font-weight:950;}
 
+/* Title-only card */
+.storyTitleCard{margin-top:10px;}
+.storyTitleCard .titleText{font-size:18px;font-weight:950;line-height:1.15;}
+
 /* navInner removed (use .top from base header CSS) */
 .navTitleWrap{min-width:0;}
 .navBrand h1{margin:0;}
@@ -789,7 +793,9 @@ if ($('mdCode')) {{
                 "",
                 VIEWER_DEBUG_BANNER_HTML.replace("__BUILD__", str(build)),
                 "",
-                f"<div class='muted storySub'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
+                "<div class='card storyTitleCard'>",
+                f"  <div id='titleText' class='titleText storyTitleText'>{title_txt}</div>",
+                "</div>",
                 "<div id='titleEdit' class='hide titleEdit'>",
                 f"  <input id='titleInput' value='{title_txt}' />",
                 "</div>",
