@@ -4112,8 +4112,37 @@ function setEditColorHex(h){
   }catch(e){}
 }
 
+function _colorReturnSetup(pkId, applyFn){
+  try{
+    window.__SF_COLOR_RETURN = { pkId: String(pkId||''), apply: applyFn, prev: '' };
+    try{ var el=document.getElementById(window.__SF_COLOR_RETURN.pkId); if (el) window.__SF_COLOR_RETURN.prev = String(el.value||''); }catch(_e){}
+    if (!window.__SF_COLOR_RETURN_HOOKED){
+      window.__SF_COLOR_RETURN_HOOKED = true;
+      window.addEventListener('focus', function(){
+        try{
+          var st = window.__SF_COLOR_RETURN;
+          if (!st || !st.pkId || typeof st.apply !== 'function') return;
+          var el = document.getElementById(st.pkId);
+          if (!el) return;
+          var v = String(el.value||'');
+          if (v && v !== String(st.prev||'')){
+            st.prev = v;
+            try{ st.apply(v); }catch(_e){}
+          }
+        }catch(_e){}
+      }, true);
+    }
+  }catch(e){}
+}
+
 function openColorPick(){
-  try{ var pk=$('colorPick'); if (pk){ pk.focus(); pk.click(); } }catch(e){}
+  try{
+    var pk=$('colorPick');
+    if (!pk) return;
+    _colorReturnSetup('colorPick', function(v){ try{ setEditColorHex(v); }catch(_e){} });
+    pk.focus();
+    pk.click();
+  }catch(e){}
 }
 
 function genEditVoiceName(){
@@ -4901,7 +4930,13 @@ function setVoiceSwatchHex(hex){
   }catch(e){}
 }
 function openVoiceColorPick(){
-  try{ var pk=document.getElementById('voiceColorPick'); if (pk){ pk.focus(); pk.click(); } }catch(e){}
+  try{
+    var pk=document.getElementById('voiceColorPick');
+    if (!pk) return;
+    _colorReturnSetup('voiceColorPick', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
+    pk.focus();
+    pk.click();
+  }catch(e){}
 }
 
 
