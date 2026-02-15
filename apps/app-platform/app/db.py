@@ -5,6 +5,8 @@ import time
 
 
 _DB_POOL = None
+_DB_INIT_DONE = False
+_DB_INIT_LOCK = None
 
 
 class _PooledConn:
@@ -70,19 +72,13 @@ def db_connect():
     raise PoolError(f"connection pool exhausted (max={maxconn})") from last_err
 
 
-def db_init(conn) -> None:
-    # Be rollback-safe: a previously-failed statement can leave the transaction aborted,
-    # causing subsequent commands to raise InFailedSqlTransaction.
-    try:
-        conn.rollback()
-    except Exception:
-        pass
+def _db_init_schema(conn) -> None:
+    """One-time schema bootstrap/migrations.
 
+    This is intentionally NOT run on every request.
+    """
     cur = conn.cursor()
-    try:
-        cur.execute("SET statement_timeout = '5000'")
-    except Exception:
-        pass
+
     cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT \'\',\n  meta_json TEXT NOT NULL DEFAULT \'\',\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  created_at BIGINT NOT NULL\n);')
     # Migrations: add columns to existing jobs table
     try:
@@ -118,12 +114,6 @@ CREATE TABLE IF NOT EXISTS sf_stories (
         pass
     try:
         cur.execute("ALTER TABLE sf_stories DROP COLUMN IF EXISTS tags")
-    except Exception:
-        pass
-
-    # Migrations: add SFML storage
-    try:
-        cur.execute("ALTER TABLE sf_stories ADD COLUMN IF NOT EXISTS sfml_text TEXT NOT NULL DEFAULT ''")
     except Exception:
         pass
 
@@ -218,6 +208,51 @@ CREATE TABLE IF NOT EXISTS sf_push_subscriptions (
 );
 """
     )
+
+
+def db_init(conn) -> None:
+    """Prepare a connection for use.
+
+    - Always rollback-safe + statement_timeout.
+    - Runs schema bootstrap/migrations only once per process to avoid DB pool exhaustion.
+    """
+    global _DB_INIT_DONE, _DB_INIT_LOCK
+
+    # Be rollback-safe: a previously-failed statement can leave the transaction aborted,
+    # causing subsequent commands to raise InFailedSqlTransaction.
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+
+    cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
+
+    if _DB_INIT_DONE:
+        return
+
+    # Lazily init lock to avoid importing threading in cold paths unnecessarily.
+    if _DB_INIT_LOCK is None:
+        import threading
+
+        _DB_INIT_LOCK = threading.Lock()
+
+    # Only one thread does schema init.
+    with _DB_INIT_LOCK:
+        if _DB_INIT_DONE:
+            return
+        _db_init_schema(conn)
+        try:
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _DB_INIT_DONE = True
     try:
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS sf_push_endpoint_uniq ON sf_push_subscriptions (endpoint)")
     except Exception:

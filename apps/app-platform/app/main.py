@@ -15,6 +15,10 @@ from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 
 from .auth import register_passphrase_auth
+from .ui_header_shared import USER_MENU_HTML, USER_MENU_JS
+from .ui_audio_shared import AUDIO_DOCK_JS
+from .ui_debug_shared import DEBUG_PREF_APPLY_JS
+from .ui_page_shared import render_page
 from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
@@ -59,6 +63,39 @@ SF_DEPLOY_TOKEN = os.environ.get("SF_DEPLOY_TOKEN", "").strip()
 VAPID_PUBLIC_KEY = os.environ.get('SF_VAPID_PUBLIC_KEY', '').strip()
 VAPID_PRIVATE_KEY = os.environ.get('SF_VAPID_PRIVATE_KEY', '').strip()
 VAPID_SUBJECT = os.environ.get('SF_VAPID_SUBJECT', 'mailto:admin@example.com').strip()
+
+
+def _vapid_private_key_material() -> str:
+    """Return a pywebpush-compatible VAPID private key.
+
+    DO App Platform env vars sometimes flatten multiline secrets.
+    Accept:
+    - PEM (with real newlines or with literal "\\n")
+    - base64url/raw VAPID key string (as accepted by pywebpush)
+    """
+    k = str(VAPID_PRIVATE_KEY or '').strip()
+    if not k:
+        return ''
+    # If it looks like PEM but has escaped newlines, unescape them.
+    if 'BEGIN ' in k and '\\n' in k:
+        k = k.replace('\\n', '\n')
+    # If it looks like PEM but is flattened into a single line, try to re-split.
+    if k.startswith('-----BEGIN') and ('\n' not in k):
+        # Best-effort: insert newlines around header/footer markers.
+        k = k.replace('-----BEGIN EC PRIVATE KEY-----', '-----BEGIN EC PRIVATE KEY-----\n')
+        k = k.replace('-----END EC PRIVATE KEY-----', '\n-----END EC PRIVATE KEY-----')
+        k = k.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
+        k = k.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----')
+        # Also wrap base64 body to avoid extremely long lines (not strictly required).
+        parts = k.split('\n')
+        if len(parts) >= 3:
+            hdr = parts[0]
+            ftr = parts[-1]
+            body = ''.join(parts[1:-1]).strip()
+            if body:
+                wrapped = '\n'.join([body[i:i+64] for i in range(0, len(body), 64)])
+                k = hdr + '\n' + wrapped + '\n' + ftr
+    return k
 
 VOICE_SERVERS: list[dict[str, Any]] = []
 try:
@@ -238,9 +275,15 @@ INDEX_BASE_CSS = base_css("""\
     .gpuChip.claimed{opacity:0.55;}
 
     /* inline checkbox pills */
-    .checkLine{display:flex;align-items:center;gap:8px;}
+    .checkLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
     .checkLine input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
-    .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);}
+    .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);line-height:1;}
+    .checkPill input[type=radio], .checkPill input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;margin:0;}
+
+    /* Notifications job kinds */
+    .notifPill{user-select:none;}
+    .notifPill input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
+    .notifKindName{font-weight:700;font-size:13px;word-break:break-word;overflow-wrap:anywhere;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
@@ -250,6 +293,28 @@ INDEX_BASE_CSS = base_css("""\
     .copyBtn:hover{background:rgba(255,255,255,0.06);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
+    /* iOS Safari: <input type=color> won't open when display:none.
+       Keep the input in DOM but visually hidden; tap the visible swatch and programmatically click(). */
+    /* iOS color input: we intentionally show it briefly next to the swatch (display toggle).
+       When hidden (wrapper display:none) it doesn't affect layout; when shown it renders as a tiny swatch. */
+    .colorPickWrap{display:inline-block;}
+    .colorPickHidden{
+      -webkit-appearance:none;
+      appearance:none;
+      width:16px;
+      height:16px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      padding:0;
+      margin:0;
+      background:transparent;
+      vertical-align:middle;
+      box-shadow:none;
+      outline:none;
+    }
+    .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
+    .colorPickHidden::-webkit-color-swatch{border:0;border-radius:999px;}
+
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -341,6 +406,7 @@ VOICES_BASE_CSS = (
     html,body{overscroll-behavior-y:none;}
     *{box-sizing:border-box;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    .brandLink{color:inherit;text-decoration:none;}
 
 """)
     + COMMON_VARS_HEADER_CSS
@@ -546,8 +612,37 @@ function fmtTs(ts){ if(!ts) return '-'; try{ return new Date(ts*1000).toLocaleSt
 function updateDockFromMetrics(m){ var el=document.getElementById('dockStats'); if(!el) return; var b=(m&&m.body)?m.body:(m||{}); var cpu=(b.cpu_pct!=null)?Number(b.cpu_pct).toFixed(1)+'%':'-'; var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var ram=rt?rp.toFixed(1)+'%':'-'; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); var maxGpu=null; if(gpus.length){ maxGpu=0; for(var i=0;i<gpus.length;i++){ var u=Number((gpus[i]||{}).util_gpu_pct||0); if(u>maxGpu) maxGpu=u; } } var gpu=(maxGpu==null)?'-':maxGpu.toFixed(1)+'%'; el.textContent='CPU '+cpu+' • RAM '+ram+' • GPU '+gpu; }
 function renderGpus(b){ var el=document.getElementById('monGpus'); if(!el) return; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); if(!gpus.length){ el.innerHTML='<div class="muted">No GPU data</div>'; return; } el.innerHTML=gpus.slice(0,8).map(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; var util=Number(g.util_gpu_pct||0); var power=(g.power_w!=null)?Number(g.power_w).toFixed(0)+'W':null; var temp=(g.temp_c!=null)?Number(g.temp_c).toFixed(0)+'C':null; var right=[power,temp].filter(Boolean).join(' • '); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); return "<div class='gpuCard'>"+"<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+"<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+"<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+"<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt?((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB'):'-')+"</div></div>"+"<div class='bar small' id='barVram"+idx+"'><div></div></div>"+"</div>"; }).join(''); gpus.slice(0,8).forEach(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; setBar('barGpu'+idx, Number(g.util_gpu_pct||0)); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); setBar('barVram'+idx, vt?(vu/vt*100):0); }); }
 function updateMonitorFromMetrics(m){ var b=(m&&m.body)?m.body:(m||{}); var cpu=Number(b.cpu_pct||0); var c=document.getElementById('monCpu'); if(c) c.textContent=fmtPct(cpu); setBar('barCpu',cpu); var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var r=document.getElementById('monRam'); if(r) r.textContent=rt?(ru.toFixed(0)+' / '+rt.toFixed(0)+' MB ('+rp.toFixed(1)+'%)'):'-'; setBar('barRam',rp); renderGpus(b); var sub=document.getElementById('monSub'); if(sub) sub.textContent='Tinybox time: '+(b.ts?fmtTs(b.ts):'-'); updateDockFromMetrics(m); try{ var procs=Array.isArray(b.processes)?b.processes:[]; var pre=document.getElementById('monProc'); if(pre){ if(!procs.length) pre.textContent='(no process data)'; else{ var lines=['PID     %CPU   %MEM   GPU   ELAPSED   COMMAND','-----------------------------------------------']; for(var i=0;i<procs.length;i++){ var p=procs[i]||{}; var pid=String(p.pid||'').padEnd(7,' '); var cpuS=String(Number(p.cpu_pct||0).toFixed(1)).padStart(5,' '); var memS=String(Number(p.mem_pct||0).toFixed(1)).padStart(5,' '); var gpuS=(p.gpu_mem_mb!=null?String(Number(p.gpu_mem_mb).toFixed(0))+'MB':'-').padStart(6,' '); var et=String(p.elapsed||'').padEnd(9,' '); var cmd=String(p.args||p.command||p.name||''); lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);} pre.textContent=lines.join(String.fromCharCode(10)); } } }catch(e){} }
-function startMetricsStream(){ if(!monitorEnabled) return; stopMetricsStream(); try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting…'; }catch(e){} try{ metricsES=new EventSource('/api/metrics/stream'); metricsES.onmessage=function(ev){ try{ var m=JSON.parse(ev.data||'{}'); lastMetrics=m; updateMonitorFromMetrics(m);}catch(e){} }; metricsES.onerror=function(_e){ try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor error'; }catch(e){} }; }catch(e){} }
-function setMonitorEnabled(on){ monitorEnabled=!!on; saveMonitorPref(monitorEnabled); try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){} if(!monitorEnabled){ stopMetricsStream(); try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; } startMetricsStream(); }
+
+// Auto-reconnect SSE (iOS/Safari drops EventSource frequently)
+let metricsReconnectTimer=null; let metricsReconnectBackoffMs=900;
+function _metricsScheduleReconnect(label){
+  try{ if(metricsReconnectTimer) return; }catch(e){}
+  try{ stopMetricsStream(); }catch(e){}
+  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent=label||'Reconnecting…'; }catch(e){}
+  var delay = Math.max(400, Math.min(10000, Number(metricsReconnectBackoffMs||900)));
+  metricsReconnectBackoffMs = Math.min(10000, Math.floor(delay*1.7));
+  try{
+    metricsReconnectTimer = setTimeout(function(){
+      metricsReconnectTimer = null;
+      if(!monitorEnabled) return;
+      startMetricsStream();
+    }, delay);
+  }catch(e){}
+}
+
+function startMetricsStream(){
+  if(!monitorEnabled) return;
+  stopMetricsStream();
+  try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){}
+  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting…'; }catch(e){}
+  try{
+    metricsES=new EventSource('/api/metrics/stream');
+    metricsES.onopen=function(){ metricsReconnectBackoffMs = 900; try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connected'; }catch(e){} };
+    metricsES.onmessage=function(ev){ try{ var m=JSON.parse(ev.data||'{}'); lastMetrics=m; updateMonitorFromMetrics(m);}catch(e){} };
+    metricsES.onerror=function(_e){ _metricsScheduleReconnect('Monitor reconnecting…'); };
+  }catch(e){ _metricsScheduleReconnect('Monitor reconnecting…'); }
+}
+function setMonitorEnabled(on){ monitorEnabled=!!on; saveMonitorPref(monitorEnabled); try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){} if(!monitorEnabled){ stopMetricsStream(); try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){} try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; } startMetricsStream(); }
 function openMonitor(){ if(!monitorEnabled) return; var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.remove('hide'); b.style.display='block'; } if(sh){ sh.classList.remove('hide'); sh.style.display='block'; } try{ document.body.classList.add('sheetOpen'); }catch(e){} startMetricsStream(); if(lastMetrics) updateMonitorFromMetrics(lastMetrics); }
 function closeMonitor(){ var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.add('hide'); b.style.display='none'; } if(sh){ sh.classList.add('hide'); sh.style.display='none'; } try{ document.body.classList.remove('sheetOpen'); }catch(e){} }
 function closeMonitorEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeMonitor(); return false; }
@@ -776,12 +871,42 @@ function __sfStartDeployWatch(){
 }
 
 window.addEventListener('error', function(ev){
-  var m = 'unknown';
-  try{ m = (ev && (ev.message||ev.type)) ? (ev.message||ev.type) : 'unknown'; }catch(_e){}
-  __sfSetDebugInfo('error: ' + m);
+  try{
+    var m = 'unknown';
+    try{ m = (ev && (ev.message||ev.type)) ? String(ev.message||ev.type) : 'unknown'; }catch(_e){}
+    var fn = '';
+    var ln = '';
+    var cn = '';
+    try{ fn = String(ev && (ev.filename||'') || ''); }catch(_e){}
+    try{ ln = String(ev && (ev.lineno!=null?ev.lineno:'') || ''); }catch(_e){}
+    try{ cn = String(ev && (ev.colno!=null?ev.colno:'') || ''); }catch(_e){}
+    var st = '';
+    try{ st = (ev && ev.error && ev.error.stack) ? String(ev.error.stack) : ''; }catch(_e){}
+    var extra = '';
+    if (fn) extra += ' @ ' + fn;
+    if (ln) extra += ':' + ln;
+    if (cn) extra += ':' + cn;
+    if (st) extra += ' | ' + st.split('\n').slice(0,2).join(' / ');
+    __sfSetDebugInfo('error: ' + m + (extra ? (' ' + extra) : ''));
+  }catch(_e){
+    __sfSetDebugInfo('error');
+  }
 });
-window.addEventListener('unhandledrejection', function(_ev){
-  __sfSetDebugInfo('promise error');
+window.addEventListener('unhandledrejection', function(ev){
+  try{
+    var msg = 'promise error';
+    try{
+      var r = ev && ev.reason;
+      if (r){
+        if (typeof r === 'string') msg = r;
+        else if (r && r.message) msg = String(r.message);
+        else msg = String(r);
+      }
+    }catch(_e){}
+    __sfSetDebugInfo('promise: ' + msg);
+  }catch(_e){
+    __sfSetDebugInfo('promise error');
+  }
 });
 
 try{
@@ -1010,6 +1135,7 @@ def index(response: Response):
   <link rel="stylesheet" href="/static/sfml_editor.css?v=5" />
   <script src="/static/sfml_editor.js?v=7"></script>
   __DEBUG_BANNER_BOOT_JS__
+  __USER_MENU_JS__
   <script>
   // Register service worker for Web Push (required for iOS PWA push)
   (function(){
@@ -1068,31 +1194,7 @@ def index(response: Response):
     </div>
     <div class='row rowEnd'>
       <a id='todoBtn' href='/todo' class='hide'><button class='secondary' type='button'>TODO</button></a>
-      <div class='menuWrap'>
-        <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
-          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-          </svg>
-        </button>
-        <div id='topMenu' class='menuCard'>
-          <div class='uTop'>
-            <div class='uAvatar'>
-              <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-                <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-              </svg>
-            </div>
-            <div>
-              <div class='uName'>User</div>
-              <div class='uSub'>Admin</div>
-            </div>
-          </div>
-          <div class='uActions'>
-            <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
-          </div>
-        </div>
-      </div>
+      __USER_MENU_HTML__
 
     </div>
   </div>
@@ -1100,6 +1202,8 @@ def index(response: Response):
   </div>
 
   __DEBUG_BANNER_HTML__
+
+  __AUDIO_DOCK_JS__
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
@@ -1191,11 +1295,14 @@ def index(response: Response):
     </div>
 
     <div class='card'>
-      <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
+      <div class='row' style='justify-content:space-between;gap:10px;align-items:center'>
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
-        <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
-          <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
-        </div>
+        <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
+      </div>
+      <div class='row' style='justify-content:flex-start;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px'>
+        <div class='muted' style='font-size:12px'>Casting engine</div>
+        <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
+        <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
       </div>
 
       <div id='prodBusy' class='updateBar hide' style='margin-top:10px'>
@@ -1345,6 +1452,22 @@ function __sfToastInit(){
 try{ document.addEventListener('DOMContentLoaded', __sfToastInit); }catch(e){}
 try{ __sfToastInit(); }catch(e){}
 
+// If the boot banner script fails to run (some Safari edge cases), don't leave it stuck on 'booting…'.
+try{
+  setTimeout(function(){
+    try{
+      var bt=document.getElementById('bootText');
+      if (!bt) return;
+      var t=String(bt.textContent||'');
+      if (t.indexOf('JS: booting')!==-1){
+        bt.textContent = t.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
+      }
+    }catch(_e){}
+  }, 0);
+}catch(_e){}
+
+/* floating audio dock is injected from ui_audio_shared.py */
+
 function showTab(name, opts){
   opts = opts || {};
   for (var i=0;i<['history','library','voices','production','advanced'].length;i++){
@@ -1352,11 +1475,22 @@ function showTab(name, opts){
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
-  // persist in URL hash
+  // persist in URL hash without triggering iOS scroll-to-top
   try{
     if (!opts.noHash){
       var h = '#tab-' + name;
-      if (window.location.hash !== h) window.location.hash = h;
+      if (window.location.hash !== h){
+        var y = 0;
+        try{ y = window.scrollY || window.pageYOffset || 0; }catch(e){ y = 0; }
+        try{
+          if (history && history.replaceState) history.replaceState(null, '', h);
+          else window.location.hash = h;
+        }catch(_e){
+          try{ window.location.hash = h; }catch(__e){}
+        }
+        // Some iOS builds still jump; restore.
+        try{ setTimeout(function(){ try{ window.scrollTo(0, y); }catch(e){} }, 0); }catch(e){}
+      }
     }
   }catch(_e){}
 
@@ -1474,7 +1608,7 @@ function toggleMenu(){
   if (m.classList.contains('show')) m.classList.remove('show');
   else m.classList.add('show');
 }
-function toggleUserMenu(){ return toggleMenu(); }
+// toggleUserMenu is provided by ui_header_shared.USER_MENU_JS (fixed-position iOS-safe dropdown)
 
 document.addEventListener('click', function(ev){
   try{
@@ -1517,6 +1651,26 @@ function fmtTs(ts){
   }
 }
 
+function jobAbort(jobId){
+  try{
+    jobId = String(jobId||'').trim();
+    if (!jobId) return;
+    if (!confirm('Abort job ' + jobId + '?')) return;
+    fetchJsonAuthed('/api/jobs/abort', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id: jobId})
+    }).then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'abort_failed');
+      try{ toastShowNow('Aborted', 'ok', 1800); }catch(_e){}
+      // refresh quickly
+      try{ loadHistory(true); }catch(_e){}
+    }).catch(function(e){
+      try{ toastShowNow('Abort failed: ' + String(e&&e.message?e.message:e), 'err', 2400); }catch(_e){}
+    });
+  }catch(e){}
+}
+
 // --- Notifications (Web Push) ---
 function notifDeviceId(){
   try{
@@ -1543,15 +1697,17 @@ function notifRenderKinds(selected){
     var host=document.getElementById('notifKinds');
     if (!host) return;
     var kinds = notifKindsList();
-    var h='';
+    var h="<div class='checkLine' style='margin-top:6px'>";
     for (var i=0;i<kinds.length;i++){
       var k = kinds[i];
       var on = !!selected[k];
-      h += "<label style='display:flex;gap:10px;align-items:center;margin:8px 0'>"
+      // Render as pills (same visual language as provider engine pills)
+      h += "<label class='checkPill notifPill'>"
         + "<input type='checkbox' data-kind='"+escAttr(k)+"' " + (on?'checked':'') + " />"
-        + "<span style='font-weight:950'>"+escapeHtml(k)+"</span>"
+        + "<span class='notifKindName'>"+escapeHtml(k)+"</span>"
         + "</label>";
     }
+    h += "</div>";
     host.innerHTML = h;
   }catch(e){}
 }
@@ -1698,45 +1854,7 @@ function pauseJobsStream(ms){
 function jobPlay(jobId, url){
   try{
     if (!url || !jobId) return;
-
-    // Jobs page uses SSE and re-renders the list, which can kill inline audio.
-    // Pause the jobs stream while audio is playing.
-    try{ pauseJobsStream(5*60*1000); }catch(e){}
-
-    // Close any other open players
-    try{
-      var olds=document.querySelectorAll('.jobPlayer');
-      for (var i=0;i<olds.length;i++){
-        try{ var a0=olds[i].querySelector('audio'); if (a0) a0.pause(); }catch(e){}
-        try{ olds[i].remove(); }catch(e){}
-      }
-    }catch(e){}
-
-    var card=document.querySelector('[data-jobid="'+String(jobId)+'"]');
-    if (!card) return;
-
-    var box=document.createElement('div');
-    box.className='jobPlayer';
-    box.style.marginTop='10px';
-    box.style.padding='10px';
-    box.style.border='1px solid rgba(255,255,255,0.10)';
-    box.style.borderRadius='12px';
-    box.style.background='rgba(255,255,255,0.03)';
-
-    var a=document.createElement('audio');
-    a.controls=true;
-    a.style.width='100%';
-    a.src=String(url);
-    a.onended = function(){ try{ window.__SF_JOBS_STREAM_PAUSED_UNTIL = 0; startJobsStream(); }catch(e){} };
-    a.onpause = function(){ try{ /* allow manual pause without restarting immediately */ }catch(e){} };
-
-    box.appendChild(a);
-    card.appendChild(box);
-
-    try{
-      var p = a.play();
-      if (p && typeof p.catch === 'function') p.catch(function(_e){});
-    }catch(e){}
+    __sfPlayAudio(String(url), 'Job ' + String(jobId));
   }catch(e){}
 }
 
@@ -1865,7 +1983,19 @@ function renderJobs(jobs){
     const isProduce = (String(job.kind||'') === 'produce_audio');
     const playable = (String(job.state||'')==='completed' && job.mp3_url);
 
-    const actions = (playable && (isSample || isProduce)) ? (function(){
+    const actions = (function(){
+      var h = '';
+
+      const runningish = (String(job.state||'')==='running' || String(job.state||'')==='queued');
+      const abortable = runningish && (isSample || isProduce || isVoiceMeta);
+      if (abortable){
+        h += `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
+          + `<button type='button' class='secondary' onclick="jobAbort('${escAttr(job.id||'')}')">Abort</button>`
+          + `</div>`;
+      }
+
+      if (!(playable && (isSample || isProduce))) return h;
+
       var btn2 = '';
       if (isSample){
         try{
@@ -1883,13 +2013,15 @@ function renderJobs(jobs){
           else btn2 = (meta ? `<button type='button' class='saveStoryAudioBtn' onclick="saveJobToStoryAudio('${escAttr(job.id||'')}')">Save</button>` : `<button type='button' class='saveStoryAudioBtn' onclick="alert('Missing metadata (story_id).')">Save</button>`);
         }catch(_e){ btn2=''; }
       }
-      return (
+
+      h += (
         `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
         + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.id||'')}','${escAttr(job.mp3_url||'')}')">Play</button>`
         + btn2
         + `</div>`
       );
-    })() : '';
+      return h;
+    })();
 
     const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
     const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
@@ -2463,6 +2595,7 @@ function renderProviders(providers){
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='voice_engines' value='"+escAttr(voiceEng.join(','))+"'/>"+
         "<label class='checkPill'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='xtts' "+(voiceEng.indexOf('xtts')>=0?'checked':'')+" onchange='onEngineToggle(this)'/>xtts</label>"+
         "<label class='checkPill'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='tortoise' "+(voiceEng.indexOf('tortoise')>=0?'checked':'')+" onchange='onEngineToggle(this)'/>tortoise</label>"+
+        "<label class='checkPill'><input type='checkbox' class='engCb' data-pid='"+escAttr(id)+"' data-engine='styletts2' "+(voiceEng.indexOf('styletts2')>=0?'checked':'')+" onchange='onEngineToggle(this)'/>styletts2</label>"+
       "</div>"+
       "<div class='k'>Split min chars</div><div><input data-pid='"+escAttr(id)+"' data-k='tortoise_split_min_text' value='"+escAttr(String(p.tortoise_split_min_text||100))+"' placeholder='100' style='width:96px;max-width:100%;min-width:0' /></div>"+
       "<div class='k'>Max CPU threads / process</div><div><input data-pid='"+escAttr(id)+"' data-k='voice_threads' value='"+escAttr(String(p.voice_threads||16))+"' placeholder='16' style='width:96px;max-width:100%;min-width:0' /></div>"+
@@ -2796,9 +2929,23 @@ function prodRenderAssignments(){
     var roster = Array.isArray(st.roster) ? st.roster : [];
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
 
-    // helper: roster option list
+    function getCastEngine(){
+      var eng = '';
+      try{
+        var r1=document.querySelector("input[name='castEngine']:checked");
+        if (r1 && r1.value) eng = String(r1.value||'').trim();
+      }catch(_e){}
+      return eng;
+    }
+
+    // helper: roster option list (filtered by selected engine)
     function optList(selected){
-      return roster.map(function(v){
+      var eng = getCastEngine();
+      var rr = roster;
+      try{
+        if (eng){ rr = roster.filter(function(v){ return String(v.engine||'').trim()===eng; }); }
+      }catch(_e){ rr = roster; }
+      return rr.map(function(v){
         var id=String(v.id||'');
         var nm=String(v.name||v.id||'');
         var t=[];
@@ -2900,7 +3047,12 @@ function prodSuggestCasting(){
     prodSetBusy(true, 'Suggesting casting…', 'Asking the LLM to match voices to characters');
     if (out) out.textContent='';
 
-    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
+    var eng = 'tortoise';
+    try{
+      var r1=document.querySelector("input[name='castEngine']:checked");
+      if (r1 && r1.value) eng = String(r1.value||'').trim() || 'tortoise';
+    }catch(e){}
+    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId, engine: eng})})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'suggest_failed'); }
         prodSetBusy(false);
@@ -3130,7 +3282,11 @@ function loadVoices(){
           chips += chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
         }
 
-        if (v.voice_ref) chips += chip('ref ' + String(v.voice_ref), '');
+        // Engine chip (show which engine this voice uses)
+        try{
+          var eng = String(v.engine||'').trim();
+          if (eng) chips += chip('engine ' + eng, '');
+        }catch(_e){}
 
         traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
       }catch(e){ traitsHtml=''; }
@@ -3155,9 +3311,7 @@ function loadVoices(){
         + playBtn
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
         + "</div>"
-        + "<div id='audWrap-" + idEnc + "' class='hide' style='margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:14px;background:#0b1020'>"
-        + "<audio id='aud-" + idEnc + "' controls style='width:100%'></audio>"
-        + "</div>"
+        /* inline audio element removed (use global floating audio dock) */
         + "</div>";
 
       return "<div class='swipe voiceSwipe'>"
@@ -3263,14 +3417,7 @@ function playVoiceEl(btn){
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
     var sample = btn ? String(btn.getAttribute('data-sample')||'').trim() : '';
     if (!idEnc || !sample) return;
-
-    var wrap = document.getElementById('audWrap-' + idEnc);
-    var a = document.getElementById('aud-' + idEnc);
-    if (wrap) wrap.classList.remove('hide');
-    if (a){
-      if (!a.src) a.src = sample;
-      try{ a.play(); }catch(e){}
-    }
+    __sfPlayAudio(sample, 'Voice sample');
   }catch(e){}
 }
 
@@ -3698,8 +3845,11 @@ try{
         .replace("__INDEX_BASE_CSS__", INDEX_BASE_CSS)
         .replace("__DEBUG_BANNER_HTML__", DEBUG_BANNER_HTML)
         .replace("__DEBUG_BANNER_BOOT_JS__", DEBUG_BANNER_BOOT_JS)
+        .replace("__USER_MENU_JS__", USER_MENU_JS)
         .replace("__BUILD__", str(build))
         .replace("__VOICE_SERVERS__", voice_servers_html)
+        .replace("__USER_MENU_HTML__", USER_MENU_HTML)
+        .replace("__AUDIO_DOCK_JS__", AUDIO_DOCK_JS)
     )
 
 
@@ -3752,7 +3902,18 @@ def api_voice_provider_engines():
                     engs = [e for e in engs if e in allow2]
             except Exception:
                 pass
-            return {'ok': True, 'engines': engs or ['xtts', 'tortoise']}
+            # If the provider allowlist contains engines not reported by the gateway, include them.
+            try:
+                p2 = _get_tinybox_provider() or {}
+                allow2 = p2.get('voice_engines') if isinstance(p2, dict) else None
+                if isinstance(allow2, list) and allow2:
+                    for e2 in allow2:
+                        e2s = str(e2 or '').strip()
+                        if e2s and e2s not in engs:
+                            engs.append(e2s)
+            except Exception:
+                pass
+            return {'ok': True, 'engines': engs or ['xtts', 'tortoise', 'styletts2']}
         return {'ok': False, 'error': 'bad_upstream_shape'}
     except Exception as e:
         return {'ok': False, 'error': f'engines_failed:{type(e).__name__}'}
@@ -3833,6 +3994,7 @@ def voices_root(response: Response):
     return RedirectResponse(url='/#tab-voices', status_code=302)
 
 
+
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -3861,53 +4023,31 @@ def voices_edit_page(voice_id: str, response: Response):
     enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
     vtraits_json = str(v.get('voice_traits_json') or '').strip()
 
-    html = """<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge - Edit Voice</title>
-  <style>__VOICES_BASE_CSS____VOICE_EDIT_EXTRA_CSS__</style>
-</head>
-<body>
-  __DEBUG_BANNER_BOOT_JS__
-  <div class='navBar'>
-    <div class='top'>
-      <div>
-        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
-        <div class='muted'><code>__VID__</code></div>
-      </div>
-      <div class='row headActions'>
-        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div>
-                <div class='uName'>User</div>
-                <div class='uSub'>Admin</div>
-              </div>
-            </div>
-            <div class='uActions'>
-              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+    style_css = VOICES_BASE_CSS + VOICE_EDIT_EXTRA_CSS
 
+    body_top = (
+        DEBUG_BANNER_BOOT_JS
+        + "\n" + USER_MENU_JS
+        + "\n" + DEBUG_PREF_APPLY_JS
+        + "\n" + AUDIO_DOCK_JS
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>"
+        "      <div class='muted'><code>__VID__</code></div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
   __DEBUG_BANNER_HTML__
 
   <div class='card'>
@@ -3915,9 +4055,11 @@ def voices_edit_page(voice_id: str, response: Response):
 
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='editSwatch' class='swatch' title='Color swatch' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
+      <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
+      <span id='colorPickWrap' class='colorPickWrap' style='display:none'>
+        <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='color_hex' type='hidden' value='__CHEX__' />
-      <input id='colorPick' type='color' class='hide' value='__CHEX__' onchange='setEditColorHex(this.value)' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -3931,12 +4073,13 @@ def voices_edit_page(voice_id: str, response: Response):
       </button>
     </div>
 
-    <div class='muted' style='margin-top:12px'>Enabled</div>
-    <label class='switch'>
-      <input id='enabled' type='checkbox' __ENABLED__ />
-      <span class='slider'></span>
-    </label>
-    <div class='muted' style='margin-top:6px'>Show in curated list</div>
+    <div class='row' style='gap:10px;align-items:center;margin-top:12px'>
+      <div class='muted'>Enabled</div>
+      <label class='switch' style='margin:0'>
+        <input id='enabled' type='checkbox' __ENABLED__ />
+        <span class='slider'></span>
+      </label>
+    </div>
 
   </div>
 
@@ -3951,7 +4094,6 @@ def voices_edit_page(voice_id: str, response: Response):
       <button class='secondary' type='button' onclick='playSample()'>Play</button>
     </div>
     <div class='term' id='sample_text' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
-    <audio id='audio' class='hide' controls style='width:100%;margin-top:10px'></audio>
 
     <div class='muted' style='margin-top:12px'>sample_url</div>
     <div class='fadeLine' style='margin-top:8px'>
@@ -3979,125 +4121,78 @@ def voices_edit_page(voice_id: str, response: Response):
   <div class='card'>
     <div class='row' style='justify-content:space-between;align-items:baseline;gap:10px'>
       <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
-      <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
+      <button type='button' class='secondary' onclick='analyzeVoice()'>Analyze voice</button>
     </div>
-    <div class='muted'>Auto-generated metadata for matching characters to voices.</div>
     <input id='voice_traits_json' type='hidden' value='__VTRAITS__' />
     <div id='traitsBox' class='term' style='margin-top:10px'>Loading…</div>
     <details class='rawBox' style='margin-top:10px'>
       <summary>Raw JSON</summary>
-      <pre class='term' style='white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
+      <pre id='traits_raw' class='term' style='white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
     </details>
   </div>
 
-  <div class='card'>
-    <div class='row' style='margin-top:0;justify-content:space-between;gap:10px;flex-wrap:wrap'>
-      <button type='button' class='secondary' onclick='deleteThisVoice()' style='border-color: rgba(255,77,77,.35); color: var(--bad);'>Delete</button>
-      <div class='row' style='gap:10px;justify-content:flex-end;margin-left:auto'>
-        <button type='button' onclick='save()'>Save</button>
-      </div>
-    </div>
+  __MONITOR__
 
-    <div id='out' class='muted' style='margin-top:10px'></div>
+  <div class='row' style='justify-content:space-between;margin-top:12px'>
+    <button class='secondary' type='button' onclick='deleteVoice()' style='border-color:rgba(255,0,72,.35);color:#ff4d6d'>Delete</button>
+    <button type='button' onclick='saveVoice()'>Save</button>
   </div>
+"""
 
+    body_bottom = """
+__MONITOR_JS__
 <script>
-function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function copyText(s){
+  try{
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(String(s||''));
+      return;
+    }
+  }catch(e){}
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=String(s||'');
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }catch(e){}
+}
+
+function copySampleUrl(){
+  try{ copyText(document.getElementById('sample_url').value||''); }catch(e){}
+}
+function copyVoiceRef(){
+  try{ copyText(document.getElementById('voice_ref').textContent||''); }catch(e){}
+}
+
 function escapeHtml(s){
-  try{ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }catch(e){ return String(s||''); }
-}
-function $(id){ return document.getElementById(id); }
-function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
-function chk(id){ var el=$(id); return !!(el && el.checked); }
-
-// Swatch uses server-provided hex (no client-side color naming logic)
-
-function updateEditSwatch(){
   try{
-    var sw=$('editSwatch');
-    var hx=$('color_hex');
-    if (!sw || !hx) return;
-    sw.style.background = String(hx.value||'').trim() || '#64748b';
-  }catch(e){}
+    return String(s||'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+  }catch(e){
+    return '';
+  }
 }
-
-function setEditColorHex(h){
-  try{
-    var hx=$('color_hex');
-    var pk=$('colorPick');
-    if (hx) hx.value = String(h||'').trim();
-    if (pk) pk.value = String(h||'').trim() || '#64748b';
-    updateEditSwatch();
-  }catch(e){}
-}
-
-function openColorPick(){
-  try{ var pk=$('colorPick'); if (pk) pk.click(); }catch(e){}
-}
-
-function genEditVoiceName(){
-  var out=$('out');
-  var el=$('display_name');
-  if (!el) return;
-  var orig = String(el.value||'');
-  if (out) out.textContent='Picking a color…';
-  fetch('/api/voices/random_name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}), credentials:'include'})
-    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-    .then(function(j){
-      if (!j || !j.ok || !j.name) throw new Error((j&&j.error)||'name_failed');
-      el.value = String(j.name||'').trim();
-      setEditColorHex(String(j.color_hex||'').trim());
-      if (out) out.textContent='';
-    })
-    .catch(function(e){ el.value = orig; if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
-}
-
-try{ setTimeout(updateEditSwatch, 0); }catch(e){}
-
-function updateSampleTextCount(){
-  try{
-    var ta=$('sampleText');
-    var c=$('sampleTextCount');
-    if (!ta || !c) return;
-    var n = (String(ta.value||'')||'').length;
-    c.textContent = String(n) + ' chars';
-  }catch(e){}
-}
-
-function deleteThisVoice(){
-  try{
-    if (!confirm('Delete this voice? This also deletes any associated sample/clip in Spaces.')) return;
-    var out=$('out'); if(out) out.textContent='Deleting…';
-    fetch('/api/voices/__VID_RAW__', {method:'DELETE', credentials:'include'})
-      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-      .then(function(j){
-        if (j && j.ok){
-          try{ toastSet('Deleted', 'ok', 1400); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-          window.location.href='/#tab-voices';
-          return;
-        }
-        if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'delete failed')+'</div>';
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-  }catch(e){}
-}
-
 
 function renderTraits(){
-
   try{
-    var box=$('traitsBox');
-    var hid=$('voice_traits_json');
+    var box=document.getElementById('traitsBox');
+    var hid=document.getElementById('voice_traits_json');
     if (!box || !hid) return;
     var raw = String(hid.value||'').trim();
+    var pre = document.getElementById('traits_raw');
+    if (pre && raw) pre.textContent = raw;
+
     if (!raw || raw==='—'){
       box.innerHTML = '<div class="muted">No metadata yet. Tap <b>Analyze voice</b>.</div>';
       return;
     }
-    // raw is JSON string stored in DB; it's HTML-escaped in the template but should still be valid JSON.
+
     var obj=null;
     try{ obj = JSON.parse(raw); }catch(e){
-      // try unescape common entities
       try{
         var tmp=document.createElement('textarea');
         tmp.innerHTML = raw;
@@ -4127,7 +4222,7 @@ function renderTraits(){
     }
 
     var tone = Array.isArray(vt.tone) ? vt.tone : [];
-    var toneHtml = tone.length ? tone.map(t=>chip(t,'')).join('') : '<span class="muted">—</span>';
+    var toneHtml = tone.length ? tone.map(function(t){ return chip(t,''); }).join('') : '<span class="muted">—</span>';
 
     var dur = (m.duration_s!=null) ? fmtNum(m.duration_s,2)+'s' : '';
     var lufs = (m.lufs_i!=null) ? fmtNum(m.lufs_i,1)+' LUFS' : '';
@@ -4151,421 +4246,119 @@ function renderTraits(){
   }catch(e){}
 }
 
-function analyzeMeta(){
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(_e){} }); }catch(e){}
+try{ renderTraits(); }catch(e){}
 
-  try{
-    var out=$('out'); if(out) out.textContent='Analyzing voice…';
-    fetch('/api/voices/__VID_RAW__/analyze_metadata', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
-      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-      .then(function(j){
-        if (j && j.ok){
-          if(out) out.textContent='Voice analysis job started.';
-          try{ toastSet('Analyzing voice…', 'info', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-          setTimeout(function(){ window.location.href='/#tab-history'; }, 250);
-          return;
-        }
-        if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'analyze failed')+'</div>';
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-  }catch(e){ }
+function setEditColorHex(hex){
+  try{ document.getElementById('color_hex').value = String(hex||''); }catch(e){}
+  try{ document.getElementById('editSwatch').style.background = String(hex||''); }catch(e){}
 }
 
-function save(){
-  var out=$('out'); if(out) out.textContent='Saving…';
-  var payload={
-    display_name: val('display_name'),
-    color_hex: val('color_hex'),
-    enabled: chk('enabled')
-  };
-  fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
-    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-    .then(function(j){
-      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }
-      if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'save failed')+'</div>';
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-}
-
-function __copyText(txt){
+function openColorPick(){
   try{
-    txt = String(txt||'');
-    if (!txt) return;
-    if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).catch(function(){
-        try{
-          var ta=document.createElement('textarea');
-          ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
-          document.body.appendChild(ta);
-          ta.focus(); ta.select();
-          try{ document.execCommand('copy'); }catch(_e){}
-          ta.remove();
-        }catch(_e){}
-      });
-      return;
+    var wrap = document.getElementById('colorPickWrap');
+    var inp = document.getElementById('colorPick');
+    if (wrap) wrap.style.display='inline-block';
+    if (inp){
+      try{ inp.focus(); }catch(e){}
+      try{ inp.click(); }catch(e){}
     }
   }catch(e){}
-  try{
-    var ta=document.createElement('textarea');
-    ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    try{ document.execCommand('copy'); }catch(_e){}
-    ta.remove();
-  }catch(e){}
 }
 
-function copySampleUrl(){
+function genEditVoiceName(){
   try{
-    var su=$('sample_url');
-    var txt = su ? String(su.value||'').trim() : '';
-    __copyText(txt);
-    try{ if (typeof toastSet === 'function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(e){}
+    var names=['Moscow Winter','Silver River','Quiet Ember','Night Lantern','Cold Harbor','Iron Lullaby'];
+    document.getElementById('display_name').value = names[Math.floor(Math.random()*names.length)];
   }catch(e){}
 }
 
 function playSample(){
   try{
-    var a=$('audio');
-    var su=$('sample_url');
-    var existing = su ? String(su.value||'').trim() : '';
-    if (existing){
-      if (a){ a.src=existing; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+    var url = document.getElementById('sample_url').value||'';
+    if (!url) return;
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio(url, 'Sample: __VID_RAW__');
       return;
     }
-
-    var out=$('out'); if(out) out.textContent='Generating sample…';
-    fetch('/api/voices/__VID_RAW__/sample', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
-      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-      .then(function(j){
-        if (!j || !j.ok || !j.sample_url){ throw new Error((j&&j.error)||'no_sample_url'); }
-        try{ if (su) su.value = String(j.sample_url||''); }catch(e){}
-        try{ var t=$('sample_url_text'); if (t) { t.textContent = String(j.sample_url||''); t.title = String(j.sample_url||''); } }catch(e){}
-        if (a){ a.src=String(j.sample_url||''); a.classList.remove('hide'); try{ a.play(); }catch(e){} }
-        if(out) out.textContent='';
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
+    window.open(url, '_blank');
   }catch(e){}
 }
 
-function copyVoiceRef(){
-  try{
-    var txt = val('voice_ref');
-    __copyText(txt);
-    try{ if (typeof toastSet==='function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(_e){}
-  }catch(e){}
+function copyTraitsRaw(){
+  try{ copyText((document.getElementById('traits_raw')||{}).textContent||''); }catch(e){}
 }
 
-try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(e){} }); }catch(e){}
-</script>
-
-
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
-    </div>
-  </div>
-
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
-
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
-<script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
+async function analyzeVoice(){
   try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
+    var btns=document.querySelectorAll('button');
+    for (var i=0;i<btns.length;i++){ if ((btns[i].textContent||'').trim()==='Analyze voice'){ btns[i].disabled=true; } }
+  }catch(e){}
+  try{
+    var r = await fetch('/api/voices/analyze', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({voice_id:'__VID_RAW__'})});
+    var j = await r.json();
+    if (j && j.ok){
+      var txt = JSON.stringify(j.traits, null, 2);
+      try{ document.getElementById('voice_traits_json').value = txt; }catch(_e){}
+      try{ document.getElementById('traitsBox').textContent = txt; }catch(_e){}
+      try{ document.getElementById('traits_raw').textContent = txt; }catch(_e){}
+    }else{
+      alert((j && j.error) ? j.error : 'Analyze failed');
+    }
   }catch(e){
-    return true;
+    alert('Analyze failed: ' + String(e));
   }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
   try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
+    var btns2=document.querySelectorAll('button');
+    for (var k=0;k<btns2.length;k++){ if ((btns2[k].textContent||'').trim()==='Analyze voice'){ btns2[k].disabled=false; } }
+  }catch(e){}
+}
+
+async function saveVoice(){
+  try{
+    var payload={
+      voice_id:'__VID_RAW__',
+      display_name: (document.getElementById('display_name').value||'').trim(),
+      color_hex: (document.getElementById('color_hex').value||'').trim(),
+      enabled: !!document.getElementById('enabled').checked
+    };
+    var r=await fetch('/api/voices/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    var j=await r.json();
+    if (!j || !j.ok){
+      alert((j && j.error) ? j.error : 'Save failed');
+      return;
+    }
+    location.href='/#tab-voices';
   }catch(e){
-    return String(ts);
+    alert('Save failed: ' + String(e));
   }
 }
 
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
-    }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
+async function deleteVoice(){
+  try{ if (!confirm('Delete this voice?')) return; }catch(e){}
   try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
+    var r=await fetch('/api/voices/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({voice_id:'__VID_RAW__'})});
+    var j=await r.json();
+    if (!j || !j.ok){
+      alert((j && j.error) ? j.error : 'Delete failed');
+      return;
     }
-  }catch(e){}
-}
-
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
-    };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
+    location.href='/#tab-voices';
+  }catch(e){
+    alert('Delete failed: ' + String(e));
   }
-  startMetricsStream();
 }
-
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
-  try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
-    }
-  }catch(e){}
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
 </script>
-  </body>
-</html>"""
+"""
+
+    html = render_page(
+        title='StoryForge - Edit Voice',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
 
     html = (html
         .replace('__VID__', vid)
@@ -4580,13 +4373,14 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__VTRAITS__', esc(vtraits_json) if vtraits_json else '—')
     )
     html = (html
-        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
-        .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
-        .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
         .replace('__BUILD__', str(build))
     )
     return html
+
 
 
 @app.get('/settings/providers/new')
@@ -4623,57 +4417,35 @@ def settings_new_provider_page(response: Response):
     )
 
 
+
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
     build = APP_BUILD
-    # Separate screen for generating/testing a voice before saving.
-    html = '''<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge - Generate voice</title>
-  <style>__VOICES_BASE_CSS____VOICE_NEW_EXTRA_CSS__</style>
-</head>
-<body>
-  __DEBUG_BANNER_BOOT_JS__
-  <div class='navBar'>
-    <div class='top'>
-      <div>
-        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
-      </div>
-      <div class='row headActions'>
-        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div>
-                <div class='uName'>User</div>
-                <div class='uSub'>Admin</div>
-              </div>
-            </div>
-            <div class='uActions'>
-              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
+    style_css = VOICES_BASE_CSS + VOICE_NEW_EXTRA_CSS
+    body_top = (
+        DEBUG_BANNER_BOOT_JS
+        + "\n" + USER_MENU_JS
+        + "\n" + DEBUG_PREF_APPLY_JS
+        + "\n" + AUDIO_DOCK_JS
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
   __DEBUG_BANNER_HTML__
 
   <div class='card'>
@@ -4682,8 +4454,10 @@ def voices_new_page(response: Response):
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
+      <span id='voiceColorPickWrap' class='colorPickWrap' style='display:none'>
+        <input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='voiceColorHex' type='hidden' value='' />
-      <input id='voiceColorPick' type='color' class='hide' value='#64748b' onchange='setVoiceSwatchHex(this.value)' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -4701,6 +4475,7 @@ def voices_new_page(response: Response):
     <select id='engineSel'>
       <option value='tortoise' selected>tortoise</option>
       <option value='xtts'>xtts</option>
+      <option value='styletts2'>styletts2</option>
     </select>
 
     <div id='tortoiseBox' class='hide'>
@@ -4767,6 +4542,12 @@ def voices_new_page(response: Response):
     <div id='out' class='muted' style='margin-top:10px'></div>
   </div>
 
+  __MONITOR__
+
+"""
+
+    body_bottom = """
+__MONITOR_JS__
 <script>
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s){
@@ -4818,14 +4599,25 @@ function setVoiceSwatchHex(hex){
     var pk=document.getElementById('voiceColorPick');
     var v = String(hex||'').trim();
     if (hx) hx.value = v;
-    if (sw) sw.style.background = v || '#64748b';
     if (pk) pk.value = v || '#64748b';
+    if (sw) sw.style.background = v || '#64748b';
+  }catch(e){}
+}
+function openVoiceColorPick(){
+  try{
+    var pk=document.getElementById('voiceColorPick');
+    if (!pk) return;
+    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='inline-block';
+    _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
+    try{ pk.focus(); }catch(_e){}
+    try{
+      if (pk && typeof pk.showPicker === 'function') pk.showPicker();
+      else pk.click();
+    }catch(_e){ try{ pk.click(); }catch(__e){} }
   }catch(e){}
 }
 
-function openVoiceColorPick(){
-  try{ var pk=document.getElementById('voiceColorPick'); if (pk) pk.click(); }catch(e){}
-}
+
 
 function $(id){ return document.getElementById(id); }
 
@@ -5268,323 +5060,27 @@ try{ document.addEventListener('DOMContentLoaded', function(){
 try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
 </script>
 
+"""
 
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
-    </div>
-  </div>
+    html = render_page(
+        title='StoryForge - Generate voice',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
 
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
-
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
-<script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
-  try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
-  }catch(e){
-    return true;
-  }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
-  try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
-  }catch(e){
-    return String(ts);
-  }
-}
-
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
-    }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
-  try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
-    }
-  }catch(e){}
-}
-
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
-    };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
-  }
-  startMetricsStream();
-}
-
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
-  try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
-    }
-  }catch(e){}
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
-</script>
-  </body>
-</html>'''
     html = (html
-        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
-        .replace('__VOICE_NEW_EXTRA_CSS__', VOICE_NEW_EXTRA_CSS)
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
-        .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
         .replace('__BUILD__', str(build))
     )
     return html
+
+
 @app.get('/todo', response_class=HTMLResponse)
 def todo_page(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -5701,524 +5197,288 @@ def todo_page(request: Request, response: Response):
 
     arch_checked = 'checked' if show_arch else ''
 
-    html = '''<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>StoryForge - TODO</title>
-  <style>__TODO_BASE_CSS__</style>
-</head>
-<body>
-  <div class="navBar">
-    <div class="top">
-      <div>
-        <div class="brandRow"><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class="pageName">TODO</div></div>
-        <div class="muted">Internal tracker (check/uncheck requires login).</div>
-      </div>
-      <div class="right">
-        <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
-            </div>
-            <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
-          </div>
-        </div>
+    build = APP_BUILD
 
+    # Use the same chrome as /base-template (INDEX_BASE_CSS), but keep the TODO list layout styles.
+    style_css = INDEX_BASE_CSS + base_css("""\
+
+    .catHead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}
+    .catTitle{font-weight:950;font-size:16px;}
+    .catCount{color:var(--muted);font-weight:800;font-size:12px;}
+
+    .todoItem{display:block;margin:10px 0;}
+    /* swipe-delete (implemented as horizontal scroll) */
+    .todoSwipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .todoSwipe::-webkit-scrollbar{display:none;}
+    .todoSwipeInner{display:flex;min-width:100%;}
+    .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
+    .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
+    .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
+    .todoHiBtn{border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:var(--muted);font-weight:950;border-radius:999px;padding:6px 10px;font-size:12px;line-height:1;cursor:pointer;}
+    .todoHiBtn:active{transform:translateY(1px);}
+    .todoItem.hi{ }
+    .todoItem.hi .todoText{color:var(--text);}
+    .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
+    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
+
+    /* Override INDEX_BASE_CSS input{width:100%} so checkboxes don't become full-width on iOS */
+    .todoMain input[type=checkbox]{width:auto;flex:0 0 auto;}
+    .todoItem input{margin-top:3px;transform:scale(1.15);width:auto;}
+
+    .todoTextWrap{min-width:0;}
+    .todoText{line-height:1.25;}
+    .todoMeta{color:var(--muted);font-size:12px;margin-top:4px;}
+    .todoPlain{margin:8px 0;color:var(--muted);}
+
+""")
+    body_top = (
+        str(DEBUG_BANNER_BOOT_JS)
+        + str(USER_MENU_JS)
+        + str(DEBUG_PREF_APPLY_JS)
+        + str(AUDIO_DOCK_JS)
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>TODO</div></div>"
+        "      <div class='muted'>Internal tracker (check/uncheck requires login).</div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
+  __DEBUG_BANNER_HTML__
+
+  <div class='card'>
+    <div class='row' style='justify-content:space-between;align-items:center;gap:10px'>
+      <div class='row' style='gap:10px;align-items:center'>
+        <div class='muted' style='font-weight:950'>Archived</div>
+        <label class='switch' aria-label='Toggle archived'>
+          <input id='archToggle' type='checkbox' __ARCH_CHECKED__ onchange='toggleArchived(this.checked)' />
+          <span class='slider'></span>
+        </label>
+      </div>
+      <div class='row' style='gap:10px;justify-content:flex-end;flex-wrap:wrap'>
+        <button class='secondary' type='button' onclick='archiveDone()'>Archive done</button>
+        <button class='secondary' type='button' onclick='clearHighlights()'>Clear highlights</button>
       </div>
     </div>
   </div>
 
-  <div class="bar">
-    <div class="muted"></div>
-    <div class="right">
-      <div class="muted" style="font-weight:950">Archived</div>
-      <label class="switch" aria-label="Toggle archived">
-        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
-        <span class="slider"></span>
-      </label>
-      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
-      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
-    </div>
+  <div class='card'>
+    __BODY_HTML__
   </div>
 
-  <div class="card">__BODY_HTML__</div>
+  __MONITOR__
+"""
 
+    body_bottom = """
+__MONITOR_JS__
 <script>
-function toggleArchived(on){
-  try{ window.location.href = on ? '/todo?arch=1' : '/todo'; }catch(e){}
+function jsonFetch(url, opts){
+  opts = opts || {};
+  opts.credentials = 'include';
+  return fetch(url, opts).then(function(r){
+    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
+    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+  });
 }
 
-function updateCatCount(cat){
+function toggleArchived(on){
   try{
-    var head = document.querySelector(".catHead[data-cat='"+cat+"']");
-    if (!head) return;
-    var items = document.querySelectorAll(".todoItem[data-cat='"+cat+"'] input[type=checkbox]");
-    var done = 0; var total = items.length;
-    for (var i=0;i<items.length;i++){ if (items[i].checked) done++; }
-    var d = head.querySelector('span.done');
-    var t = head.querySelector('span.total');
-    if (d) d.textContent = String(done);
-    if (t) t.textContent = String(total);
+    var u=new URL(window.location.href);
+    if (on) u.searchParams.set('arch','1'); else u.searchParams.delete('arch');
+    window.location.href=u.toString();
   }catch(e){}
 }
 
 function onTodoToggle(cb){
   try{
-    var id = cb.getAttribute('data-id');
-    var wrap = cb.closest ? cb.closest('.todoItem') : null;
-    var cat = wrap ? (wrap.getAttribute('data-cat') || '') : '';
-    if (cat) updateCatCount(cat);
-
-    var checked = !!cb.checked;
-    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status!==200){
-          // revert
-          try{ cb.checked = !checked; }catch(e){}
-          if (cat) updateCatCount(cat);
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-
-function toggleHighlight(id){
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-              if (el){
-                if (j.highlighted) el.classList.add('hi');
-                else el.classList.remove('hi');
-              }
-              return;
-            }
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
+    var id = cb && cb.getAttribute ? cb.getAttribute('data-id') : '';
+    if (!id) return;
+    var url = cb.checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+    jsonFetch(url, {method:'POST'}).catch(function(_e){ window.location.reload(); });
   }catch(e){}
 }
 
 function deleteTodo(id){
-  if (!confirm('Delete this todo?')) return;
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              try{
-                var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-                if (el && el.parentNode) el.parentNode.removeChild(el);
-              }catch(e){}
-              try{ recomputeCounts(); }catch(e){}
-              return;
-            }
-          }catch(e){}
-        }
-        alert('Delete failed');
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Delete failed'); }
+  try{ if(!confirm('Delete TODO #' + id + '?')) return; }catch(e){}
+  jsonFetch('/api/todos/'+String(id)+'/delete_auth', {method:'POST'})
+    .then(function(j){ if(!j||!j.ok) throw new Error((j&&j.error)||'delete_failed'); window.location.reload(); })
+    .catch(function(e){ alert('Delete failed: ' + String(e&&e.message?e.message:e)); });
 }
 
-
-function clearHighlights(){
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/clear_highlights_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var els=document.querySelectorAll('.todoItem.hi');
-            for (var i=0;i<els.length;i++){ els[i].classList.remove('hi'); }
-          }catch(e){}
-        } else {
-          alert('Clear highlights failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Clear highlights failed'); }
+function toggleHighlight(id){
+  jsonFetch('/api/todos/'+String(id)+'/toggle_highlight_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
 }
 
 function archiveDone(){
-  if (!confirm('Archive all completed items?')) return;
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/archive_done_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{ location.reload(); }catch(e){}
-        } else {
-          alert('Archive failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
+  jsonFetch('/api/todos/archive_done_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
+}
+
+function clearHighlights(){
+  jsonFetch('/api/todos/clear_highlights_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
 }
 </script>
+"""
+
+    html = render_page(
+        title='StoryForge - TODO',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
+
+    html = (html
+        .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
+        .replace('__BUILD__', str(build))
+        .replace('__ARCH_CHECKED__', arch_checked)
+        .replace('__BODY_HTML__', body_html)
+    )
+    return HTMLResponse(html)
+
+@app.get('/ui/test-tone.wav')
+def ui_test_tone_wav():
+    # Tiny WAV for UI testing (triggers the global audio dock)
+    try:
+        import io, math, struct, wave
+        sr = 22050
+        dur_s = 0.25
+        freq = 880.0
+        n = int(sr * dur_s)
+        buf = io.BytesIO()
+        with wave.open(buf, 'wb') as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            for i in range(n):
+                t = i / sr
+                # simple sine with fade in/out to avoid clicks
+                amp = 0.25
+                fade = 0.02
+                if t < fade:
+                    amp *= (t / fade)
+                if t > dur_s - fade:
+                    amp *= max(0.0, (dur_s - t) / fade)
+                v = amp * math.sin(2 * math.pi * freq * t)
+                w.writeframes(struct.pack('<h', int(max(-1.0, min(1.0, v)) * 32767)))
+        data = buf.getvalue()
+        return Response(content=data, media_type='audio/wav', headers={'Cache-Control': 'no-store'})
+    except Exception:
+        return Response(content=b'', media_type='audio/wav', headers={'Cache-Control': 'no-store'})
 
 
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
+@app.get('/base-template', response_class=HTMLResponse)
+def base_template_page(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    build = APP_BUILD
+
+    style_css = INDEX_BASE_CSS
+    body_top = (
+        str(DEBUG_BANNER_BOOT_JS)
+        + str(USER_MENU_JS)
+        + str(DEBUG_PREF_APPLY_JS)
+        + str(AUDIO_DOCK_JS)
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Base template</div></div>"
+        "      <div class='muted'>Reference page: header + debug + player + monitor + sample middle.</div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
+  __DEBUG_BANNER_HTML__
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Sample middle</div>
+    <div class='muted'>Tap Play to trigger the shared floating audio player.</div>
+
+    <div class='row' style='justify-content:space-between;align-items:center;margin-top:10px'>
+      <div class='muted' style='font-weight:950'>Test tone</div>
+      <button type='button' class='secondary' onclick='playTestTone()'>Play</button>
+    </div>
+
+    <div class='row' style='margin-top:10px'>
+      <input id='audioUrl' placeholder='Or paste any audio URL…' />
+      <button type='button' onclick='playUrl()'>Play URL</button>
     </div>
   </div>
 
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
+  __MONITOR__
+"""
 
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
+    body_bottom = """
+__MONITOR_JS__
 <script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
+function playTestTone(){
   try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
-  }catch(e){
-    return true;
-  }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
-  try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
-  }catch(e){
-    return String(ts);
-  }
-}
-
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio('/ui/test-tone.wav?v=' + String(window.__SF_BUILD||''), 'Test tone');
+      return;
     }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
-  try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
-    }
+    window.open('/ui/test-tone.wav', '_blank');
   }catch(e){}
 }
 
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
+function playUrl(){
   try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
-    };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
-  }
-  startMetricsStream();
-}
-
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
-  try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
+    var u = String((document.getElementById('audioUrl')||{}).value||'').trim();
+    if (!u) return;
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio(u, 'URL audio');
+      return;
     }
+    window.open(u, '_blank');
   }catch(e){}
 }
-
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
 </script>
-  </body>
-</html>'''
+"""
 
-    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
-    html = html.replace('__TODO_BASE_CSS__', TODO_BASE_CSS)
-    return html
+    html = render_page(
+        title='StoryForge - Base template',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
 
+    html = (html
+        .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
+        .replace('__BUILD__', str(build))
+    )
+    return HTMLResponse(html)
 
 
 @app.post('/api/todos')
@@ -6450,7 +5710,7 @@ async def api_metrics_stream():
         while True:
             try:
                 # _get uses requests (blocking); run in a thread so we don't block the event loop.
-                m = await asyncio.to_thread(_get, '/v1/metrics', 12.0)
+                m = await asyncio.to_thread(_get, '/v1/metrics', 6.0)
                 data = json.dumps(m, separators=(',', ':'))
                 yield f"data: {data}\n\n"
             except Exception as e:
@@ -6712,6 +5972,53 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
+@app.post('/api/jobs/abort')
+def api_jobs_abort(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Abort a running/queued job.
+
+    - Marks the job state as aborted in the DB.
+    - Best-effort: calls Tinybox (/v1/jobs/abort) to kill any active subprocesses tied to this job.
+
+    Auth: passphrase session middleware.
+    Payload: {id: <job_id>}
+    """
+    try:
+        job_id = str((payload or {}).get('id') or (payload or {}).get('job_id') or '').strip()
+        if not job_id:
+            return {'ok': False, 'error': 'missing_id'}
+
+        now = int(time.time())
+
+        # Update DB state first (so UI reflects abort even if Tinybox kill fails).
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE jobs SET state=%s, finished_at=%s WHERE id=%s",
+                ('aborted', now, job_id),
+            )
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        # Best-effort: request Tinybox to kill job subprocesses.
+        try:
+            requests.post(
+                GATEWAY_BASE + '/v1/jobs/abort',
+                json={'job_id': job_id},
+                headers=_h(),
+                timeout=8,
+            )
+        except Exception:
+            pass
+
+        return {'ok': True, 'job_id': job_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'abort_failed: {type(e).__name__}: {e}'}
 
 
 
@@ -6777,7 +6084,7 @@ def _push_notify_job_state(kind: str, state: str, job_id: str, title: str, mp3_u
                         'keys': {'p256dh': p256dh, 'auth': auth},
                     },
                     data=body,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_private_key=_vapid_private_key_material(),
                     vapid_claims={'sub': VAPID_SUBJECT},
                     timeout=6,
                 )
@@ -6953,7 +6260,7 @@ def api_notifications_test(request: Request, payload: dict[str, Any] = Body(defa
         webpush(
             subscription_info={'endpoint': endpoint, 'keys': {'p256dh': p256dh, 'auth': auth}},
             data=body,
-            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_private_key=_vapid_private_key_material(),
             vapid_claims={'sub': VAPID_SUBJECT},
             timeout=6,
         )
@@ -7390,6 +6697,10 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
         if not story_id:
             return {'ok': False, 'error': 'missing_story_id'}
 
+        engine = str((payload or {}).get('engine') or '').strip().lower() or 'tortoise'
+        if engine not in ('tortoise', 'styletts2', 'xtts'):
+            return {'ok': False, 'error': 'bad_engine'}
+
         conn = db_connect()
         try:
             db_init(conn)
@@ -7405,9 +6716,14 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
             chars = ([{'name': 'Narrator', 'role': 'narrator', 'description': ''}] + chars)
         chars.sort(key=lambda c: (0 if str((c or {}).get('role') or '').lower() == 'narrator' or str((c or {}).get('name') or '').strip().lower() == 'narrator' else 1, str((c or {}).get('name') or '')))
 
-        # Build compact voice roster summary
+        # Build compact voice roster summary (filter by engine)
         vrows = []
         for v in voices:
+            try:
+                if engine and str(v.get('engine') or '').strip().lower() != engine:
+                    continue
+            except Exception:
+                pass
             vid = str(v.get('id') or '')
             if not vid:
                 continue
@@ -7446,6 +6762,7 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
                 'Return STRICT JSON only. No markdown.',
                 'Output shape: {"assignments": [{"character":"Name","voice_id":"id","reason":"short"}] }',
                 'Every character must have exactly one assignment.',
+                'Only choose voices from the provided roster (already filtered by engine).',
                 'Prefer matching gender/age/pitch/tone when known, otherwise pick a distinct voice.',
                 'Narrator must be included.',
             ],
@@ -8736,7 +8053,7 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
                     'gateway_base': str(p.get('gateway_base') or '').strip()[:200],
                     'monitoring_enabled': bool(p.get('monitoring_enabled', False)),
                     'voice_enabled': bool(p.get('voice_enabled', False)),
-                    'voice_engines': [str(x).strip() for x in (p.get('voice_engines') or []) if str(x).strip() in ('xtts', 'tortoise')],
+                    'voice_engines': [str(x).strip() for x in (p.get('voice_engines') or []) if str(x).strip() in ('xtts', 'tortoise', 'styletts2')],
                     'voice_gpus': _ints(p.get('voice_gpus') or []),
                     'voice_threads': int(p.get('voice_threads') or 16) if str(p.get('voice_threads') or '').strip() else 16,
                     'tortoise_split_min_text': int(p.get('tortoise_split_min_text') or 100) if str(p.get('tortoise_split_min_text') or '').strip() else 100,
@@ -9193,7 +8510,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 def do_one(i: int, chunk: str, gpu: int | None):
                     r = requests.post(
                         GATEWAY_BASE + '/v1/tts',
-                        json={'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads},
+                        json={'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads, 'job_id': job_id},
                         headers=_h(),
                         timeout=1800,
                     )
@@ -9281,6 +8598,26 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                     },
                 )
             except Exception as e:
+                # If the job was aborted, don't overwrite it as failed.
+                try:
+                    conn2 = db_connect()
+                    st2 = ''
+                    try:
+                        db_init(conn2)
+                        cur2 = conn2.cursor()
+                        cur2.execute('SELECT state FROM jobs WHERE id=%s', (job_id,))
+                        row2 = cur2.fetchone()
+                        st2 = str(row2[0] or '') if row2 else ''
+                    finally:
+                        try:
+                            conn2.close()
+                        except Exception:
+                            pass
+                    if st2 == 'aborted':
+                        return
+                except Exception:
+                    pass
+
                 det = ''
                 try:
                     import traceback

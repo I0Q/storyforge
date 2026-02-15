@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import os
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -11,12 +13,22 @@ from fastapi import Response
 from .db import db_connect, db_init
 from .library_db import get_story_db
 
+APP_BUILD = int(os.environ.get("SF_BUILD", "0") or 0) or int(time.time())
+
+from .ui_debug_shared import DEBUG_BANNER_BOOT_JS, DEBUG_BANNER_HTML
+from .ui_audio_shared import AUDIO_DOCK_JS
+from .ui_header_shared import USER_MENU_HTML
+
 VIEWER_EXTRA_CSS = """
 .hide{display:none}
 .rowBetween{justify-content:space-between;}
 .rowEnd{justify-content:flex-end;margin-left:auto;}
 .rowBetweenCenter{justify-content:space-between;align-items:center;}
 .fw950{font-weight:950;}
+
+/* Title-only card */
+.storyTitleCard{margin-top:10px;}
+.storyTitleCard .titleText{font-size:18px;font-weight:950;line-height:1.15;}
 
 /* navInner removed (use .top from base header CSS) */
 .navTitleWrap{min-width:0;}
@@ -156,7 +168,12 @@ def register_library_viewer(app: FastAPI) -> None:
         story_md_esc = html.escape(story_md)
         rendered = _render_md_simple(story_md)
 
-        js = f"""
+        build = APP_BUILD
+
+        js = (
+            DEBUG_BANNER_BOOT_JS.replace("__BUILD__", str(build))
+            + AUDIO_DOCK_JS
+            + f"""
 <script>
 window.__STORY_ID = {story_id!r};
 window.__CHARS = {json.dumps(chars, separators=(',',':'))};
@@ -374,6 +391,49 @@ function escapeHtml(s){{
     .replace(/>/g,'&gt;');
 }}
 
+function escAttr(s){{
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}}
+
+function copyIconSvg(){{
+  return "<svg viewBox='0 0 24 24' aria-hidden='true'>"+
+    "<path stroke-linecap='round' stroke-linejoin='round' d='M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4'/>"+
+    "</svg>";
+}}
+
+function copyToClipboard(text){{
+  try{{
+    if (navigator.clipboard && navigator.clipboard.writeText){{
+      return navigator.clipboard.writeText(text).catch(function(_e){{
+        var ta=document.createElement('textarea');
+        ta.value=text; document.body.appendChild(ta);
+        ta.select();
+        try{{document.execCommand('copy');}}catch(__e){{}}
+        ta.remove();
+      }});
+    }}
+  }}catch(e){{}}
+  try{{
+    var ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta);
+    ta.select();
+    try{{document.execCommand('copy');}}catch(_e){{}}
+    ta.remove();
+  }}catch(e){{}}
+}}
+
+function copyFromAttr(el){{
+  var v='';
+  try{{ v = (el && el.getAttribute) ? (el.getAttribute('data-copy') || '') : ''; }}catch(e){{}}
+  if (!v) return;
+  try{{ copyToClipboard(v); toastShowNow('Copied', 'ok', 1200); }}catch(_e){{}}
+}}
+
 function renderMdSimple(md){{
   var lines = String(md||'').split('\\n');
   var out=[];
@@ -532,7 +592,10 @@ function loadAudio(){{
           var url=String(it.mp3_url||'');
           html += "<div class='audioItem'>"+
             "<div class='audioLabel'>"+escapeHtml(label||('Audio '+String(i+1)))+"</div>"+
-            "<div class='muted' style='margin-top:6px'>"+escapeHtml(url||'')+"</div>"+
+            "<div class='fadeLine' style='margin-top:6px'>"+
+              "<div class='fadeText' title='"+escAttr(url||'')+"'>"+escapeHtml(url||'')+"</div>"+
+              (url?"<button class='copyBtn' type='button' data-copy='"+escAttr(url)+"' onclick='copyFromAttr(this)' aria-label='Copy'>"+copyIconSvg()+"</button>":"")+
+            "</div>"+
             "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+
             "</div>"+
@@ -550,26 +613,8 @@ function playAudioByIndex(i){{
     var items = window.__AUDIO_ITEMS || [];
     var it = (items && items[i]) ? items[i] : null;
     var url = String((it && it.mp3_url) || '');
-    playAudio(url);
-  }}catch(e){{}}
-}}
-
-function playAudio(url){{
-  try{{
-    url = String(url||'');
-    if (!url) return;
-    var out=$('audioOut');
-    if (!out) return;
-    // Replace existing player
-    try{{
-      var olds = out.querySelectorAll('audio');
-      for (var i=0;i<olds.length;i++){{ try{{ olds[i].pause(); }}catch(_e){{}} try{{ olds[i].remove(); }}catch(_e){{}} }}
-    }}catch(_e){{}}
-
-    var a = document.createElement('audio');
-    a.controls=true; a.style.width='100%'; a.src=url;
-    out.insertBefore(a, out.firstChild);
-    try{{ a.play(); }}catch(e){{}}
+    var label = String((it && it.label) || ('Audio '+String(i+1)));
+    __sfPlayAudio(url, label);
   }}catch(e){{}}
 }}
 
@@ -589,6 +634,7 @@ if ($('mdCode')) {{
 }}
 </script>
 """
+        )
 
         body = "\n".join(
             [
@@ -601,23 +647,16 @@ if ($('mdCode')) {{
                 "    </div>",
                 "    <div class='row rowEnd'>",
                 "      <a href='/#tab-library'><button class='secondary' type='button'>Back</button></a>",
-                "      <div class='menuWrap'>",
-                "        <button class='userBtn' type='button' onclick=\"toggleUserMenu()\" aria-label='User menu'>",
-                "          <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg>",
-                "        </button>",
-                "        <div id='topMenu' class='menuCard'>",
-                "          <div class='uTop'>",
-                "            <div class='uAvatar'><svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/><path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/></svg></div>",
-                "            <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>",
-                "          </div>",
-                "          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>",
-                "        </div>",
-                "      </div>",
+                USER_MENU_HTML,
                 "    </div>",
                 "  </div>",
                 "</div>",
                 "",
-                f"<div class='muted storySub'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
+                DEBUG_BANNER_HTML.replace("__BUILD__", str(build)),
+                "",
+                "<div class='card storyTitleCard'>",
+                f"  <div id='titleText' class='titleText storyTitleText'>{title_txt}</div>",
+                "</div>",
                 "<div id='titleEdit' class='hide titleEdit'>",
                 f"  <input id='titleInput' value='{title_txt}' />",
                 "</div>",
