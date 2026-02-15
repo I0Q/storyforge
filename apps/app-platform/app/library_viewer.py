@@ -15,51 +15,7 @@ from .library_db import get_story_db
 
 APP_BUILD = int(os.environ.get("SF_BUILD", "0") or 0) or int(time.time())
 
-VIEWER_DEBUG_BANNER_HTML = """
-  <div id='boot' class='boot muted'>
-    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
-    <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
-      </svg>
-    </button>
-  </div>
-"""
-
-# Minimal debug boot JS (kept compatible with older iOS Safari)
-VIEWER_DEBUG_BANNER_BOOT_JS = """
-<script>
-window.__SF_BUILD='__BUILD__';
-window.__SF_LAST_ERR='';
-function __sfEnsureBootText(){ try{ return document.getElementById('bootText'); }catch(e){ return null; } }
-function __sfSetDebugInfo(msg){ try{ window.__SF_LAST_ERR=String(msg||''); var t=__sfEnsureBootText(); if(t) t.textContent='Build: '+String(window.__SF_BUILD||'?')+' • JS: '+(window.__SF_LAST_ERR||'ok'); }catch(e){} }
-window.addEventListener('error', function(ev){ try{ var m=''; try{ m=String((ev&&ev.message)||''); }catch(e){} __sfSetDebugInfo(m||'error'); }catch(e){} });
-window.addEventListener('unhandledrejection', function(ev){ try{ var r=(ev&&ev.reason); var m=''; try{ m=String((r&&r.message)||r||''); }catch(e){} __sfSetDebugInfo(m||'unhandled'); }catch(e){} });
-function copyBoot(){
-  try{
-    var b=String(window.__SF_BUILD||'?');
-    var e=String(window.__SF_LAST_ERR||'');
-    var txt='Build: '+b+'\nJS: '+(e||'(none)');
-    if (navigator && navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).catch(function(){});
-    }
-  }catch(e){}
-}
-// Don't leave it stuck on booting…
-function __sfFixBooting(){
-  try{
-    var t=__sfEnsureBootText();
-    if(!t) return;
-    var s=String(t.textContent||'');
-    if(s.indexOf('JS: booting')!==-1){
-      t.textContent=s.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
-    }
-  }catch(e){}
-}
-try{ setTimeout(__sfFixBooting, 0); }catch(e){}
-try{ setTimeout(__sfFixBooting, 500); }catch(e){}
-</script>
-"""
+from .ui_debug_shared import DEBUG_BANNER_BOOT_JS, DEBUG_BANNER_HTML
 
 VIEWER_EXTRA_CSS = """
 .hide{display:none}
@@ -213,7 +169,7 @@ def register_library_viewer(app: FastAPI) -> None:
         build = APP_BUILD
 
         js = (
-            VIEWER_DEBUG_BANNER_BOOT_JS.replace("__BUILD__", str(build))
+            DEBUG_BANNER_BOOT_JS.replace("__BUILD__", str(build))
             + f"""
 <script>
 window.__STORY_ID = {story_id!r};
@@ -791,7 +747,7 @@ if ($('mdCode')) {{
                 "  </div>",
                 "</div>",
                 "",
-                VIEWER_DEBUG_BANNER_HTML.replace("__BUILD__", str(build)),
+                DEBUG_BANNER_HTML.replace("__BUILD__", str(build)),
                 "",
                 "<div class='card storyTitleCard'>",
                 f"  <div id='titleText' class='titleText storyTitleText'>{title_txt}</div>",

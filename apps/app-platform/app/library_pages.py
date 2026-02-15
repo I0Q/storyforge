@@ -16,6 +16,7 @@ from .library_db import (
     upsert_story_db,
     validate_story_id,
 )
+from .ui_debug_shared import DEBUG_PREF_APPLY_JS
 
 
 # Extracted verbatim from _html_page() for safer incremental refactors.
@@ -357,15 +358,7 @@ document.addEventListener('click', function(ev){{
   }}catch(e){{}}
 }});
 </script>
-<script>
-// Match main page debug toggle behavior: sf_debug_ui controls whether .boot debug areas show.
-try{{
-  var v = null;
-  try{{ v = localStorage.getItem('sf_debug_ui'); }}catch(e){{}}
-  var on = (v===null || v==='' || v==='1');
-  try{{ document.body.classList.toggle('debugOff', !on); }}catch(e){{}}
-}}catch(e){{}}
-</script>
+{DEBUG_PREF_APPLY_JS}
 {MONITOR_HTML}
 {MONITOR_JS}
 </body>
