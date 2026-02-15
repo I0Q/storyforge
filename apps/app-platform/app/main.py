@@ -868,8 +868,9 @@ function __sfStartDeployWatch(){
             if (lastState !== 'deploying'){
               idleHits += 1;
               intervalMs = Math.min(60000, Math.max(15000, intervalMs));
-              // After a couple of idle confirmations, stop polling until reload.
-              if (idleHits >= 2) return;
+              // Keep polling (slowly) even when idle so we can catch a deploy that starts
+              // later without requiring a full page reload (common on mobile/iOS).
+              // intervalMs will back off up to 60s while idle.
             }else{
               idleHits = 0;
               intervalMs = 5000;
