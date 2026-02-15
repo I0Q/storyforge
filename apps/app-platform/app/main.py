@@ -4140,8 +4140,10 @@ function openColorPick(){
     _colorReturnSetup('colorPick', 'colorPickWrap', function(v){ try{ setEditColorHex(v); }catch(_e){} });
     try{ pk.focus(); }catch(_e){}
     // Must happen in the same user gesture; iOS can block delayed/programmatic clicks.
-    try{ pk.click(); }catch(_e){}
-    try{ pk.click(); }catch(_e){}
+    try{
+      if (pk && typeof pk.showPicker === 'function') pk.showPicker();
+      else pk.click();
+    }catch(_e){ try{ pk.click(); }catch(__e){} }
   }catch(e){}
 }
 
@@ -4942,8 +4944,10 @@ function openVoiceColorPick(){
     _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
     try{ pk.focus(); }catch(_e){}
     // Must happen in the same user gesture; iOS can block delayed/programmatic clicks.
-    try{ pk.click(); }catch(_e){}
-    try{ pk.click(); }catch(_e){}
+    try{
+      if (pk && typeof pk.showPicker === 'function') pk.showPicker();
+      else pk.click();
+    }catch(_e){ try{ pk.click(); }catch(__e){} }
   }catch(e){}
 }
 
