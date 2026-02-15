@@ -3985,9 +3985,9 @@ def voices_edit_page(voice_id: str, response: Response):
 
     body_top = (
         DEBUG_BANNER_BOOT_JS
-        + "\\n" + USER_MENU_JS
-        + "\\n" + DEBUG_PREF_APPLY_JS
-        + "\\n" + AUDIO_DOCK_JS
+        + "\n" + USER_MENU_JS
+        + "\n" + DEBUG_PREF_APPLY_JS
+        + "\n" + AUDIO_DOCK_JS
     )
 
     nav_html = (
@@ -4289,9 +4289,9 @@ def voices_new_page(response: Response):
     style_css = VOICES_BASE_CSS + VOICE_NEW_EXTRA_CSS
     body_top = (
         DEBUG_BANNER_BOOT_JS
-        + "\\n" + USER_MENU_JS
-        + "\\n" + DEBUG_PREF_APPLY_JS
-        + "\\n" + AUDIO_DOCK_JS
+        + "\n" + USER_MENU_JS
+        + "\n" + DEBUG_PREF_APPLY_JS
+        + "\n" + AUDIO_DOCK_JS
     )
 
     nav_html = (
