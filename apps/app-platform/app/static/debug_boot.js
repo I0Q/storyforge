@@ -80,13 +80,13 @@
 
     var lastState = '';
     var lastUpdated = 0;
-    var es = null;
+    var ws = null;
     var rt = null;
     var backoff = 900;
 
     function stop(){
       try{ if(rt){ clearTimeout(rt); rt=null; } }catch(e){}
-      try{ if(es){ es.close(); es=null; } }catch(e){}
+      try{ if(ws){ ws.close(); ws=null; } }catch(e){}
     }
 
     function schedule(){
@@ -120,10 +120,19 @@
     function start(){
       stop();
       try{
-        es = new EventSource('/api/deploy/stream');
-        es.onopen = function(){ backoff = 900; };
-        es.onmessage = function(ev){ try{ apply(JSON.parse(ev.data || '{}')); }catch(e){} };
-        es.onerror = function(){ schedule(); };
+        var proto = (window.location && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+        var url = proto + '//' + window.location.host + '/ws/deploy';
+        ws = new WebSocket(url);
+        ws.onopen = function(){ backoff = 900; };
+        ws.onmessage = function(ev){
+          try{
+            var j = JSON.parse(String(ev.data||'{}'));
+            if (j && j.type === 'keepalive') return;
+            apply(j);
+          }catch(e){}
+        };
+        ws.onerror = function(){ schedule(); };
+        ws.onclose = function(){ schedule(); };
       }catch(e){
         schedule();
       }

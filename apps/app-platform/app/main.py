@@ -11,8 +11,9 @@ from datetime import datetime
 import html as pyhtml
 
 import requests
-from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File, WebSocket
 from fastapi.staticfiles import StaticFiles
+from fastapi.websockets import WebSocketDisconnect
 
 from .auth import register_passphrase_auth
 from .ui_header_shared import USER_MENU_HTML, USER_MENU_JS
@@ -6165,16 +6166,14 @@ def api_runtime_fingerprint():
 async def api_deploy_stream():
     """SSE stream for deploy state.
 
-    This is debug-UI only on the client. Server-side is public but low-impact.
-
-    Emits a JSON payload like /api/deploy/status whenever state/updated_at changes.
+    NOTE: App Platform/Cloudflare may buffer SSE. We keep this endpoint for
+    completeness, but the debug UI now prefers WebSockets.
     """
 
     async def gen():
         import asyncio
 
-        # Send an immediate chunk so proxies (Cloudflare/iOS) don't buffer the stream.
-        # Some intermediaries won't flush tiny SSE frames.
+        # Best-effort keepalive frames.
         yield ": boot " + (" " * 2048) + "\n\n"
 
         last_upd = None
@@ -6213,17 +6212,14 @@ async def api_deploy_stream():
                 upd = int((j or {}).get('updated_at') or 0)
                 st = str((j or {}).get('state') or '')
 
-                # Emit on change (or first tick).
                 if last_upd is None or upd != last_upd or st != last_state:
                     yield f"data: {json.dumps(j, separators=(',', ':'))}\n\n"
                     last_upd = upd
                     last_state = st
                 else:
-                    # Keepalive so intermediaries keep the stream flowing.
                     if (tick % 6) == 0:
                         yield ": keepalive\n\n"
             except Exception:
-                # Best-effort: keep stream alive.
                 yield f"data: {json.dumps({'ok': True, 'state': 'unknown', 'message': '', 'updated_at': 0}, separators=(',', ':'))}\n\n"
 
             tick += 1
@@ -6237,6 +6233,74 @@ async def api_deploy_stream():
         'Connection': 'keep-alive',
     }
     return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
+
+
+@app.websocket('/ws/deploy')
+async def ws_deploy(ws: WebSocket):
+    """WebSocket stream for deploy state.
+
+    Debug UI should only connect when sf_debug_ui is enabled client-side.
+    Server side is public but low-impact.
+    """
+    await ws.accept()
+
+    import asyncio
+
+    last_upd = None
+    last_state = None
+    tick = 0
+
+    try:
+        while True:
+            def _load():
+                conn = db_connect()
+                try:
+                    db_init(conn)
+                    cur = conn.cursor()
+                    cur.execute("SELECT value_json, updated_at FROM sf_settings WHERE key='deploy_state'")
+                    row = cur.fetchone()
+                    if not row:
+                        return {'ok': True, 'state': 'idle', 'message': '', 'updated_at': 0}
+                    vraw = str(row[0] or '').strip()
+                    try:
+                        v = json.loads(vraw) if vraw else {}
+                    except Exception:
+                        v = {}
+                    return {
+                        'ok': True,
+                        'state': str(v.get('state') or 'idle'),
+                        'message': str(v.get('message') or ''),
+                        'updated_at': int(row[1] or 0),
+                    }
+                finally:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+            j = await asyncio.to_thread(_load)
+            upd = int((j or {}).get('updated_at') or 0)
+            st = str((j or {}).get('state') or '')
+
+            if last_upd is None or upd != last_upd or st != last_state:
+                await ws.send_text(json.dumps(j, separators=(',', ':')))
+                last_upd = upd
+                last_state = st
+            else:
+                # keepalive
+                if (tick % 6) == 0:
+                    await ws.send_text('{"type":"keepalive"}')
+
+            tick += 1
+            await asyncio.sleep(2.0)
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        try:
+            await ws.close()
+        except Exception:
+            pass
+        return
 
 
 def _require_deploy_token(request: Request) -> None:
