@@ -60,6 +60,39 @@ VAPID_PUBLIC_KEY = os.environ.get('SF_VAPID_PUBLIC_KEY', '').strip()
 VAPID_PRIVATE_KEY = os.environ.get('SF_VAPID_PRIVATE_KEY', '').strip()
 VAPID_SUBJECT = os.environ.get('SF_VAPID_SUBJECT', 'mailto:admin@example.com').strip()
 
+
+def _vapid_private_key_material() -> str:
+    """Return a pywebpush-compatible VAPID private key.
+
+    DO App Platform env vars sometimes flatten multiline secrets.
+    Accept:
+    - PEM (with real newlines or with literal "\\n")
+    - base64url/raw VAPID key string (as accepted by pywebpush)
+    """
+    k = str(VAPID_PRIVATE_KEY or '').strip()
+    if not k:
+        return ''
+    # If it looks like PEM but has escaped newlines, unescape them.
+    if 'BEGIN ' in k and '\\n' in k:
+        k = k.replace('\\n', '\n')
+    # If it looks like PEM but is flattened into a single line, try to re-split.
+    if k.startswith('-----BEGIN') and ('\n' not in k):
+        # Best-effort: insert newlines around header/footer markers.
+        k = k.replace('-----BEGIN EC PRIVATE KEY-----', '-----BEGIN EC PRIVATE KEY-----\n')
+        k = k.replace('-----END EC PRIVATE KEY-----', '\n-----END EC PRIVATE KEY-----')
+        k = k.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
+        k = k.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----')
+        # Also wrap base64 body to avoid extremely long lines (not strictly required).
+        parts = k.split('\n')
+        if len(parts) >= 3:
+            hdr = parts[0]
+            ftr = parts[-1]
+            body = ''.join(parts[1:-1]).strip()
+            if body:
+                wrapped = '\n'.join([body[i:i+64] for i in range(0, len(body), 64)])
+                k = hdr + '\n' + wrapped + '\n' + ftr
+    return k
+
 VOICE_SERVERS: list[dict[str, Any]] = []
 try:
     _raw = os.environ.get("VOICE_SERVERS_JSON", "").strip()
@@ -6810,7 +6843,7 @@ def _push_notify_job_state(kind: str, state: str, job_id: str, title: str, mp3_u
                         'keys': {'p256dh': p256dh, 'auth': auth},
                     },
                     data=body,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_private_key=_vapid_private_key_material(),
                     vapid_claims={'sub': VAPID_SUBJECT},
                     timeout=6,
                 )
@@ -6986,7 +7019,7 @@ def api_notifications_test(request: Request, payload: dict[str, Any] = Body(defa
         webpush(
             subscription_info={'endpoint': endpoint, 'keys': {'p256dh': p256dh, 'auth': auth}},
             data=body,
-            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_private_key=_vapid_private_key_material(),
             vapid_claims={'sub': VAPID_SUBJECT},
             timeout=6,
         )
