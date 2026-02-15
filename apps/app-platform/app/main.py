@@ -4111,8 +4111,10 @@ function _colorReturnSetup(pkId, wrapId, applyFn){
     try{ var el=document.getElementById(window.__SF_COLOR_RETURN.pkId); if (el) window.__SF_COLOR_RETURN.prev = String(el.value||''); }catch(_e){}
     if (!window.__SF_COLOR_RETURN_HOOKED){
       window.__SF_COLOR_RETURN_HOOKED = true;
-      window.addEventListener('focus', function(){
+      window.addEventListener('focus', function(ev){
         try{
+          // Important: do NOT capture element focus events; we only want window focus return.
+          if (ev && ev.target && ev.target !== window) return;
           var st = window.__SF_COLOR_RETURN;
           if (!st || !st.pkId || typeof st.apply !== 'function') return;
           var el = document.getElementById(st.pkId);
@@ -4125,7 +4127,7 @@ function _colorReturnSetup(pkId, wrapId, applyFn){
           // hide again after the picker is dismissed
           try{ var w = st.wrapId ? document.getElementById(st.wrapId) : null; if (w) w.style.display='none'; }catch(_e){}
         }catch(_e){}
-      }, true);
+      }, false);
     }
   }catch(e){}
 }
