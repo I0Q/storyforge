@@ -4093,9 +4093,8 @@ def voices_edit_page(voice_id: str, response: Response):
 """
 
     body_bottom = """
-<script>
 __MONITOR_JS__
-
+<script>
 function copyText(s){
   try{
     if (navigator && navigator.clipboard && navigator.clipboard.writeText){
@@ -4381,9 +4380,8 @@ def voices_new_page(response: Response):
 """
 
     body_bottom = """
-<script>
 __MONITOR_JS__
-
+<script>
 function setEngineUi(){
   var e = (document.getElementById('engineSel').value||'').trim();
   var tb = document.getElementById('tortoiseBox');
