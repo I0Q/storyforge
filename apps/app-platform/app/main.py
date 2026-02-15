@@ -3388,12 +3388,28 @@ function playVoiceEl(btn){
     var sample = btn ? String(btn.getAttribute('data-sample')||'').trim() : '';
     if (!idEnc || !sample) return;
 
+    // Jobs page uses SSE + re-renders; on iOS that can interrupt audio even on other tabs.
+    // Pause jobs stream while audio is playing.
+    try{ pauseJobsStream(5*60*1000); }catch(_e){}
+
+    // Stop any other open voice players
+    try{
+      var olds=document.querySelectorAll('#pane-voices audio');
+      for (var i=0;i<olds.length;i++){
+        try{ olds[i].pause(); }catch(_e){}
+      }
+    }catch(_e){}
+
     var wrap = document.getElementById('audWrap-' + idEnc);
     var a = document.getElementById('aud-' + idEnc);
     if (wrap) wrap.classList.remove('hide');
     if (a){
-      if (!a.src) a.src = sample;
-      try{ a.play(); }catch(e){}
+      a.src = sample;
+      a.onended = function(){ try{ window.__SF_JOBS_STREAM_PAUSED_UNTIL = 0; startJobsStream(); }catch(_e){} };
+      try{
+        var p=a.play();
+        if (p && typeof p.catch === 'function') p.catch(function(_e){});
+      }catch(_e){}
     }
   }catch(e){}
 }
