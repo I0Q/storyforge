@@ -90,6 +90,9 @@ LIBRARY_BASE_CSS = """
 # Shared monitor UI (dock + bottom sheet) so all pages match the main template.
 LIBRARY_BASE_CSS += """
 
+    /* debug toggle: hide debug banner on all library pages when debug is disabled */
+    body.debugOff .boot{display:none !important;}
+
     /* bottom dock */
     .dock{display:block;position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(15,23,51,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;}
     .dockInner{max-width:920px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
@@ -353,6 +356,15 @@ document.addEventListener('click', function(ev){{
     if(!w) m.classList.remove('show');
   }}catch(e){{}}
 }});
+</script>
+<script>
+// Match main page debug toggle behavior: sf_debug_ui controls whether .boot debug areas show.
+try{{
+  var v = null;
+  try{{ v = localStorage.getItem('sf_debug_ui'); }}catch(e){{}}
+  var on = (v===null || v==='' || v==='1');
+  try{{ document.body.classList.toggle('debugOff', !on); }}catch(e){{}}
+}}catch(e){{}}
 </script>
 {MONITOR_HTML}
 {MONITOR_JS}
