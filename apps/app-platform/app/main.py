@@ -5155,47 +5155,35 @@ def todo_page(request: Request, response: Response):
 
     arch_checked = 'checked' if show_arch else ''
 
-    html = '''<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>StoryForge - TODO</title>
-  <style>__TODO_BASE_CSS__</style>
-</head>
-<body>
-  <div class="navBar">
-    <div class="top">
-      <div>
-        <div class="brandRow"><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class="pageName">TODO</div></div>
-        <div class="muted">Internal tracker (check/uncheck requires login).</div>
-      </div>
-      <div class="right">
-        <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
-            </div>
-            <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
-          </div>
-        </div>
 
-      </div>
-    </div>
-  </div>
+
+    build = APP_BUILD
+
+    style_css = TODO_BASE_CSS
+    body_top = (
+        DEBUG_BANNER_BOOT_JS
+        + "\\n" + USER_MENU_JS
+        + "\\n" + DEBUG_PREF_APPLY_JS
+        + "\\n" + AUDIO_DOCK_JS
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>TODO</div></div>"
+        "      <div class='muted'>Internal tracker (check/uncheck requires login).</div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/#tab-jobs'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
+  __DEBUG_BANNER_HTML__
 
   <div class="bar">
     <div class="muted"></div>
@@ -5210,467 +5198,112 @@ def todo_page(request: Request, response: Response):
     </div>
   </div>
 
-  <div class="card">__BODY_HTML__</div>
+  <div class="card">
+    __BODY_HTML__
+  </div>
 
+  <div class='card'>
+    <div class='row' style='justify-content:space-between;align-items:center;gap:10px'>
+      <div class='muted' style='font-weight:950'>Add</div>
+      <button type='button' onclick='addTodo()'>Add</button>
+    </div>
+    <div class='row' style='margin-top:10px'>
+      <input id='newText' placeholder='New todo…' />
+    </div>
+    <div class='row' style='margin-top:10px'>
+      <input id='newCat' placeholder='Category (optional)' />
+    </div>
+    <div id='out' class='muted' style='margin-top:10px'></div>
+  </div>
+"""
+
+    body_bottom = """
 <script>
-function toggleArchived(on){
-  try{ window.location.href = on ? '/todo?arch=1' : '/todo'; }catch(e){}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function jsonFetch(url, opts){
+  opts = opts || {};
+  opts.credentials = 'include';
+  return fetch(url, opts).then(function(r){
+    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
+    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+  });
 }
 
-function updateCatCount(cat){
+function toggleArchived(on){
   try{
-    var head = document.querySelector(".catHead[data-cat='"+cat+"']");
-    if (!head) return;
-    var items = document.querySelectorAll(".todoItem[data-cat='"+cat+"'] input[type=checkbox]");
-    var done = 0; var total = items.length;
-    for (var i=0;i<items.length;i++){ if (items[i].checked) done++; }
-    var d = head.querySelector('span.done');
-    var t = head.querySelector('span.total');
-    if (d) d.textContent = String(done);
-    if (t) t.textContent = String(total);
+    var u=new URL(window.location.href);
+    if (on) u.searchParams.set('arch','1'); else u.searchParams.delete('arch');
+    window.location.href=u.toString();
   }catch(e){}
 }
 
 function onTodoToggle(cb){
   try{
-    var id = cb.getAttribute('data-id');
-    var wrap = cb.closest ? cb.closest('.todoItem') : null;
-    var cat = wrap ? (wrap.getAttribute('data-cat') || '') : '';
-    if (cat) updateCatCount(cat);
-
-    var checked = !!cb.checked;
-    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status!==200){
-          // revert
-          try{ cb.checked = !checked; }catch(e){}
-          if (cat) updateCatCount(cat);
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-
-function toggleHighlight(id){
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-              if (el){
-                if (j.highlighted) el.classList.add('hi');
-                else el.classList.remove('hi');
-              }
-              return;
-            }
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
+    var id = cb && cb.getAttribute ? cb.getAttribute('data-id') : '';
+    if (!id) return;
+    var url = cb.checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+    jsonFetch(url, {method:'POST'}).catch(function(_e){ window.location.reload(); });
   }catch(e){}
 }
 
 function deleteTodo(id){
-  if (!confirm('Delete this todo?')) return;
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              try{
-                var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-                if (el && el.parentNode) el.parentNode.removeChild(el);
-              }catch(e){}
-              try{ recomputeCounts(); }catch(e){}
-              return;
-            }
-          }catch(e){}
-        }
-        alert('Delete failed');
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Delete failed'); }
+  try{ if(!confirm('Delete TODO #' + id + '?')) return; }catch(e){}
+  jsonFetch('/api/todos/'+String(id)+'/delete_auth', {method:'POST'})
+    .then(function(j){ if(!j||!j.ok) throw new Error((j&&j.error)||'delete_failed'); window.location.reload(); })
+    .catch(function(e){ alert('Delete failed: ' + String(e&&e.message?e.message:e)); });
 }
 
-
-function clearHighlights(){
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/clear_highlights_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var els=document.querySelectorAll('.todoItem.hi');
-            for (var i=0;i<els.length;i++){ els[i].classList.remove('hi'); }
-          }catch(e){}
-        } else {
-          alert('Clear highlights failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Clear highlights failed'); }
+function toggleHighlight(id){
+  jsonFetch('/api/todos/'+String(id)+'/toggle_highlight_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
 }
 
 function archiveDone(){
-  if (!confirm('Archive all completed items?')) return;
+  jsonFetch('/api/todos/archive_done_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
+}
+
+function clearHighlights(){
+  jsonFetch('/api/todos/clear_highlights_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
+}
+
+function addTodo(){
   try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/archive_done_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{ location.reload(); }catch(e){}
-        } else {
-          alert('Archive failed');
-        }
-      }
-    };
-    xhr.send('{}');
+    var t = String((document.getElementById('newText')||{}).value||'').trim();
+    var c = String((document.getElementById('newCat')||{}).value||'').trim();
+    if (!t) return;
+    var out=document.getElementById('out'); if(out) out.textContent='Adding…';
+    jsonFetch('/api/todos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:t, category:c})})
+      .then(function(j){
+        if(!j||!j.ok) throw new Error((j&&j.error)||'add_failed');
+        window.location.reload();
+      })
+      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>'; });
   }catch(e){}
 }
 </script>
+"""
 
+    html = render_page(
+        title='StoryForge - TODO',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
 
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
-    </div>
-  </div>
-
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
-
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
-<script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
-  try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
-  }catch(e){
-    return true;
-  }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
-  try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
-  }catch(e){
-    return String(ts);
-  }
-}
-
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
-    }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
-  try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
-    }
-  }catch(e){}
-}
-
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
-    };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
-  }
-  startMetricsStream();
-}
-
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
-  try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
-    }
-  }catch(e){}
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
-</script>
-  </body>
-</html>'''
-
-    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
-    html = html.replace('__TODO_BASE_CSS__', TODO_BASE_CSS)
+    html = (html
+        .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__BUILD__', str(build))
+        .replace('__ARCH_CHECKED__', arch_checked)
+        .replace('__BODY_HTML__', body_html)
+    )
     return html
 
 @app.post('/api/todos')
