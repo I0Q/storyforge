@@ -90,6 +90,21 @@ function __sfPositionUserMenu(){
     var h = 140;
     try{ h = Math.max(90, Math.min(320, m.offsetHeight || 140)); }catch(_e){}
 
+    // Mobile: always open from the top-right under the header (stable iOS Safari positioning).
+    try{
+      if ((vw || 0) <= 520){
+        m.style.left = 'auto';
+        m.style.right = '14px';
+        // Use env(safe-area-inset-top) so it doesn't go under the notch.
+        m.style.top = 'calc(14px + env(safe-area-inset-top))';
+        m.style.bottom = 'auto';
+        m.style.maxWidth = 'calc(100vw - 28px)';
+        m.style.overflowY = 'auto';
+        m.style.webkitOverflowScrolling = 'touch';
+        return;
+      }
+    }catch(_e){}
+
     var left = (r.right - w);
     left = __sfMenuClamp(left, pad, (vw || 0) - w - pad);
     var top = (r.bottom + 8);
