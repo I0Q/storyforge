@@ -1446,11 +1446,22 @@ function showTab(name, opts){
     document.getElementById('pane-'+n).classList.toggle('hide', n!==name);
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   }
-  // persist in URL hash
+  // persist in URL hash without triggering iOS scroll-to-top
   try{
     if (!opts.noHash){
       var h = '#tab-' + name;
-      if (window.location.hash !== h) window.location.hash = h;
+      if (window.location.hash !== h){
+        var y = 0;
+        try{ y = window.scrollY || window.pageYOffset || 0; }catch(e){ y = 0; }
+        try{
+          if (history && history.replaceState) history.replaceState(null, '', h);
+          else window.location.hash = h;
+        }catch(_e){
+          try{ window.location.hash = h; }catch(__e){}
+        }
+        // Some iOS builds still jump; restore.
+        try{ setTimeout(function(){ try{ window.scrollTo(0, y); }catch(e){} }, 0); }catch(e){}
+      }
     }
   }catch(_e){}
 
