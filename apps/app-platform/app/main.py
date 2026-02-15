@@ -3986,7 +3986,7 @@ def voices_edit_page(voice_id: str, response: Response):
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
-      <div class='colorPickNest'><input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' aria-label='Pick color' /></div
+      <div class='colorPickNest'><input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' oninput='setEditColorHex(this.value)' aria-label='Pick color' /></div
       <input id='color_hex' type='hidden' value='__CHEX__' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4752,7 +4752,7 @@ def voices_new_page(response: Response):
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
-      <div class='colorPickNest'><input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' aria-label='Pick color' /></div
+      <div class='colorPickNest'><input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' oninput='setVoiceSwatchHex(this.value)' aria-label='Pick color' /></div
       <input id='voiceColorHex' type='hidden' value='' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
