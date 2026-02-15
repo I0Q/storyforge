@@ -181,151 +181,67 @@ MONITOR_HTML = """
 
 MONITOR_JS = """
 <script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
+let metricsES=null; let monitorEnabled=true; let lastMetrics=null;
+// Some pages include extra monitor helpers (poll fallback). Provide safe no-ops so missing helpers don't crash.
+try{ if (typeof window.stopMetricsPoll !== 'function') window.stopMetricsPoll = function(){}; }catch(e){}
+try{ if (typeof window.startMetricsPoll !== 'function') window.startMetricsPoll = function(){}; }catch(e){}
+function loadMonitorPref(){ try{ var v=localStorage.getItem('sf_monitor_enabled'); if(v===null) return true; return v==='1'; }catch(e){ return true; } }
+function saveMonitorPref(on){ try{ localStorage.setItem('sf_monitor_enabled', on?'1':'0'); }catch(e){} }
+function stopMetricsStream(){ if(metricsES){ try{ metricsES.close(); }catch(e){} metricsES=null; } }
+function setBar(elId,pct){ var el=document.getElementById(elId); if(!el) return; var p=Math.max(0,Math.min(100,pct||0)); var f=el.querySelector('div'); if(f) f.style.width=p.toFixed(0)+'%'; el.classList.remove('warn','bad'); if(p>=85) el.classList.add('bad'); else if(p>=60) el.classList.add('warn'); }
+function fmtPct(x){ if(x==null) return '-'; return (Number(x).toFixed(1))+'%'; }
+function fmtTs(ts){ if(!ts) return '-'; try{ return new Date(ts*1000).toLocaleString(); }catch(e){ return String(ts); } }
+function updateDockFromMetrics(m){ var el=document.getElementById('dockStats'); if(!el) return; var b=(m&&m.body)?m.body:(m||{}); var cpu=(b.cpu_pct!=null)?Number(b.cpu_pct).toFixed(1)+'%':'-'; var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var ram=rt?rp.toFixed(1)+'%':'-'; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); var maxGpu=null; if(gpus.length){ maxGpu=0; for(var i=0;i<gpus.length;i++){ var u=Number((gpus[i]||{}).util_gpu_pct||0); if(u>maxGpu) maxGpu=u; } } var gpu=(maxGpu==null)?'-':maxGpu.toFixed(1)+'%'; el.textContent='CPU '+cpu+' • RAM '+ram+' • GPU '+gpu; }
+function renderGpus(b){ var el=document.getElementById('monGpus'); if(!el) return; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); if(!gpus.length){ el.innerHTML='<div class="muted">No GPU data</div>'; return; } el.innerHTML=gpus.slice(0,8).map(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; var util=Number(g.util_gpu_pct||0); var power=(g.power_w!=null)?Number(g.power_w).toFixed(0)+'W':null; var temp=(g.temp_c!=null)?Number(g.temp_c).toFixed(0)+'C':null; var right=[power,temp].filter(Boolean).join(' • '); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); return "<div class='gpuCard'>"+"<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+"<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+"<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+"<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt?((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB'):'-')+"</div></div>"+"<div class='bar small' id='barVram"+idx+"'><div></div></div>"+"</div>"; }).join(''); gpus.slice(0,8).forEach(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; setBar('barGpu'+idx, Number(g.util_gpu_pct||0)); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); setBar('barVram'+idx, vt?(vu/vt*100):0); }); }
+function updateMonitorFromMetrics(m){ var b=(m&&m.body)?m.body:(m||{}); var cpu=Number(b.cpu_pct||0); var c=document.getElementById('monCpu'); if(c) c.textContent=fmtPct(cpu); setBar('barCpu',cpu); var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var r=document.getElementById('monRam'); if(r) r.textContent=rt?(ru.toFixed(0)+' / '+rt.toFixed(0)+' MB ('+rp.toFixed(1)+'%)'):'-'; setBar('barRam',rp); renderGpus(b); var sub=document.getElementById('monSub'); if(sub) sub.textContent='Tinybox time: '+(b.ts?fmtTs(b.ts):'-'); updateDockFromMetrics(m); try{ var procs=Array.isArray(b.processes)?b.processes:[]; var pre=document.getElementById('monProc'); if(pre){ if(!procs.length) pre.textContent='(no process data)'; else{ var lines=['PID     %CPU   %MEM   GPU   ELAPSED   COMMAND','-----------------------------------------------']; for(var i=0;i<procs.length;i++){ var p=procs[i]||{}; var pid=String(p.pid||'').padEnd(7,' '); var cpuS=String(Number(p.cpu_pct||0).toFixed(1)).padStart(5,' '); var memS=String(Number(p.mem_pct||0).toFixed(1)).padStart(5,' '); var gpuS=(p.gpu_mem_mb!=null?String(Number(p.gpu_mem_mb).toFixed(0))+'MB':'-').padStart(6,' '); var et=String(p.elapsed||'').padEnd(9,' '); var cmd=String(p.args||p.command||p.name||''); lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);} pre.textContent=lines.join(String.fromCharCode(10)); } } }catch(e){} }
 
-function loadMonitorPref(){
-  try{ var v = localStorage.getItem('sf_monitor_enabled'); if (v === null) return true; return v === '1'; }catch(e){ return true; }
+// Auto-reconnect SSE (iOS/Safari drops EventSource frequently)
+let metricsReconnectTimer=null; let metricsReconnectBackoffMs=900;
+let metricsIntervalSec=10; // closed dock default
+let monitorSheetOpen=false;
+function _metricsUrl(){ try{ return '/api/metrics/stream?interval=' + String(Math.max(1, Math.min(30, Number(metricsIntervalSec||10)))); }catch(e){ return '/api/metrics/stream?interval=10'; } }
+function setMetricsInterval(sec){
+  var s = 10;
+  try{ s = Number(sec||10); }catch(e){ s = 10; }
+  s = Math.max(1, Math.min(30, s));
+  if (Number(metricsIntervalSec||0) === Number(s||0)) return;
+  metricsIntervalSec = s;
+  if (!monitorEnabled) return;
+  // restart stream to apply interval
+  startMetricsStream();
 }
-function saveMonitorPref(on){ try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){} }
-function stopMetricsStream(){ if (metricsES){ try{ metricsES.close(); }catch(e){} metricsES=null; } }
-function setBar(elId, pct){
-  var el=document.getElementById(elId); if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div'); if (fill) fill.style.width=p.toFixed(0)+'%';
-  el.classList.remove('warn','bad');
-  if (p>=85) el.classList.add('bad'); else if (p>=60) el.classList.add('warn');
-}
-function fmtPct(x){ if (x==null) return '-'; return (Number(x).toFixed(1)) + '%'; }
-function fmtTs(ts){ if(!ts) return '-'; try{ return new Date(ts*1000).toLocaleString(); }catch(e){ return String(ts);} }
-
-function updateDockFromMetrics(m){
-  var el=document.getElementById('dockStats'); if(!el) return;
-  var b=(m && m.body) ? m.body : (m||{});
-  var cpu=(b.cpu_pct!=null)?Number(b.cpu_pct).toFixed(1)+'%':'-';
-  var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0);
-  var rp=rt?(ru/rt*100):0; var ram=rt?rp.toFixed(1)+'%':'-';
-  var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]);
-  var maxGpu=null; if(gpus.length){ maxGpu=0; for(var i=0;i<gpus.length;i++){ var u=Number((gpus[i]||{}).util_gpu_pct||0); if(u>maxGpu) maxGpu=u; } }
-  var gpu=(maxGpu==null)?'-':maxGpu.toFixed(1)+'%';
-  el.textContent='CPU '+cpu+' • RAM '+ram+' • GPU '+gpu;
-}
-
-function renderGpus(b){
-  var el=document.getElementById('monGpus'); if(!el) return;
-  var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]);
-  if(!gpus.length){ el.innerHTML='<div class="muted">No GPU data</div>'; return; }
-  el.innerHTML=gpus.slice(0,8).map(function(g,i){
-    g=g||{}; var idx=(g.index!=null)?g.index:i;
-    var util=Number(g.util_gpu_pct||0);
-    var power=(g.power_w!=null)?Number(g.power_w).toFixed(0)+'W':null;
-    var temp=(g.temp_c!=null)?Number(g.temp_c).toFixed(0)+'C':null;
-    var right=[power,temp].filter(Boolean).join(' • ');
-    var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0);
-    var vp=vt?(vu/vt*100):0;
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt?((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB'):'-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-      "</div>";
-  }).join('');
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{}; var idx=(g.index!=null)?g.index:i;
-    setBar('barGpu'+idx, Number(g.util_gpu_pct||0));
-    var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0);
-    setBar('barVram'+idx, vt?(vu/vt*100):0);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b=(m && m.body) ? m.body : (m||{});
-  var cpu=Number(b.cpu_pct||0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent=fmtPct(cpu);
-  setBar('barCpu', cpu);
-  var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0);
-  var rp=rt?(ru/rt*100):0;
-  var r=document.getElementById('monRam'); if(r) r.textContent=rt?(ru.toFixed(0)+' / '+rt.toFixed(0)+' MB ('+rp.toFixed(1)+'%)'):'-';
-  setBar('barRam', rp);
-  renderGpus(b);
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent='Tinybox time: '+(b.ts?fmtTs(b.ts):'-');
-  updateDockFromMetrics(m);
+function _metricsScheduleReconnect(label){
+  try{ if(metricsReconnectTimer) return; }catch(e){}
+  try{ stopMetricsStream(); }catch(e){}
+  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent=label||'Reconnecting…'; }catch(e){}
+  var delay = Math.max(400, Math.min(10000, Number(metricsReconnectBackoffMs||900)));
+  metricsReconnectBackoffMs = Math.min(10000, Math.floor(delay*1.7));
   try{
-    var procs=Array.isArray(b.processes)?b.processes:[];
-    var pre=document.getElementById('monProc');
-    if(pre){
-      if(!procs.length) pre.textContent='(no process data)';
-      else{
-        var lines=['PID     %CPU   %MEM   GPU   ELAPSED   COMMAND','-----------------------------------------------'];
-        for(var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=String(Number(p.cpu_pct||0).toFixed(1)).padStart(5,' ');
-          var memS=String(Number(p.mem_pct||0).toFixed(1)).padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?String(Number(p.gpu_mem_mb).toFixed(0))+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent=lines.join('\\n');
-      }
-    }
+    metricsReconnectTimer = setTimeout(function(){
+      metricsReconnectTimer = null;
+      if(!monitorEnabled) return;
+      startMetricsStream();
+    }, delay);
   }catch(e){}
 }
 
 function startMetricsStream(){
   if(!monitorEnabled) return;
   stopMetricsStream();
+  try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){}
   try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting…'; }catch(e){}
   try{
-    metricsES = new EventSource('/api/metrics/stream');
+    metricsES=new EventSource(_metricsUrl());
+    metricsES.onopen=function(){ metricsReconnectBackoffMs = 900; try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connected'; }catch(e){} };
     metricsES.onmessage=function(ev){ try{ var m=JSON.parse(ev.data||'{}'); lastMetrics=m; updateMonitorFromMetrics(m);}catch(e){} };
-    metricsES.onerror=function(_e){ try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor error'; }catch(e){} };
-  }catch(e){}
+    metricsES.onerror=function(_e){ _metricsScheduleReconnect('Monitor reconnecting…'); };
+  }catch(e){ _metricsScheduleReconnect('Monitor reconnecting…'); }
 }
-
-function setMonitorEnabled(on){
-  monitorEnabled=!!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if(!monitorEnabled){ stopMetricsStream(); try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; }
-  startMetricsStream();
-}
-
-function openMonitor(){
-  if(!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if(b){ b.classList.remove('hide'); b.style.display='block'; }
-  if(sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if(lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if(b){ b.classList.add('hide'); b.style.display='none'; }
-  if(sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
+function setMonitorEnabled(on){ monitorEnabled=!!on; saveMonitorPref(monitorEnabled); try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){} if(!monitorEnabled){ stopMetricsStream(); try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){} try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; } startMetricsStream(); }
+function openMonitor(){ if(!monitorEnabled) return; monitorSheetOpen=true; setMetricsInterval(1); var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.remove('hide'); b.style.display='block'; } if(sh){ sh.classList.remove('hide'); sh.style.display='block'; } try{ document.body.classList.add('sheetOpen'); }catch(e){} startMetricsStream(); if(lastMetrics) updateMonitorFromMetrics(lastMetrics); }
+function closeMonitor(){ monitorSheetOpen=false; setMetricsInterval(10); var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.add('hide'); b.style.display='none'; } if(sh){ sh.classList.add('hide'); sh.style.display='none'; } try{ document.body.classList.remove('sheetOpen'); }catch(e){} }
 function closeMonitorEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeMonitor(); return false; }
-
-function bindMonitorClose(){
-  try{
-    var btn=document.getElementById('monCloseBtn');
-    if(btn && !btn.__bound){
-      btn.__bound=true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
-    }
-  }catch(e){}
-}
-
+function bindMonitorClose(){ try{ var btn=document.getElementById('monCloseBtn'); if(btn && !btn.__bound){ btn.__bound=true; btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false}); btn.addEventListener('click', function(ev){ closeMonitorEv(ev); }); } }catch(e){} }
 try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
 try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
 </script>
