@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .auth import register_passphrase_auth
 from .ui_header_shared import USER_MENU_HTML
+from .ui_audio_shared import AUDIO_DOCK_JS
 from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
@@ -1169,6 +1170,8 @@ def index(response: Response):
 
   __DEBUG_BANNER_HTML__
 
+  __AUDIO_DOCK_JS__
+
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
     <button id='tab-library' class='tab' onclick='showTab("library")'>Library</button>
@@ -1430,99 +1433,7 @@ try{
   }, 0);
 }catch(_e){}
 
-// Global audio player (survives tab re-renders; iOS-friendly)
-function __sfEnsureAudioDock(){
-  try{
-    var d=document.getElementById('sfAudioDock');
-    if (d) return d;
-    d=document.createElement('div');
-    d.id='sfAudioDock';
-    d.style.position='fixed';
-    d.style.left='12px';
-    d.style.right='12px';
-    d.style.bottom='calc(64px + env(safe-area-inset-bottom, 0px))';
-    d.style.zIndex='99998';
-    d.style.padding='10px 12px';
-    d.style.border='1px solid rgba(255,255,255,0.10)';
-    d.style.borderRadius='14px';
-    d.style.background='rgba(20,22,30,0.96)';
-    d.style.backdropFilter='blur(6px)';
-    d.style.webkitBackdropFilter='blur(6px)';
-    d.style.boxShadow='0 12px 40px rgba(0,0,0,0.35)';
-    d.style.display='none';
-
-    var row=document.createElement('div');
-    row.style.display='flex';
-    row.style.alignItems='center';
-    row.style.gap='10px';
-
-    var t=document.createElement('div');
-    t.id='sfAudioTitle';
-    t.style.flex='1';
-    t.style.minWidth='0';
-    t.style.fontWeight='900';
-    t.style.fontSize='13px';
-    t.style.whiteSpace='nowrap';
-    t.style.overflow='hidden';
-    t.style.textOverflow='ellipsis';
-    t.textContent='Audio';
-
-    var x=document.createElement('button');
-    x.type='button';
-    x.textContent='×';
-    x.style.width='34px';
-    x.style.height='30px';
-    x.style.borderRadius='10px';
-    x.style.border='1px solid rgba(255,255,255,0.10)';
-    x.style.background='transparent';
-    x.style.color='var(--text)';
-    x.style.fontWeight='900';
-    x.onclick=function(){
-      try{
-        var a=document.getElementById('sfAudioEl');
-        if (a) a.pause();
-      }catch(_e){}
-      try{ d.style.display='none'; }catch(_e){}
-    };
-
-    row.appendChild(t);
-    row.appendChild(x);
-
-    var a=document.createElement('audio');
-    a.id='sfAudioEl';
-    a.controls=true;
-    a.preload='none';
-    a.style.width='100%';
-    a.style.marginTop='8px';
-
-    d.appendChild(row);
-    d.appendChild(a);
-    document.body.appendChild(d);
-    return d;
-  }catch(e){ return null; }
-}
-
-function __sfPlayAudio(url, title){
-  try{
-    url = String(url||'').trim();
-    if (!url) return;
-    var d=__sfEnsureAudioDock();
-    var a=document.getElementById('sfAudioEl');
-    var t=document.getElementById('sfAudioTitle');
-    if (t) t.textContent = String(title||'Audio');
-    if (d) d.style.display='block';
-    if (a){
-      // Reset src to force iOS to treat this as a fresh user-initiated play
-      try{ a.pause(); }catch(_e){}
-      a.src = url;
-      try{ a.currentTime = 0; }catch(_e){}
-      try{
-        var p=a.play();
-        if (p && typeof p.catch==='function') p.catch(function(_e){});
-      }catch(_e){}
-    }
-  }catch(e){}
-}
+/* floating audio dock is injected from ui_audio_shared.py */
 
 function showTab(name, opts){
   opts = opts || {};
@@ -3356,9 +3267,7 @@ function loadVoices(){
         + playBtn
         + "<button class='secondary' data-vid='" + idEnc + "' onclick='goVoiceEdit(this)'>Edit</button>"
         + "</div>"
-        + "<div id='audWrap-" + idEnc + "' class='hide' style='margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:14px;background:#0b1020'>"
-        + "<audio id='aud-" + idEnc + "' controls style='width:100%'></audio>"
-        + "</div>"
+        /* inline audio element removed (use global floating audio dock) */
         + "</div>";
 
       return "<div class='swipe voiceSwipe'>"
@@ -3895,6 +3804,7 @@ try{
         .replace("__BUILD__", str(build))
         .replace("__VOICE_SERVERS__", voice_servers_html)
         .replace("__USER_MENU_HTML__", USER_MENU_HTML)
+        .replace("__AUDIO_DOCK_JS__", AUDIO_DOCK_JS)
     )
 
 
@@ -4160,7 +4070,6 @@ def voices_edit_page(voice_id: str, response: Response):
       <button class='secondary' type='button' onclick='playSample()'>Play</button>
     </div>
     <div class='term' id='sample_text' style='margin-top:8px;white-space:pre-wrap;'>__STXT__</div>
-    <audio id='audio' class='hide' controls style='width:100%;margin-top:10px'></audio>
 
     <div class='muted' style='margin-top:12px'>sample_url</div>
     <div class='fadeLine' style='margin-top:8px'>
@@ -4470,11 +4379,10 @@ function copySampleUrl(){
 
 function playSample(){
   try{
-    var a=$('audio');
     var su=$('sample_url');
     var existing = su ? String(su.value||'').trim() : '';
     if (existing){
-      if (a){ a.src=existing; a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+      try{ __sfPlayAudio(existing, 'Voice sample'); }catch(_e){}
       return;
     }
 
@@ -4485,7 +4393,7 @@ function playSample(){
         if (!j || !j.ok || !j.sample_url){ throw new Error((j&&j.error)||'no_sample_url'); }
         try{ if (su) su.value = String(j.sample_url||''); }catch(e){}
         try{ var t=$('sample_url_text'); if (t) { t.textContent = String(j.sample_url||''); t.title = String(j.sample_url||''); } }catch(e){}
-        if (a){ a.src=String(j.sample_url||''); a.classList.remove('hide'); try{ a.play(); }catch(e){} }
+        try{ __sfPlayAudio(String(j.sample_url||''), 'Voice sample'); }catch(_e){}
         if(out) out.textContent='';
       })
       .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
