@@ -7635,6 +7635,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'CASTING: At the top, emit a casting block exactly like:\ncast:\n  Name: voice_id',
                 'CASTING: One mapping per character. Names must match the speaker tags used later.',
                 'CASTING: Always include Narrator.',
+                'DIRECTIVES (optional): You may include directives at top-level: @tortoise_preset, @tortoise_candidates, @seed, @tortoise_chunk_chars, @tortoise_chunk_pause_ms',
+                'PAUSES (optional): In scene bodies, you may include: PAUSE: 0.25 (indented by two spaces). Use pauses to slow rushed narration.',
                 'SCENES: Emit 1..max_scenes scene blocks. Each scene header is: scene <id> "<title>":',
                 'SCENES: If max_scenes=1, output exactly ONE scene block (scene-1) but still cover the whole story.',
                 'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
@@ -7652,6 +7654,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             ],
             'example': (
                 '# SFML v1\n'
+                '@tortoise_preset: standard\n'
+                '@tortoise_candidates: 2\n'
+                '@tortoise_chunk_chars: 450\n'
+                '@tortoise_chunk_pause_ms: 120\n'
+                '\n'
                 'cast:\n'
                 '  Narrator: indigo-dawn\n'
                 '  Maris: lunar-violet\n'
@@ -7660,6 +7667,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 '  Narrator:\n'
                 '    - The lighthouse stood silent on the cliff.\n'
                 '    - The sea breathed below, slow and steady.\n'
+                '  PAUSE: 0.25\n'
                 '  Maris:\n'
                 '    - I can hear the sea breathing below.\n'
             ),

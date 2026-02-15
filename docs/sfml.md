@@ -8,6 +8,8 @@ SFML v1 is a plain-text, code-like script format designed to be:
 
 This is the **only supported format** in the StoryForge UI/editor right now.
 
+SFML supports a small set of **directives** (lines that begin with `@`) and **pause** events to control pacing.
+
 ---
 
 ## Overview
@@ -89,6 +91,31 @@ scene <scene_id> "<title>":
 - For Tortoise, keep punctuation in the lines; punctuation helps delivery.
 
 ---
+
+## 4) Directives (optional)
+
+### Syntax
+```text
+@key: value
+```
+
+### Supported (initial)
+- `@tortoise_preset: standard|fast|high_quality|ultra_fast`
+- `@tortoise_candidates: 1|2|3` (generate multiple candidates and pick best)
+- `@seed: 12345` (best-effort determinism)
+- `@tortoise_chunk_chars: 450` (soft cap for longform chunk merging)
+- `@tortoise_chunk_pause_ms: 120` (silence inserted between longform chunks)
+
+## 5) Pauses
+
+### Syntax
+```text
+  PAUSE: 0.25
+```
+
+### Rules
+- Scene-level line (indented by two spaces).
+- Insert an explicit pause (silence) into the audio.
 
 ## Minimal valid example
 
