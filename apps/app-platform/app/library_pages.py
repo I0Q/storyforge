@@ -17,6 +17,7 @@ from .library_db import (
     validate_story_id,
 )
 from .ui_debug_shared import DEBUG_PREF_APPLY_JS
+from .ui_header_shared import USER_MENU_JS
 
 
 # Extracted verbatim from _html_page() for safer incremental refactors.
@@ -342,22 +343,7 @@ def _html_page(title: str, body: str) -> str:
 </head>
 <body>
 {body}
-<script>
-function toggleUserMenu(){{
-  var m=document.getElementById('topMenu');
-  if(!m) return;
-  if(m.classList.contains('show')) m.classList.remove('show');
-  else m.classList.add('show');
-}}
-document.addEventListener('click', function(ev){{
-  try{{
-    var m=document.getElementById('topMenu');
-    if(!m) return;
-    var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
-    if(!w) m.classList.remove('show');
-  }}catch(e){{}}
-}});
-</script>
+{USER_MENU_JS}
 {DEBUG_PREF_APPLY_JS}
 {MONITOR_HTML}
 {MONITOR_JS}
