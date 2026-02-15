@@ -337,12 +337,8 @@ def analyze_voice_metadata(
         "duration_s": dur,
         "lufs_i": lufs,
         "features": feats or {},
-        # deterministic metadata
-        "engine": engine,
-        "voice_ref": voice_ref,
-        "tortoise_voice": tortoise_voice or (voice_ref if engine == 'tortoise' else ''),
-        "tortoise_gender": tortoise_gender,
-        "tortoise_preset": tortoise_preset,
+        # Note: engine + voice_ref are already stored on sf_voices; avoid duplicating here.
+        # (Same for tortoise hints — those live in provider/voice fields.)
     }
 
     # LLM: use measured audio features + known engine params.
