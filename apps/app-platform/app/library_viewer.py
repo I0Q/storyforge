@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import os
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -10,6 +12,43 @@ from fastapi import Response
 
 from .db import db_connect, db_init
 from .library_db import get_story_db
+
+APP_BUILD = int(os.environ.get("SF_BUILD", "0") or 0) or int(time.time())
+
+VIEWER_DEBUG_BANNER_HTML = """
+  <div id='boot' class='boot muted'>
+    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
+    <button class='copyBtn' type='button' onclick='copyBoot()' aria-label='Copy build + error' style='margin-left:auto'>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4"/>
+      </svg>
+    </button>
+  </div>
+"""
+
+# Minimal debug boot JS (kept compatible with older iOS Safari)
+VIEWER_DEBUG_BANNER_BOOT_JS = """
+<script>
+window.__SF_BUILD='__BUILD__';
+window.__SF_LAST_ERR='';
+function __sfEnsureBootText(){ try{ return document.getElementById('bootText'); }catch(e){ return null; } }
+function __sfSetDebugInfo(msg){ try{ window.__SF_LAST_ERR=String(msg||''); var t=__sfEnsureBootText(); if(t) t.textContent='Build: '+String(window.__SF_BUILD||'?')+' • JS: '+(window.__SF_LAST_ERR||'ok'); }catch(e){} }
+window.addEventListener('error', function(ev){ try{ var m=''; try{ m=String((ev&&ev.message)||''); }catch(e){} __sfSetDebugInfo(m||'error'); }catch(e){} });
+window.addEventListener('unhandledrejection', function(ev){ try{ var r=(ev&&ev.reason); var m=''; try{ m=String((r&&r.message)||r||''); }catch(e){} __sfSetDebugInfo(m||'unhandled'); }catch(e){} });
+function copyBoot(){
+  try{
+    var b=String(window.__SF_BUILD||'?');
+    var e=String(window.__SF_LAST_ERR||'');
+    var txt='Build: '+b+'\nJS: '+(e||'(none)');
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).catch(function(){});
+    }
+  }catch(e){}
+}
+// Don't leave it stuck on booting…
+try{ setTimeout(function(){ try{ var t=__sfEnsureBootText(); if(!t) return; var s=String(t.textContent||''); if(s.indexOf('JS: booting')!==-1) t.textContent=s.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok'); }catch(e){} }, 0); }catch(e){}
+</script>
+"""
 
 VIEWER_EXTRA_CSS = """
 .hide{display:none}
@@ -156,10 +195,101 @@ def register_library_viewer(app: FastAPI) -> None:
         story_md_esc = html.escape(story_md)
         rendered = _render_md_simple(story_md)
 
-        js = f"""
+        build = APP_BUILD
+
+        js = (
+            VIEWER_DEBUG_BANNER_BOOT_JS.replace("__BUILD__", str(build))
+            + f"""
 <script>
 window.__STORY_ID = {story_id!r};
 window.__CHARS = {json.dumps(chars, separators=(',',':'))};
+
+// Global audio player (copied from main page; survives tab re-renders; iOS-friendly)
+function __sfEnsureAudioDock(){{
+  try{{
+    var d=document.getElementById('sfAudioDock');
+    if (d) return d;
+    d=document.createElement('div');
+    d.id='sfAudioDock';
+    d.style.position='fixed';
+    d.style.left='12px';
+    d.style.right='12px';
+    d.style.bottom='calc(64px + env(safe-area-inset-bottom, 0px))';
+    d.style.zIndex='99998';
+    d.style.padding='10px 12px';
+    d.style.border='1px solid rgba(255,255,255,0.10)';
+    d.style.borderRadius='14px';
+    d.style.background='rgba(20,22,30,0.96)';
+    d.style.backdropFilter='blur(6px)';
+    d.style.webkitBackdropFilter='blur(6px)';
+    d.style.boxShadow='0 12px 40px rgba(0,0,0,0.35)';
+    d.style.display='none';
+
+    var row=document.createElement('div');
+    row.style.display='flex';
+    row.style.alignItems='center';
+    row.style.gap='10px';
+
+    var t=document.createElement('div');
+    t.id='sfAudioTitle';
+    t.style.flex='1';
+    t.style.minWidth='0';
+    t.style.fontWeight='900';
+    t.style.fontSize='13px';
+    t.style.whiteSpace='nowrap';
+    t.style.overflow='hidden';
+    t.style.textOverflow='ellipsis';
+    t.textContent='Audio';
+
+    var x=document.createElement('button');
+    x.type='button';
+    x.textContent='×';
+    x.style.width='34px';
+    x.style.height='30px';
+    x.style.borderRadius='10px';
+    x.style.border='1px solid rgba(255,255,255,0.10)';
+    x.style.background='transparent';
+    x.style.color='var(--text)';
+    x.style.fontWeight='900';
+    x.onclick=function(){{
+      try{{ var a=document.getElementById('sfAudioEl'); if (a) a.pause(); }}catch(_e){{}}
+      try{{ d.style.display='none'; }}catch(_e){{}}
+    }};
+
+    row.appendChild(t);
+    row.appendChild(x);
+
+    var a=document.createElement('audio');
+    a.id='sfAudioEl';
+    a.controls=true;
+    a.preload='none';
+    a.style.width='100%';
+    a.style.marginTop='8px';
+
+    d.appendChild(row);
+    d.appendChild(a);
+    document.body.appendChild(d);
+    return d;
+  }}catch(e){{ return null; }}
+}}
+
+function __sfPlayAudio(url, title){{
+  try{{
+    url = String(url||'').trim();
+    if (!url) return;
+    var d=__sfEnsureAudioDock();
+    var a=document.getElementById('sfAudioEl');
+    var t=document.getElementById('sfAudioTitle');
+    if (t) t.textContent = String(title||'Audio');
+    if (d) d.style.display='block';
+    if (a){{
+      try{{ a.pause(); }}catch(_e){{}}
+      a.src = url;
+      try{{ a.currentTime = 0; }}catch(_e){{}}
+      try{{ var p=a.play(); if (p && typeof p.catch==='function') p.catch(function(_e){{}}); }}catch(_e){{}}
+    }}
+  }}catch(e){{}}
+}}
 
 function $(id){{ return document.getElementById(id); }}
 
@@ -550,26 +680,8 @@ function playAudioByIndex(i){{
     var items = window.__AUDIO_ITEMS || [];
     var it = (items && items[i]) ? items[i] : null;
     var url = String((it && it.mp3_url) || '');
-    playAudio(url);
-  }}catch(e){{}}
-}}
-
-function playAudio(url){{
-  try{{
-    url = String(url||'');
-    if (!url) return;
-    var out=$('audioOut');
-    if (!out) return;
-    // Replace existing player
-    try{{
-      var olds = out.querySelectorAll('audio');
-      for (var i=0;i<olds.length;i++){{ try{{ olds[i].pause(); }}catch(_e){{}} try{{ olds[i].remove(); }}catch(_e){{}} }}
-    }}catch(_e){{}}
-
-    var a = document.createElement('audio');
-    a.controls=true; a.style.width='100%'; a.src=url;
-    out.insertBefore(a, out.firstChild);
-    try{{ a.play(); }}catch(e){{}}
+    var label = String((it && it.label) || ('Audio '+String(i+1)));
+    __sfPlayAudio(url, label);
   }}catch(e){{}}
 }}
 
@@ -589,6 +701,7 @@ if ($('mdCode')) {{
 }}
 </script>
 """
+        )
 
         body = "\n".join(
             [
@@ -616,6 +729,8 @@ if ($('mdCode')) {{
                 "    </div>",
                 "  </div>",
                 "</div>",
+                "",
+                VIEWER_DEBUG_BANNER_HTML.replace("__BUILD__", str(build)),
                 "",
                 f"<div class='muted storySub'><span id='titleText' class='storyTitleText'>{title_txt}</span></div>",
                 "<div id='titleEdit' class='hide titleEdit'>",
