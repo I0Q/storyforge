@@ -837,12 +837,42 @@ function __sfStartDeployWatch(){
 }
 
 window.addEventListener('error', function(ev){
-  var m = 'unknown';
-  try{ m = (ev && (ev.message||ev.type)) ? (ev.message||ev.type) : 'unknown'; }catch(_e){}
-  __sfSetDebugInfo('error: ' + m);
+  try{
+    var m = 'unknown';
+    try{ m = (ev && (ev.message||ev.type)) ? String(ev.message||ev.type) : 'unknown'; }catch(_e){}
+    var fn = '';
+    var ln = '';
+    var cn = '';
+    try{ fn = String(ev && (ev.filename||'') || ''); }catch(_e){}
+    try{ ln = String(ev && (ev.lineno!=null?ev.lineno:'') || ''); }catch(_e){}
+    try{ cn = String(ev && (ev.colno!=null?ev.colno:'') || ''); }catch(_e){}
+    var st = '';
+    try{ st = (ev && ev.error && ev.error.stack) ? String(ev.error.stack) : ''; }catch(_e){}
+    var extra = '';
+    if (fn) extra += ' @ ' + fn;
+    if (ln) extra += ':' + ln;
+    if (cn) extra += ':' + cn;
+    if (st) extra += ' | ' + st.split('\n').slice(0,2).join(' / ');
+    __sfSetDebugInfo('error: ' + m + (extra ? (' ' + extra) : ''));
+  }catch(_e){
+    __sfSetDebugInfo('error');
+  }
 });
-window.addEventListener('unhandledrejection', function(_ev){
-  __sfSetDebugInfo('promise error');
+window.addEventListener('unhandledrejection', function(ev){
+  try{
+    var msg = 'promise error';
+    try{
+      var r = ev && ev.reason;
+      if (r){
+        if (typeof r === 'string') msg = r;
+        else if (r && r.message) msg = String(r.message);
+        else msg = String(r);
+      }
+    }catch(_e){}
+    __sfSetDebugInfo('promise: ' + msg);
+  }catch(_e){
+    __sfSetDebugInfo('promise error');
+  }
 });
 
 try{
@@ -1255,10 +1285,10 @@ def index(response: Response):
       <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center'>
+          <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
           <div class='muted' style='font-size:12px'>Casting engine</div>
           <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
           <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
-          <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
         </div>
       </div>
 
