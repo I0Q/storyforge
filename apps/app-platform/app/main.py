@@ -2814,8 +2814,21 @@ function prodRenderSfml(sfml){
 
       try{
         if (window.SFMLEditor && host){
+          // Build voice_id -> color map for SFML highlighting
+          var __vc = {};
+          try{
+            var vs = (window.__SF_VOICES || []);
+            for (var i=0;i<vs.length;i++){
+              var v = vs[i] || {};
+              var id = String(v.id||'');
+              var hx = String(v.color_hex||'');
+              if (id && hx){ __vc[id] = hx; }
+            }
+          }catch(_e){}
+
           window.__SF_SFML_ED = window.SFMLEditor.create(host, {
             debounceMs: 2000,
+            voiceColors: __vc,
             onSave: function(v){
               try{ window.__SF_PROD.sfml = String(v||''); }catch(_e){}
               try{ prodSfmlSaveNow(v); }catch(_e){}
@@ -2851,6 +2864,7 @@ function loadVoices(){
   return fetchJsonAuthed('/api/voices').then(function(j){
     if (!j.ok){ if(el) el.innerHTML = "<div class='muted'>Error loading voices</div>"; return; }
     var voices = j.voices || [];
+    try{ window.__SF_VOICES = voices; }catch(_e){}
     if (!voices.length){ if(el) el.innerHTML = "<div class='muted'>No voices yet.</div>"; return; }
 
     if (!el) return;

@@ -157,6 +157,20 @@
     return /^[A-Za-z][A-Za-z0-9_-]*$/.test(nm);
   }
 
+  function hexToRgb(hex){
+    try{
+      hex = String(hex||'').trim();
+      if (hex.charAt(0)==='#') hex = hex.slice(1);
+      if (hex.length===3) hex = hex.charAt(0)+hex.charAt(0)+hex.charAt(1)+hex.charAt(1)+hex.charAt(2)+hex.charAt(2);
+      if (hex.length!==6) return null;
+      var r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+      if (isNaN(r)||isNaN(g)||isNaN(b)) return null;
+      return {r:r,g:g,b:b};
+    }catch(e){
+      return null;
+    }
+  }
+
   function hiliteLine(line, ctx){
     ctx = ctx || {};
     var s = String(line == null ? '' : line);
@@ -232,6 +246,42 @@
     return leadEsc + '<span class="sfmlTokBase">' + escHtml(t) + '</span>';
   }
 
+  function parseCastMap(lines){
+    // returns {CharacterName: voice_id}
+    var m = {};
+    var inCast = false;
+    for (var i=0;i<lines.length;i++){
+      var raw = String(lines[i]||'');
+      var s = raw.replace(/^\s+|\s+$/g,'');
+      if (!s || s.indexOf('#')===0) continue;
+      if (s.toLowerCase()==='cast:'){ inCast = true; continue; }
+      if (inCast){
+        if (s.toLowerCase().indexOf('scene ')===0) break;
+        if (raw.indexOf('  ')===0 && s.indexOf(':')>0){
+          var k = s.split(':',1)[0].replace(/^\s+|\s+$/g,'');
+          var v = s.slice(s.indexOf(':')+1).replace(/^\s+|\s+$/g,'');
+          if (k && v) m[k]=v;
+        }
+      }
+    }
+    return m;
+  }
+
+  function speakerColor(speaker, castMap, voiceColors){
+    try{
+      if (!speaker) return null;
+      castMap = castMap || {};
+      voiceColors = voiceColors || {};
+      var vid = castMap[String(speaker)] || '';
+      var hx = voiceColors[String(vid)] || '';
+      if (!hx) return null;
+      if (hx.charAt(0) !== '#') hx = '#'+hx;
+      return hx;
+    }catch(e){
+      return null;
+    }
+  }
+
   function render(ed, text){
     text = normalizeNewlines(text);
     var lines = text.split('\n');
@@ -240,17 +290,76 @@
     var h = [];
     var inCast = false;
 
+    var castMap = parseCastMap(lines);
+    var voiceColors = (ed && ed.__sfVoiceColors) ? ed.__sfVoiceColors : {};
+
+    // Track whether we are inside a speaker block
+    var blkSpeaker = null;
+    var blkColor = null;
+
     for (var j=0;j<lines.length;j++){
       var ln = lines[j];
-      var tr = String(ln || '').replace(/^\s+|\s+$/g, '');
+      var raw = String(ln || '');
+      var tr = raw.replace(/^\s+|\s+$/g, '');
 
       // update context based on top-level headers
       if (isBlockHeaderLine(tr) && tr.toLowerCase() === 'cast:') inCast = true;
       else if (isBlockHeaderLine(tr) && tr.toLowerCase() !== 'cast:') inCast = false;
 
+      // speaker block header: "  Name:" then 4-space indented bullets
+      var isBlkHead = false;
+      if (!inCast && raw.indexOf('  ')===0 && raw.indexOf('    ')!==0 && tr && tr.charAt(tr.length-1)===':'){
+        var nm = tr.slice(0,-1).replace(/^\s+|\s+$/g,'');
+        // lookahead for body
+        var next = (j+1<lines.length) ? String(lines[j+1]||'') : '';
+        if (next.indexOf('    ')===0){
+          isBlkHead = true;
+          blkSpeaker = nm;
+          blkColor = speakerColor(nm, castMap, voiceColors);
+        }
+      }
+
+      // if we dedent out of a block
+      if (blkSpeaker && raw.indexOf('    ')!==0 && !isBlkHead){
+        // leaving block unless this line is still the header (handled above)
+        blkSpeaker = null;
+        blkColor = null;
+      }
+
+      // speaker line: [Name] ... (color that single line)
+      var singleSpeaker = null;
+      if (!inCast && tr.indexOf('[')===0){
+        var rb = tr.indexOf(']');
+        if (rb>0) singleSpeaker = tr.slice(1,rb).replace(/^\s+|\s+$/g,'');
+      }
+
+      var lineColor = null;
+      var cls = 'sfmlLine';
+      if (isBlkHead){
+        lineColor = blkColor;
+        cls += ' sfmlBlk sfmlBlkHead';
+      }else if (blkSpeaker && raw.indexOf('    ')===0){
+        lineColor = blkColor;
+        cls += ' sfmlBlk';
+      }else if (singleSpeaker){
+        lineColor = speakerColor(singleSpeaker, castMap, voiceColors);
+        if (lineColor) cls += ' sfmlBlk sfmlBlkHead';
+      }
+
       // ensure empty lines remain "editable" (some browsers collapse empty blocks)
       var body = ln.length ? hiliteLine(ln, {inCast: inCast}) : '<span class="sfmlTokBase"><br></span>';
-      h.push('<div class="sfmlLine" data-sfml-line="'+j+'">' + body + '</div>');
+
+      var style = '';
+      if (lineColor){
+        var rgb = hexToRgb(lineColor);
+        if (rgb){
+          style = ' style="--sfmlBlk:'+lineColor+';background:rgba('+rgb.r+','+rgb.g+','+rgb.b+',0.07)"';
+        }else{
+          style = ' style="--sfmlBlk:'+lineColor+'"';
+        }
+      }
+
+      h.push('<div class="'+cls+'" data-sfml-line="'+j+'"'+style+'>' + body + '</div>');
     }
     ed.innerHTML = h.join('');
     return lines;
@@ -269,6 +378,8 @@
 
     var ed = document.createElement('div');
     ed.className = 'sfmlEditorPane';
+    // Optional mapping: voice_id -> color hex (e.g. "#aabbcc")
+    try{ ed.__sfVoiceColors = opts.voiceColors || {}; }catch(e){ ed.__sfVoiceColors = {}; }
     ed.setAttribute('contenteditable', 'true');
     ed.setAttribute('spellcheck', 'false');
     ed.setAttribute('autocapitalize', 'none');
