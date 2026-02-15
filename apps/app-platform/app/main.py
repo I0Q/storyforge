@@ -1286,7 +1286,7 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
         <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
       </div>
-      <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px'>
+      <div class='row' style='justify-content:flex-start;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px'>
         <div class='muted' style='font-size:12px'>Casting engine</div>
         <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
         <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
@@ -1438,6 +1438,20 @@ function __sfToastInit(){
 }
 try{ document.addEventListener('DOMContentLoaded', __sfToastInit); }catch(e){}
 try{ __sfToastInit(); }catch(e){}
+
+// If the boot banner script fails to run (some Safari edge cases), don't leave it stuck on 'booting…'.
+try{
+  setTimeout(function(){
+    try{
+      var bt=document.getElementById('bootText');
+      if (!bt) return;
+      var t=String(bt.textContent||'');
+      if (t.indexOf('JS: booting')!==-1){
+        bt.textContent = t.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
+      }
+    }catch(_e){}
+  }, 0);
+}catch(_e){}
 
 // Global audio player (survives tab re-renders; iOS-friendly)
 function __sfEnsureAudioDock(){
