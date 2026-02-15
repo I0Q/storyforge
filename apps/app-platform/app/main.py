@@ -4077,19 +4077,16 @@ def voices_edit_page(voice_id: str, response: Response):
   </div>
 
   <div class='card'>
-    <div class='row' style='justify-content:space-between;align-items:center'>
-      <div style='font-weight:950'>Voice traits</div>
-      <button class='secondary' type='button' onclick='analyzeVoice()'>Analyze voice</button>
+    <div class='row' style='justify-content:space-between;align-items:baseline;gap:10px'>
+      <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
+      <button type='button' class='secondary' onclick='analyzeVoice()'>Analyze voice</button>
     </div>
-    <div class='term' id='traits' style='margin-top:10px;white-space:pre-wrap;'>__VTRAITS__</div>
-  </div>
-
-  <div class='card'>
-    <div class='row' style='justify-content:space-between;align-items:center'>
-      <div style='font-weight:950'>Raw traits JSON</div>
-      <button class='secondary' type='button' onclick='copyTraitsRaw()'>Copy</button>
-    </div>
-    <div class='term' id='traits_raw' style='margin-top:10px;white-space:pre-wrap;'>__VTRAITS__</div>
+    <input id='voice_traits_json' type='hidden' value='__VTRAITS__' />
+    <div id='traitsBox' class='term' style='margin-top:10px'>Loading…</div>
+    <details class='rawBox' style='margin-top:10px'>
+      <summary>Raw JSON</summary>
+      <pre id='traits_raw' class='term' style='white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
+    </details>
   </div>
 
   __MONITOR__
@@ -4126,6 +4123,27 @@ function copySampleUrl(){
 function copyVoiceRef(){
   try{ copyText(document.getElementById('voice_ref').textContent||''); }catch(e){}
 }
+
+function renderTraitsFromHidden(){
+  try{
+    var raw = String((document.getElementById('voice_traits_json')||{}).value||'').trim();
+    var box = document.getElementById('traitsBox');
+    var pre = document.getElementById('traits_raw');
+    if (pre && raw) pre.textContent = raw;
+    if (!box) return;
+    if (!raw){ box.textContent = '—'; return; }
+    // If it's JSON, pretty-print; else show raw.
+    try{
+      var obj = JSON.parse(raw);
+      box.textContent = JSON.stringify(obj, null, 2);
+    }catch(_e){
+      box.textContent = raw;
+    }
+  }catch(e){}
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraitsFromHidden(); }catch(_e){} }); }catch(e){}
+try{ renderTraitsFromHidden(); }catch(e){}
 
 function setEditColorHex(hex){
   try{ document.getElementById('color_hex').value = String(hex||''); }catch(e){}
@@ -4177,7 +4195,8 @@ async function analyzeVoice(){
     var j = await r.json();
     if (j && j.ok){
       var txt = JSON.stringify(j.traits, null, 2);
-      document.getElementById('traits').textContent = txt;
+      try{ document.getElementById('voice_traits_json').value = txt; }catch(_e){}
+      try{ document.getElementById('traitsBox').textContent = txt; }catch(_e){}
       try{ document.getElementById('traits_raw').textContent = txt; }catch(_e){}
     }else{
       alert((j && j.error) ? j.error : 'Analyze failed');
@@ -4358,134 +4377,585 @@ def voices_new_page(response: Response):
     <div id='tortoiseBox' class='hide'>
       <div class='k'>Tortoise voice</div>
       <div class='row' style='gap:10px;flex-wrap:nowrap'>
-        <input id='tortoiseVoice' placeholder='train_dotrice' style='flex:1;min-width:0'/>
+        <select id='tortoiseVoice' style='flex:1;min-width:0'></select>
+        <select id='tortoiseGender' style='flex:0 0 140px'>
+          <option value='any' selected>Any</option>
+          <option value='female'>Female</option>
+          <option value='male'>Male</option>
+        </select>
       </div>
-      <div class='muted'>Existing Tortoise voice directory name on the provider host.</div>
+      <div class='k'>Quality</div>
+      <select id='tortoisePreset'>
+        <option value='ultrafast'>ultrafast</option>
+        <option value='fast'>fast</option>
+        <option value='standard' selected>standard</option>
+        <option value='high_quality'>high_quality</option>
+      </select>
     </div>
 
-    <div id='xttsBox' class='hide'>
-      <div class='k'>XTTS reference (wav/mp3 URL)</div>
-      <input id='xttsRef' placeholder='https://.../clip.wav'/>
-      <div class='muted'>We will use this clip as the speaker reference for XTTS.</div>
-    </div>
+    <div id='clipBox'>
+      <div class='k'>Voice clip</div>
+      <div class='row' style='gap:10px;flex-wrap:nowrap'>
+        <select id='clipMode' style='flex:0 0 160px'>
+          <option value='preset' selected>Choose preset</option>
+          <option value='upload'>Upload</option>
+          <option value='url'>Paste URL</option>
+        </select>
 
-    <div class='k'>Reference audio (optional)</div>
-    <input id='voiceRefUrl' placeholder='https://.../clip.wav' />
-    <div class='muted'>If provided, we can use it for voice analysis and some engines.</div>
+        <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
+          <select id='clipPreset'></select>
+        </div>
 
-    <div class='k'>Sample text</div>
-    <textarea id='sampleText'>The forgotten stories of the past hold echoes of truth that resonate even today. Unveiling their secrets, we embark on a journey of human resilience and transformation.</textarea>
+        <div id='clipUploadRow' class='hide' style='flex:1;min-width:0'>
+          <input id='clipFile' type='file' accept='audio/*' />
+        </div>
 
-    <div class='row' style='justify-content:space-between;align-items:center;margin-top:10px'>
-      <button class='secondary' type='button' onclick='voicePreview()'>Generate sample</button>
-      <button type='button' onclick='voiceSave()'>Save to roster</button>
-    </div>
-
-    <div id='previewBox' class='hide' style='margin-top:12px'>
-      <div class='muted'>Preview</div>
-      <div class='row' style='justify-content:space-between;align-items:center;margin-top:8px'>
-        <div class='fadeText' id='previewUrlText'></div>
-        <button class='secondary' type='button' onclick='previewPlay()'>Play</button>
+        <div id='clipUrlRow' class='hide' style='flex:1;min-width:0'>
+          <input id='clipUrl' placeholder='https://…/clip.wav' />
+        </div>
       </div>
     </div>
 
+    <div class='k'>Sample text <span class='muted' id='sampleTextCount' style='margin-left:8px'>0 chars</span></div>
+    <div class='row' style='gap:10px;flex-wrap:nowrap'>
+      <textarea id='sampleText' placeholder='Hello…' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
+      <button type='button' class='copyBtn' onclick='genSampleText()' aria-label='Random sample text' title='Random sample text' style='align-self:stretch'>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          <path stroke="currentColor" fill="currentColor" d="M8.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M15.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M15.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M8.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
+          <path stroke="currentColor" fill="currentColor" d="M12 13a1 1 0 110-2 1 1 0 010 2z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class='row' style='margin-top:12px'>
+      <button type='button' onclick='trainAndSave()'>Generate</button>
+    </div>
+
+    <div id='out' class='muted' style='margin-top:10px'></div>
   </div>
 
   __MONITOR__
+
 """
 
     body_bottom = """
 __MONITOR_JS__
 <script>
-function setEngineUi(){
-  var e = (document.getElementById('engineSel').value||'').trim();
-  var tb = document.getElementById('tortoiseBox');
-  var xb = document.getElementById('xttsBox');
-  if (tb) tb.classList.toggle('hide', e !== 'tortoise');
-  if (xb) xb.classList.toggle('hide', e !== 'xtts');
-  // styletts2: no extra engine-specific fields for now
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){
+  // escape for HTML attributes / single-quoted contexts
+  try{
+    return String(s||'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }catch(e){
+    return '';
+  }
+}
+
+function voiceColorHex(name){
+  try{
+    var s = String(name||'').toLowerCase();
+    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    var map = {
+      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
+      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
+      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
+      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
+      ivory:'#f5f5dc', gold:'#facc15'
+    };
+    for (var i=words.length-1; i>=0; i--){
+      var w = words[i];
+      if (map[w]) return map[w];
+      if (w.length>1 && w.charAt(w.length-1)==='s'){
+        var w2 = w.slice(0,-1);
+        if (map[w2]) return map[w2];
+      }
+    }
+    var h=0;
+    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
+    var hue = Math.abs(h) % 360;
+    return 'hsl(' + hue + ', 70%, 55%)';
+  }catch(e){
+    return '#64748b';
+  }
 }
 
 function setVoiceSwatchHex(hex){
-  try{ document.getElementById('voiceColorHex').value = String(hex||''); }catch(e){}
-  try{ document.getElementById('voiceSwatch').style.background = String(hex||''); }catch(e){}
+  try{
+    var hx=document.getElementById('voiceColorHex');
+    var sw=document.getElementById('voiceSwatch');
+    var pk=document.getElementById('voiceColorPick');
+    var v = String(hex||'').trim();
+    if (hx) hx.value = v;
+    if (pk) pk.value = v || '#64748b';
+    if (sw) sw.style.background = v || '#64748b';
+  }catch(e){}
 }
-
 function openVoiceColorPick(){
   try{
-    var wrap = document.getElementById('voiceColorPickWrap');
-    var inp = document.getElementById('voiceColorPick');
-    if (wrap) wrap.style.display='inline-block';
-    if (inp){
-      try{ inp.focus(); }catch(e){}
-      try{ inp.click(); }catch(e){}
+    var pk=document.getElementById('voiceColorPick');
+    if (!pk) return;
+    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='inline-block';
+    _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
+    try{ pk.focus(); }catch(_e){}
+    try{
+      if (pk && typeof pk.showPicker === 'function') pk.showPicker();
+      else pk.click();
+    }catch(_e){ try{ pk.click(); }catch(__e){} }
+  }catch(e){}
+}
+
+
+
+function $(id){ return document.getElementById(id); }
+
+function updateSampleTextCount(){
+  try{
+    var ta=$('sampleText');
+    var c=$('sampleTextCount');
+    if (!ta || !c) return;
+    var txt = String(ta.value||'');
+    var chars = txt.length;
+    var words = 0;
+    try{ words = txt.trim() ? txt.trim().split(/\s+/).length : 0; }catch(e){ words = 0; }
+    c.textContent = String(chars) + ' chars • ' + String(words) + ' words';
+  }catch(e){}
+}
+
+function jsonFetch(url, opts){
+  opts = opts || {};
+  opts.credentials = 'include';
+  return fetch(url, opts).then(function(r){
+    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
+    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+  });
+}
+
+// user menu
+function toggleMenu(){
+  var m=document.getElementById('topMenu');
+  if (!m) return;
+  if (m.classList.contains('show')) m.classList.remove('show');
+  else m.classList.add('show');
+}
+try{
+  document.addEventListener('click', function(ev){
+    try{
+      var m=document.getElementById('topMenu');
+      if (!m) return;
+      var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
+      if (!w) m.classList.remove('show');
+    }catch(e){}
+    try{ setEngineUi(); }catch(e){}
+  });
+}catch(e){}
+
+function setVis(){
+  var m=(($('clipMode')||{}).value||'upload');
+  var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
+  if(u) u.classList.toggle('hide', m!=='upload');
+  if(p) p.classList.toggle('hide', m!=='preset');
+  if(r) r.classList.toggle('hide', m!=='url');
+}
+
+// Tortoise built-in voices (from Tinybox tortoise install)
+var TORTOISE_VOICES = [
+  'angie','applejack','daniel','deniro','emma','freeman','geralt','halle','jlaw','lj','mol','myself','pat','pat2','rainbow','snakes','tim_reynolds','tom','weaver','william',
+  'train_atkins','train_daws','train_dotrice','train_dreams','train_empire','train_grace','train_kennard','train_lescault','train_mouse'
+];
+var TORTOISE_GENDER = {
+  'angie':'female','emma':'female','halle':'female','jlaw':'female','mol':'female','rainbow':'female','applejack':'female','train_grace':'female',
+  'daniel':'male','deniro':'male','freeman':'male','geralt':'male','lj':'male','myself':'male','pat':'male','pat2':'male','snakes':'male','tim_reynolds':'male','tom':'male','weaver':'male','william':'male',
+  'train_atkins':'male','train_daws':'male','train_dotrice':'male','train_dreams':'male','train_empire':'male','train_kennard':'male','train_lescault':'male','train_mouse':'male'
+};
+
+function loadTortoiseVoices(){
+  var sel=$('tortoiseVoice');
+  if(!sel) return;
+  var gsel=$('tortoiseGender');
+  var g = gsel ? String(gsel.value||'any') : 'any';
+  var voices = TORTOISE_VOICES.slice();
+  if (g==='female' || g==='male') voices = voices.filter(function(v){ return (TORTOISE_GENDER[v]||'any')===g; });
+  if (!voices.length) voices = TORTOISE_VOICES.slice();
+  var cur = '';
+  try{ cur = String(sel.value||'').trim(); }catch(e){}
+  sel.innerHTML='';
+  for (var i=0;i<voices.length;i++){
+    var o=document.createElement('option');
+    o.value=voices[i];
+    o.textContent=voices[i];
+    sel.appendChild(o);
+  }
+  if (cur){ try{ sel.value=cur; }catch(e){} }
+}
+
+function setEngineUi(){
+  var eng = String((($('engineSel')||{}).value||'')).trim();
+  var tb=$('tortoiseBox');
+  if (tb) tb.classList.toggle('hide', eng!=='tortoise');
+
+  // Hide clip UI entirely when tortoise is selected
+  try{
+    var showClip = (eng!=='tortoise');
+    var cb = $('clipBox');
+    if (cb) cb.classList.toggle('hide', !showClip);
+    if (!showClip){
+      if ($('clipPresetRow')) $('clipPresetRow').classList.add('hide');
+      if ($('clipUploadRow')) $('clipUploadRow').classList.add('hide');
+      if ($('clipUrlRow')) $('clipUrlRow').classList.add('hide');
+    } else {
+      // Ensure the correct inline clip control is visible (preset/upload/url)
+      try{ setVis(); }catch(e){}
     }
   }catch(e){}
 }
 
-function genVoiceName(){
-  try{
-    var names=['Luna','Juniper','Raven','Mira','Sol','Ivy','Kestrel','Nova'];
-    document.getElementById('voiceName').value = names[Math.floor(Math.random()*names.length)];
-  }catch(e){}
+function loadEngines(){
+  return jsonFetch('/api/voice_provider/engines').then(function(j){
+    var sel=$('engineSel'); if(!sel) return;
+    var prev = '';
+    try{ prev = String(sel.value||'').trim(); }catch(e){}
+
+    sel.innerHTML='';
+    var arr=(j&&j.engines)||[];
+    if (!arr.length){ arr=['tortoise','xtts']; }
+    for(var i=0;i<arr.length;i++){
+      var o=document.createElement('option');
+      o.value=String(arr[i]);
+      o.textContent=String(arr[i]);
+      sel.appendChild(o);
+    }
+    // default to tortoise if available; otherwise keep previous selection
+    try{
+      var hasT = false;
+      for (var k=0;k<sel.options.length;k++){ if (String(sel.options[k].value)==='tortoise') { hasT=true; break; } }
+      if (hasT) sel.value = 'tortoise';
+      else if (prev) sel.value = prev;
+    }catch(e){}
+
+    // Force UI sync even if async timing is weird on iOS
+    try{ setEngineUi(); }catch(e){}
+    try{ setTimeout(function(){ try{ setEngineUi(); }catch(e){} }, 0); }catch(e){}
+    try{ setTimeout(function(){ try{ setEngineUi(); }catch(e){} }, 200); }catch(e){}
+  });
 }
 
-async function voicePreview(){
-  try{
-    var payload={
-      engine: (document.getElementById('engineSel').value||'').trim(),
-      display_name: (document.getElementById('voiceName').value||'').trim(),
-      color_hex: (document.getElementById('voiceColorHex').value||'').trim(),
-      voice_ref: (document.getElementById('voiceRefUrl').value||'').trim(),
-      sample_text: (document.getElementById('sampleText').value||'').trim(),
-      tortoise_voice: (document.getElementById('tortoiseVoice')||{}).value||'',
-      xtts_ref: (document.getElementById('xttsRef')||{}).value||''
-    };
-    var r=await fetch('/api/voices/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-    var j=await r.json();
-    if (!j || !j.ok){ alert((j && j.error) ? j.error : 'Preview failed'); return; }
-    document.getElementById('previewUrlText').textContent = j.sample_url || '';
-    document.getElementById('previewBox').classList.remove('hide');
-  }catch(e){
-    alert('Preview failed: ' + String(e));
-  }
-}
+function loadPresets(){
+  function runOnce(){ return jsonFetch('/api/voice_provider/presets'); }
+  return runOnce().catch(function(_e){ return new Promise(function(res){ setTimeout(res, 600); }).then(runOnce); }).then(function(j){
+    var sel=$('clipPreset'); if(!sel) return;
+    sel.innerHTML='';
 
-function previewPlay(){
-  try{
-    var url = (document.getElementById('previewUrlText').textContent||'').trim();
-    if (!url) return;
-    if (typeof window.__sfPlayAudio === 'function'){
-      window.__sfPlayAudio(url, 'Voice preview');
+    if (!j || j.ok===false){
+      var msg = String((j&&j.error)?j.error:'unknown');
+      var st = (j&&j.status!=null) ? (' ' + String(j.status)) : '';
+      sel.innerHTML = "<option value=''>No presets (error"+st+")</option>";
+      var out=$('out');
+      if (out){
+        out.innerHTML = "<div class='err'>Presets failed: " + esc(msg) + (st?(' (HTTP '+esc(String(j.status))+')'):'') + "</div>";
+      }
       return;
     }
-    window.open(url, '_blank');
-  }catch(e){}
+
+    var arr=(j&&j.clips)||[];
+    if (!arr.length){
+      sel.innerHTML = "<option value=''>No presets available</option>";
+      return;
+    }
+    function presetLabel(c){
+      try{
+        var nm = String((c&&c.name)||'').trim();
+        var male = {'awb':1,'bdl':1,'jmk':1,'ksp':1,'rms':1};
+        var female = {'clb':1,'slt':1};
+        if (nm && male[nm]) return nm + ' (male)';
+        if (nm && female[nm]) return nm + ' (female)';
+        return String((c&&c.name) || (c&&c.url) || (c&&c.path) || '');
+      }catch(e){
+        return String((c&&c.name) || (c&&c.url) || (c&&c.path) || '');
+      }
+    }
+
+    for(var i=0;i<arr.length;i++){
+      var c=arr[i]||{};
+      var o=document.createElement('option');
+      o.value=String(c.url||c.path||'');
+      o.textContent=presetLabel(c);
+      sel.appendChild(o);
+    }
+  });
 }
 
-async function voiceSave(){
+function uploadClip(){
+  var f = (($('clipFile')||{}).files||[])[0];
+  if(!f) return Promise.reject('no_file');
+  var fd=new FormData();
+  fd.append('file', f);
+  return fetch('/api/upload/voice_clip', {method:'POST', body: fd, credentials:'include'})
+    .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'bad_json'}; }); })
+    .then(function(j){ if(j&&j.ok&&j.url) return j.url; throw ((j&&j.error)||'upload_failed'); });
+}
+
+function getClipUrl(){
+  var m=(($('clipMode')||{}).value||'upload');
+  if(m==='url'){
+    var u=String((($('clipUrl')||{}).value||'')).trim();
+    if (!u) return Promise.reject('missing_url');
+    return Promise.resolve(u);
+  }
+  if(m==='preset'){
+    var v=String((($('clipPreset')||{}).value||'')).trim();
+    if (!v) return Promise.reject('missing_preset');
+    // If provider returns a Tinybox path, copy it to Spaces first.
+    if (v.indexOf('/')===0){
+      return jsonFetch('/api/voice_provider/preset_to_spaces', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:v})})
+        .then(function(j){
+          if (!j || !j.ok || !j.url) throw new Error((j&&j.error)||'preset_to_spaces_failed');
+          return String(j.url);
+        });
+    }
+    return Promise.resolve(v);
+  }
+  return uploadClip();
+}
+
+function slugify(s){
   try{
-    var payload={
-      engine: (document.getElementById('engineSel').value||'').trim(),
-      display_name: (document.getElementById('voiceName').value||'').trim(),
-      color_hex: (document.getElementById('voiceColorHex').value||'').trim(),
-      voice_ref: (document.getElementById('voiceRefUrl').value||'').trim(),
-      sample_text: (document.getElementById('sampleText').value||'').trim(),
-      tortoise_voice: (document.getElementById('tortoiseVoice')||{}).value||'',
-      xtts_ref: (document.getElementById('xttsRef')||{}).value||''
-    };
-    var r=await fetch('/api/voices/create', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-    var j=await r.json();
-    if (!j || !j.ok){ alert((j && j.error) ? j.error : 'Save failed'); return; }
-    location.href='/#tab-voices';
+    s = String(s||'').toLowerCase();
+    s = s.replace(/[^a-z0-9]+/g,'-');
+    s = s.replace(/^-+|-+$/g,'');
+    return s || 'voice';
   }catch(e){
-    alert('Save failed: ' + String(e));
+    return 'voice';
   }
 }
 
-try{ document.getElementById('engineSel').addEventListener('change', setEngineUi); }catch(e){}
-try{ setEngineUi(); }catch(e){}
+
+function genVoiceName(){
+  var out=$('out');
+  var el=$('voiceName');
+  var btn=null;
+  try{ btn = document.querySelector("button[onclick='genVoiceName()']"); }catch(e){}
+
+  var origVal = el ? String(el.value||'') : '';
+  var frames = ['Picking a color', 'Picking a color.', 'Picking a color..', 'Picking a color...'];
+  var i=0; var timer=null;
+  function startAnim(){
+    try{
+      if (el){ el.disabled=true; el.value = frames[0]; }
+      if (btn){ btn.disabled=true; }
+      timer = setInterval(function(){
+        try{ i=(i+1)%frames.length; if (el) el.value = frames[i]; }catch(e){}
+      }, 280);
+    }catch(e){}
+  }
+  function stopAnim(){
+    try{ if (timer) clearInterval(timer); }catch(e){}
+    timer=null;
+    try{ if (el) el.disabled=false; }catch(e){}
+    try{ if (btn) btn.disabled=false; }catch(e){}
+  }
+
+  startAnim();
+  function runOnce(){
+    return jsonFetch('/api/voices/random_name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  }
+
+  return runOnce()
+    .catch(function(_e){ return new Promise(function(res){ setTimeout(res, 500); }).then(runOnce); })
+    .then(function(j){
+      stopAnim();
+      if (!j || !j.ok || !j.name){
+        if (el) el.value = origVal;
+        throw new Error((j&&j.error)||'name_failed');
+      }
+      if (el) el.value = String(j.name||'').trim();
+      try{ setVoiceSwatchHex(String(j.color_hex||'').trim()); }catch(e){}
+      if (out) out.textContent='';
+    })
+    .catch(function(e){
+      stopAnim();
+      if (el) el.value = origVal;
+      if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
+    });
+}
+
+function genSampleText(){
+  var out=$('out');
+  var ta=$('sampleText');
+  var btn=null;
+  try{ btn = document.querySelector("button[onclick='genSampleText()']"); }catch(e){}
+
+  var origVal = ta ? String(ta.value||'') : '';
+  var origPh = ta ? String(ta.placeholder||'') : '';
+
+  // Put the loading animation in the textarea itself.
+  var frames = [
+    'Generating sample text',
+    'Generating sample text.',
+    'Generating sample text..',
+    'Generating sample text...',
+  ];
+  var i=0;
+  var timer=null;
+
+  function startAnim(){
+    try{
+      if (ta){ ta.disabled=true; ta.value = frames[0]; }
+      try{ updateSampleTextCount(); }catch(e){}
+      if (btn){ btn.disabled=true; }
+      timer = setInterval(function(){
+        try{
+          i = (i+1) % frames.length;
+          if (ta) ta.value = frames[i];
+          try{ updateSampleTextCount(); }catch(e){}
+        }catch(e){}
+      }, 350);
+    }catch(e){}
+  }
+  function stopAnim(){
+    try{ if (timer) clearInterval(timer); }catch(e){}
+    timer=null;
+    try{ if (ta){ ta.disabled=false; } }catch(e){}
+    try{ if (btn){ btn.disabled=false; } }catch(e){}
+  }
+
+  startAnim();
+
+  // Safari sometimes surfaces generic "TypeError: Load failed" for network/proxy failures.
+  // Do a small retry to smooth over transient disconnects.
+  function runOnce(){
+    return jsonFetch('/api/voices/sample_text_random', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  }
+
+  return runOnce()
+    .catch(function(_e){ return new Promise(function(res){ setTimeout(res, 500); }).then(runOnce); })
+    .then(function(j){
+      stopAnim();
+      if (!j || !j.ok || !j.text){
+        if (ta){ ta.value = origVal; ta.placeholder = origPh; }
+        try{ updateSampleTextCount(); }catch(e){}
+        throw new Error((j&&j.error)||'sample_text_failed');
+      }
+      if (ta) ta.value = String(j.text||'');
+      try{ updateSampleTextCount(); }catch(e){}
+      if (out) out.textContent='';
+    })
+    .catch(function(e){
+      stopAnim();
+      if (ta){ ta.value = origVal; ta.placeholder = origPh; }
+      try{ updateSampleTextCount(); }catch(_e){}
+      if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
+    });
+}
+
+function trainAndSave(){
+  // New UX: generating a sample should NOT auto-save to roster.
+  // Queue a job, redirect to Jobs, then user can Play + Save from the job card.
+  var out=$('out'); if(out) out.textContent='Queuing job…';
+
+  var displayName = String((($('voiceName')||{}).value||'')).trim();
+  var engine = String((($('engineSel')||{}).value||'')).trim();
+  var rid = String((($('id')||{}).value||'')).trim();
+  if (!rid) rid = slugify(displayName);
+  if ($('id')) $('id').value = rid;
+
+  if (!displayName){ if(out) out.innerHTML='<div class="err">Missing voice name</div>'; return; }
+  if (!engine){ if(out) out.innerHTML='<div class="err">Missing engine</div>'; return; }
+
+  // Reuse testSample path (which queues /api/tts_job and redirects to History)
+  return testSample();
+}
+
+function val(id){ var el=$(id); return el?el.value:''; }
+
+function testSample(){
+  var engine = String(val('engineSel') || '').trim();
+  if (!engine) engine = String(val('engine') || '').trim();
+
+  // Prefer using the last trained voice_ref if present; otherwise, try current preset/url/upload.
+  var vref = String(val('voice_ref') || '').trim();
+  var out=$('out'); if(out) out.textContent='Generating…';
+
+  function go(voiceRef){
+    var payload={engine: engine, voice: String(voiceRef||''), text: String(val('sampleText')||val('text')||'') || ('Hello. This is ' + (val('voiceName')||val('id')||'a voice') + '.'), upload:true};
+
+    // Run as a job so progress is visible on the Jobs/History tab.
+    // Provide some metadata so the completed job can offer "Save to roster".
+    payload.display_name = String(val('voiceName')||val('id')||'').trim() || 'Voice';
+    payload.color_hex = String(val('voiceColorHex')||'').trim();
+    payload.roster_id = String(val('id')||'').trim() || slugify(payload.display_name);
+
+    // If engine=tortoise, attach the selected tortoise settings (best-effort).
+    try{
+      if (engine==='tortoise'){
+        var ts = window.__SF_LAST_TORTOISE || {};
+        payload.tortoise_voice = String(ts.voice||'').trim();
+        payload.tortoise_gender = String(ts.gender||'').trim();
+        payload.tortoise_preset = String(ts.preset||'').trim();
+      }
+    }catch(_e){}
+
+    return jsonFetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+      .then(function(j){
+        if (!j || !j.ok || !j.job_id){ if(out) out.innerHTML='<div class="err">'+esc((j&&j.error)||'tts_job_failed')+'</div>'; return; }
+        // Jump straight to Jobs/History so you can watch it.
+        window.location.href = '/#tab-history';
+      }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+  }
+
+  if (vref) return go(vref).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+
+  // If using tortoise, voice_ref is a built-in voice name (not a clip URL).
+  if (engine==='tortoise'){
+    var tv = 'tom';
+    var tg = 'any';
+    var tp = 'standard';
+    try{
+      tv = String((($('tortoiseVoice')||{}).value||'')).trim() || 'tom';
+      tg = String((($('tortoiseGender')||{}).value||'any')).trim() || 'any';
+      tp = String((($('tortoisePreset')||{}).value||'standard')).trim() || 'standard';
+    }catch(_e){}
+    // Persist for later "Save to roster" from the job card.
+    try{ window.__SF_LAST_TORTOISE = {voice: tv, gender: tg, preset: tp}; }catch(_e){}
+
+    // Send selected voice now (Cloud -> Tinybox uses this as tortoise --ref)
+    return go(tv).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+  }
+
+  // No trained voice_ref yet (xtts): derive from clip mode.
+  return getClipUrl().then(function(url){ return go(url); })
+    .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){
+  try{ loadEngines(); }catch(e){}
+  try{ loadPresets(); }catch(e){}
+  try{ setVis(); }catch(e){}
+  var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
+  var eg=$('engineSel'); if(eg) eg.addEventListener('change', function(){ try{ setEngineUi(); }catch(e){}; try{ setVis(); }catch(e){} });
+  var tg=$('tortoiseGender'); if(tg) tg.addEventListener('change', function(){ try{ loadTortoiseVoices(); }catch(e){} });
+  try{ loadTortoiseVoices(); }catch(e){}
+  try{ setEngineUi(); }catch(e){}
+  try{ updateSampleTextCount(); }catch(e){}
+  try{ var st=$('sampleText'); if (st) st.addEventListener('input', updateSampleTextCount); }catch(e){}
+
+  // Suggest a random voice name on first load (only if empty)
+  try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
+
+  // Mark JS as running for the debug banner.
+  try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
+}); }catch(e){}
+try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
 </script>
+
 """
 
     html = render_page(
