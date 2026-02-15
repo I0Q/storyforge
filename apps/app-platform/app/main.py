@@ -4124,25 +4124,90 @@ function copyVoiceRef(){
   try{ copyText(document.getElementById('voice_ref').textContent||''); }catch(e){}
 }
 
-function renderTraitsFromHidden(){
+function escapeHtml(s){
   try{
-    var raw = String((document.getElementById('voice_traits_json')||{}).value||'').trim();
-    var box = document.getElementById('traitsBox');
+    return String(s||'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+  }catch(e){
+    return '';
+  }
+}
+
+function renderTraits(){
+  try{
+    var box=document.getElementById('traitsBox');
+    var hid=document.getElementById('voice_traits_json');
+    if (!box || !hid) return;
+    var raw = String(hid.value||'').trim();
     var pre = document.getElementById('traits_raw');
     if (pre && raw) pre.textContent = raw;
-    if (!box) return;
-    if (!raw){ box.textContent = '—'; return; }
-    // If it's JSON, pretty-print; else show raw.
-    try{
-      var obj = JSON.parse(raw);
-      box.textContent = JSON.stringify(obj, null, 2);
-    }catch(_e){
-      box.textContent = raw;
+
+    if (!raw || raw==='—'){
+      box.innerHTML = '<div class="muted">No metadata yet. Tap <b>Analyze voice</b>.</div>';
+      return;
     }
+
+    var obj=null;
+    try{ obj = JSON.parse(raw); }catch(e){
+      try{
+        var tmp=document.createElement('textarea');
+        tmp.innerHTML = raw;
+        obj = JSON.parse(tmp.value);
+      }catch(_e){ obj=null; }
+    }
+    if (!obj){
+      box.innerHTML = '<div class="err">Could not parse voice traits JSON.</div>';
+      return;
+    }
+
+    var vt = obj.voice_traits || {};
+    var m = obj.measured || {};
+    var f = m.features || {};
+
+    function fmtNum(x, d){
+      try{
+        var n = Number(x);
+        if (!isFinite(n)) return '';
+        return n.toFixed(d==null?2:d);
+      }catch(e){ return ''; }
+    }
+    function chip(txt, cls){
+      txt = String(txt||'').trim();
+      if (!txt) return '';
+      return '<span class="chip '+(cls||'')+'">'+escapeHtml(txt)+'</span>';
+    }
+
+    var tone = Array.isArray(vt.tone) ? vt.tone : [];
+    var toneHtml = tone.length ? tone.map(function(t){ return chip(t,''); }).join('') : '<span class="muted">—</span>';
+
+    var dur = (m.duration_s!=null) ? fmtNum(m.duration_s,2)+'s' : '';
+    var lufs = (m.lufs_i!=null) ? fmtNum(m.lufs_i,1)+' LUFS' : '';
+
+    var f0 = (f.f0_hz_median!=null) ? fmtNum(f.f0_hz_median,0)+' Hz' : '';
+    var f0r = (f.f0_hz_p10!=null && f.f0_hz_p90!=null) ? (fmtNum(f.f0_hz_p10,0)+'–'+fmtNum(f.f0_hz_p90,0)+' Hz') : '';
+
+    box.innerHTML = ''
+      + '<div class="traitsGrid">'
+      + '<div class="k">gender</div><div class="v">'+escapeHtml(String(vt.gender||'unknown'))+'</div>'
+      + '<div class="k">age</div><div class="v">'+escapeHtml(String(vt.age||'unknown'))+'</div>'
+      + '<div class="k">pitch</div><div class="v">'+escapeHtml(String(vt.pitch||'unknown'))+(f0?(' • '+escapeHtml(f0)):'')+(f0r?(' <span class="muted">('+escapeHtml(f0r)+')</span>'):'')+'</div>'
+      + '<div class="k">accent</div><div class="v">'+escapeHtml(String(vt.accent||''))+'</div>'
+      + '<div class="k">tone</div><div class="v"><div class="chips">'+toneHtml+'</div></div>'
+      + '<div class="k">duration</div><div class="v">'+(dur?escapeHtml(dur):'<span class="muted">—</span>')+'</div>'
+      + '<div class="k">loudness</div><div class="v">'+(lufs?escapeHtml(lufs):'<span class="muted">—</span>')+'</div>'
+      + '<div class="k">engine</div><div class="v">'+escapeHtml(String(m.engine||''))+'</div>'
+      + '<div class="k">voice_ref</div><div class="v">'+escapeHtml(String(m.voice_ref||''))+'</div>'
+      + (m.tortoise_voice?('<div class="k">tortoise</div><div class="v">'+escapeHtml(String(m.tortoise_voice||''))+'</div>'):'')
+      + '</div>';
   }catch(e){}
 }
 
-try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraitsFromHidden(); }catch(_e){} }); }catch(e){}
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(_e){} }); }catch(e){}
+try{ renderTraits(); }catch(e){}
+
+try{ document.addEventListener('DOMContentLoaded'try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraitsFromHidden(); }catch(_e){} }); }catch(e){}
 try{ renderTraitsFromHidden(); }catch(e){}
 
 function setEditColorHex(hex){
