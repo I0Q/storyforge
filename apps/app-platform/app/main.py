@@ -1443,6 +1443,100 @@ function __sfToastInit(){
 try{ document.addEventListener('DOMContentLoaded', __sfToastInit); }catch(e){}
 try{ __sfToastInit(); }catch(e){}
 
+// Global audio player (survives tab re-renders; iOS-friendly)
+function __sfEnsureAudioDock(){
+  try{
+    var d=document.getElementById('sfAudioDock');
+    if (d) return d;
+    d=document.createElement('div');
+    d.id='sfAudioDock';
+    d.style.position='fixed';
+    d.style.left='12px';
+    d.style.right='12px';
+    d.style.bottom='calc(64px + env(safe-area-inset-bottom, 0px))';
+    d.style.zIndex='99998';
+    d.style.padding='10px 12px';
+    d.style.border='1px solid rgba(255,255,255,0.10)';
+    d.style.borderRadius='14px';
+    d.style.background='rgba(20,22,30,0.96)';
+    d.style.backdropFilter='blur(6px)';
+    d.style.webkitBackdropFilter='blur(6px)';
+    d.style.boxShadow='0 12px 40px rgba(0,0,0,0.35)';
+    d.style.display='none';
+
+    var row=document.createElement('div');
+    row.style.display='flex';
+    row.style.alignItems='center';
+    row.style.gap='10px';
+
+    var t=document.createElement('div');
+    t.id='sfAudioTitle';
+    t.style.flex='1';
+    t.style.minWidth='0';
+    t.style.fontWeight='900';
+    t.style.fontSize='13px';
+    t.style.whiteSpace='nowrap';
+    t.style.overflow='hidden';
+    t.style.textOverflow='ellipsis';
+    t.textContent='Audio';
+
+    var x=document.createElement('button');
+    x.type='button';
+    x.textContent='×';
+    x.style.width='34px';
+    x.style.height='30px';
+    x.style.borderRadius='10px';
+    x.style.border='1px solid rgba(255,255,255,0.10)';
+    x.style.background='transparent';
+    x.style.color='var(--text)';
+    x.style.fontWeight='900';
+    x.onclick=function(){
+      try{
+        var a=document.getElementById('sfAudioEl');
+        if (a) a.pause();
+      }catch(_e){}
+      try{ d.style.display='none'; }catch(_e){}
+    };
+
+    row.appendChild(t);
+    row.appendChild(x);
+
+    var a=document.createElement('audio');
+    a.id='sfAudioEl';
+    a.controls=true;
+    a.preload='none';
+    a.style.width='100%';
+    a.style.marginTop='8px';
+
+    d.appendChild(row);
+    d.appendChild(a);
+    document.body.appendChild(d);
+    return d;
+  }catch(e){ return null; }
+}
+
+function __sfPlayAudio(url, title){
+  try{
+    url = String(url||'').trim();
+    if (!url) return;
+    var d=__sfEnsureAudioDock();
+    var a=document.getElementById('sfAudioEl');
+    var t=document.getElementById('sfAudioTitle');
+    if (t) t.textContent = String(title||'Audio');
+    if (d) d.style.display='block';
+    if (a){
+      // Reset src to force iOS to treat this as a fresh user-initiated play
+      try{ a.pause(); }catch(_e){}
+      a.src = url;
+      try{ a.currentTime = 0; }catch(_e){}
+      try{
+        var p=a.play();
+        if (p && typeof p.catch==='function') p.catch(function(_e){});
+      }catch(_e){}
+    }
+  }catch(e){}
+}
+
 function showTab(name, opts){
   opts = opts || {};
   for (var i=0;i<['history','library','voices','production','advanced'].length;i++){
@@ -1798,45 +1892,7 @@ function pauseJobsStream(ms){
 function jobPlay(jobId, url){
   try{
     if (!url || !jobId) return;
-
-    // Jobs page uses SSE and re-renders the list, which can kill inline audio.
-    // Pause the jobs stream while audio is playing.
-    try{ pauseJobsStream(5*60*1000); }catch(e){}
-
-    // Close any other open players
-    try{
-      var olds=document.querySelectorAll('.jobPlayer');
-      for (var i=0;i<olds.length;i++){
-        try{ var a0=olds[i].querySelector('audio'); if (a0) a0.pause(); }catch(e){}
-        try{ olds[i].remove(); }catch(e){}
-      }
-    }catch(e){}
-
-    var card=document.querySelector('[data-jobid="'+String(jobId)+'"]');
-    if (!card) return;
-
-    var box=document.createElement('div');
-    box.className='jobPlayer';
-    box.style.marginTop='10px';
-    box.style.padding='10px';
-    box.style.border='1px solid rgba(255,255,255,0.10)';
-    box.style.borderRadius='12px';
-    box.style.background='rgba(255,255,255,0.03)';
-
-    var a=document.createElement('audio');
-    a.controls=true;
-    a.style.width='100%';
-    a.src=String(url);
-    a.onended = function(){ try{ window.__SF_JOBS_STREAM_PAUSED_UNTIL = 0; startJobsStream(); }catch(e){} };
-    a.onpause = function(){ try{ /* allow manual pause without restarting immediately */ }catch(e){} };
-
-    box.appendChild(a);
-    card.appendChild(box);
-
-    try{
-      var p = a.play();
-      if (p && typeof p.catch === 'function') p.catch(function(_e){});
-    }catch(e){}
+    __sfPlayAudio(String(url), 'Job ' + String(jobId));
   }catch(e){}
 }
 
@@ -3387,30 +3443,7 @@ function playVoiceEl(btn){
     var idEnc = btn ? (btn.getAttribute('data-vid')||'') : '';
     var sample = btn ? String(btn.getAttribute('data-sample')||'').trim() : '';
     if (!idEnc || !sample) return;
-
-    // Jobs page uses SSE + re-renders; on iOS that can interrupt audio even on other tabs.
-    // Pause jobs stream while audio is playing.
-    try{ pauseJobsStream(5*60*1000); }catch(_e){}
-
-    // Stop any other open voice players
-    try{
-      var olds=document.querySelectorAll('#pane-voices audio');
-      for (var i=0;i<olds.length;i++){
-        try{ olds[i].pause(); }catch(_e){}
-      }
-    }catch(_e){}
-
-    var wrap = document.getElementById('audWrap-' + idEnc);
-    var a = document.getElementById('aud-' + idEnc);
-    if (wrap) wrap.classList.remove('hide');
-    if (a){
-      a.src = sample;
-      a.onended = function(){ try{ window.__SF_JOBS_STREAM_PAUSED_UNTIL = 0; startJobsStream(); }catch(_e){} };
-      try{
-        var p=a.play();
-        if (p && typeof p.catch === 'function') p.catch(function(_e){});
-      }catch(_e){}
-    }
+    __sfPlayAudio(sample, 'Voice sample');
   }catch(e){}
 }
 
