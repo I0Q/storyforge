@@ -200,6 +200,32 @@ CREATE TABLE IF NOT EXISTS sf_story_audio (
 );
 """
     )
+
+    # Web Push subscriptions (browser/OS notifications)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_push_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  device_id TEXT NOT NULL DEFAULT '',
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL DEFAULT '',
+  auth TEXT NOT NULL DEFAULT '',
+  ua TEXT NOT NULL DEFAULT '',
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  job_kinds_json TEXT NOT NULL DEFAULT '[]',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
+    try:
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS sf_push_endpoint_uniq ON sf_push_subscriptions (endpoint)")
+    except Exception:
+        pass
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS sf_push_device_id_idx ON sf_push_subscriptions (device_id)")
+    except Exception:
+        pass
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_story_id_idx ON sf_story_audio (story_id)")
     except Exception:

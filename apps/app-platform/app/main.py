@@ -55,6 +55,11 @@ SF_JOB_TOKEN = os.environ.get("SF_JOB_TOKEN", "").strip()
 # SF_DEPLOY_TOKEN reserved for future deploy pipeline rework
 SF_DEPLOY_TOKEN = os.environ.get("SF_DEPLOY_TOKEN", "").strip()
 
+# Web Push (browser/OS notifications)
+VAPID_PUBLIC_KEY = os.environ.get('SF_VAPID_PUBLIC_KEY', '').strip()
+VAPID_PRIVATE_KEY = os.environ.get('SF_VAPID_PRIVATE_KEY', '').strip()
+VAPID_SUBJECT = os.environ.get('SF_VAPID_SUBJECT', 'mailto:admin@example.com').strip()
+
 VOICE_SERVERS: list[dict[str, Any]] = []
 try:
     _raw = os.environ.get("VOICE_SERVERS_JSON", "").strip()
@@ -1000,10 +1005,20 @@ def index(response: Response):
   <meta name='viewport' content='width=device-width, initial-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
-  <link rel="stylesheet" href="/static/sfml_editor.css?v=4" />
-  <script src="/static/sfml_editor.js?v=6"></script>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="/static/sfml_editor.css?v=5" />
+  <script src="/static/sfml_editor.js?v=7"></script>
   __DEBUG_BANNER_BOOT_JS__
   <script>
+  // Register service worker for Web Push (required for iOS PWA push)
+  (function(){
+    try{
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.register('/sw.js').catch(function(_e){});
+    }catch(_e){}
+  })();
+
   // Ensure monitor UI is hidden on first paint when disabled.
   // Emergency override: add ?mon=0 (or ?monitor=0 / ?monoff=1) to force monitor OFF even if the sheet is stuck.
   (function(){
@@ -1230,6 +1245,22 @@ def index(response: Response):
     </div>
 
     <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>Notifications</div>
+      <div class='muted'>Browser/OS push notifications for job completion (completed or failed). iOS requires Add to Home Screen.</div>
+      <div id='notifOut' class='muted' style='margin-top:8px'>Loading…</div>
+      <div class='row' style='margin-top:10px;gap:12px;flex-wrap:wrap'>
+        <button id='notifEnableBtn' type='button' onclick='notifEnable()'>Enable on this device</button>
+        <button id='notifDisableBtn' class='secondary' type='button' onclick='notifDisable()'>Disable on this device</button>
+      </div>
+      <div style='margin-top:12px;font-weight:950;'>Job types</div>
+      <div class='muted'>Select which job kinds trigger a push on completion.</div>
+      <div id='notifKinds' style='margin-top:8px'></div>
+      <div class='row' style='margin-top:10px;justify-content:flex-end'>
+        <button class='secondary' type='button' onclick='notifSaveKinds()'>Save notification settings</button>
+      </div>
+    </div>
+
+    <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
       <div class='muted'>Hide/show the build + JS error banner.</div>
       <div class='row' style='margin-top:10px;'>
@@ -1336,6 +1367,7 @@ function showTab(name, opts){
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
     else if (name==='production') loadProduction();
+    else if (name==='advanced') { try{ notifLoad(); }catch(e){} }
   }catch(_e){}
 }
 
@@ -1482,6 +1514,155 @@ function fmtTs(ts){
   }catch(e){
     return String(ts);
   }
+}
+
+// --- Notifications (Web Push) ---
+function notifDeviceId(){
+  try{
+    var k='sf_notif_device_id';
+    var v=localStorage.getItem(k) || '';
+    if (!v){
+      v = 'dev_' + String(Date.now()) + '_' + String(Math.floor(Math.random()*1e9));
+      localStorage.setItem(k, v);
+    }
+    return v;
+  }catch(e){
+    return 'dev_' + String(Date.now());
+  }
+}
+
+function notifKindsList(){
+  // Known job kinds (expand over time)
+  return ['produce_audio','tts_sample','voice_meta','deploy','other'];
+}
+
+function notifRenderKinds(selected){
+  try{
+    selected = selected || {};
+    var host=document.getElementById('notifKinds');
+    if (!host) return;
+    var kinds = notifKindsList();
+    var h='';
+    for (var i=0;i<kinds.length;i++){
+      var k = kinds[i];
+      var on = !!selected[k];
+      h += "<label style='display:flex;gap:10px;align-items:center;margin:8px 0'>"
+        + "<input type='checkbox' data-kind='"+escAttr(k)+"' " + (on?'checked':'') + " />"
+        + "<span style='font-weight:950'>"+escapeHtml(k)+"</span>"
+        + "</label>";
+    }
+    host.innerHTML = h;
+  }catch(e){}
+}
+
+function notifSelectedKinds(){
+  var out=[];
+  try{
+    var host=document.getElementById('notifKinds');
+    if (!host) return out;
+    var els=host.querySelectorAll('input[type=checkbox][data-kind]');
+    for (var i=0;i<els.length;i++){
+      var el=els[i];
+      if (el && el.checked){ out.push(String(el.getAttribute('data-kind')||'')); }
+    }
+  }catch(e){}
+  return out;
+}
+
+function notifOut(msg, kind){
+  try{
+    var el=document.getElementById('notifOut');
+    if (!el) return;
+    el.className = 'muted';
+    if (kind==='err') el.className = 'err';
+    el.textContent = String(msg||'');
+  }catch(e){}
+}
+
+function notifLoad(){
+  notifOut('Loading…');
+  // render default kinds first
+  var defSel={};
+  try{ var ks=notifKindsList(); for (var i=0;i<ks.length;i++) defSel[ks[i]] = (ks[i]==='produce_audio'); }catch(_e){}
+  notifRenderKinds(defSel);
+
+  return fetchJsonAuthed('/api/notifications/settings?device_id='+encodeURIComponent(notifDeviceId()))
+    .then(function(j){
+      if (!j || !j.ok){ throw new Error((j&&j.error)||'load_failed'); }
+      var enabled = !!j.enabled;
+      var kinds = Array.isArray(j.job_kinds) ? j.job_kinds : [];
+      var sel={};
+      for (var i=0;i<kinds.length;i++) sel[String(kinds[i])] = true;
+      notifRenderKinds(sel);
+      notifOut(enabled ? 'Notifications enabled on this device.' : 'Notifications not enabled on this device.');
+    })
+    .catch(function(e){
+      notifOut('Notifications unavailable: '+String(e&&e.message?e.message:e), 'err');
+    });
+}
+
+function notifSaveKinds(){
+  try{
+    var kinds = notifSelectedKinds();
+    notifOut('Saving…');
+    return fetchJsonAuthed('/api/notifications/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({device_id:notifDeviceId(), job_kinds:kinds})})
+      .then(function(j){
+        if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
+        notifOut('Saved.');
+      })
+      .catch(function(e){ notifOut('Save failed: '+String(e&&e.message?e.message:e), 'err'); });
+  }catch(e){ notifOut('Save failed', 'err'); }
+}
+
+function notifEnable(){
+  // subscribe this device
+  notifOut('Enabling…');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)){
+    notifOut('Push not supported in this browser.', 'err');
+    return;
+  }
+
+  navigator.serviceWorker.ready.then(function(reg){
+    return fetchJsonAuthed('/api/notifications/vapid_public').then(function(j){
+      if (!j || !j.ok || !j.public_key){ throw new Error((j&&j.error)||'missing_vapid_public'); }
+      function urlBase64ToUint8Array(base64String){
+        base64String = String(base64String||'');
+        var padding = '='.repeat((4 - base64String.length % 4) % 4);
+        var base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+        var rawData = atob(base64);
+        var outputArray = new Uint8Array(rawData.length);
+        for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
+      }
+      return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(j.public_key) });
+    }).then(function(sub){
+      var kinds = notifSelectedKinds();
+      return fetchJsonAuthed('/api/notifications/subscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({device_id:notifDeviceId(), subscription: sub, job_kinds: kinds, ua: (navigator.userAgent||'')})});
+    }).then(function(resp){
+      if (!resp || !resp.ok) throw new Error((resp&&resp.error)||'subscribe_failed');
+      notifOut('Enabled.');
+    });
+  }).catch(function(e){
+    notifOut('Enable failed: '+String(e&&e.message?e.message:e), 'err');
+  });
+}
+
+function notifDisable(){
+  notifOut('Disabling…');
+  if (!('serviceWorker' in navigator)){
+    notifOut('Disabled.');
+    return;
+  }
+  navigator.serviceWorker.ready.then(function(reg){
+    return reg.pushManager.getSubscription().then(function(sub){
+      if (!sub) return null;
+      return sub.unsubscribe().then(function(){ return sub; });
+    }).then(function(sub){
+      return fetchJsonAuthed('/api/notifications/unsubscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({device_id:notifDeviceId(), endpoint: sub ? sub.endpoint : ''})});
+    }).then(function(_j){
+      notifOut('Disabled.');
+    });
+  }).catch(function(e){ notifOut('Disable failed: '+String(e&&e.message?e.message:e), 'err'); });
 }
 
 function safeJson(s){
@@ -6450,14 +6631,32 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
         }
 
         conn = db_connect()
+        prev_state = ''
+        kind = ''
+        title = ''
+        mp3_url = ''
         try:
             db_init(conn)
             cur = conn.cursor()
+
             # Ensure exists
             cur.execute(
                 "INSERT INTO jobs (id,title,state,created_at) VALUES (%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
                 (job_id, str(fields.get('title') or job_id), str(fields.get('state') or 'running'), int(time.time())),
             )
+
+            # Read previous state for notifications
+            try:
+                cur.execute("SELECT state, kind, title, mp3_url FROM jobs WHERE id=%s", (job_id,))
+                row = cur.fetchone()
+                if row:
+                    prev_state = str(row[0] or '')
+                    kind = str(row[1] or '')
+                    title = str(row[2] or '')
+                    mp3_url = str(row[3] or '')
+            except Exception:
+                prev_state = ''
+
             # Patch
             sets = []
             vals = []
@@ -6476,6 +6675,19 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
                 vals.append(job_id)
                 cur.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=%s", tuple(vals))
             conn.commit()
+
+            # Determine if we should notify (state transition to completed/failed)
+            try:
+                new_state = str(fields.get('state') or '')
+                if new_state in ('completed', 'failed') and prev_state != new_state:
+                    # Use the patched fields when available
+                    kind2 = str(fields.get('kind') or kind or '')
+                    title2 = str(fields.get('title') or title or job_id)
+                    mp32 = str(fields.get('mp3_url') or mp3_url or '')
+                    _push_notify_job_state(kind2, new_state, job_id, title2, mp32)
+            except Exception:
+                pass
+
         finally:
             try:
                 conn.close()
@@ -6491,6 +6703,267 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
 
 
 
+
+
+def _push_notify_job_state(kind: str, state: str, job_id: str, title: str, mp3_url: str = '') -> None:
+    """Best-effort Web Push notifications on job terminal states."""
+    try:
+        kind = str(kind or '').strip()
+        state = str(state or '').strip()
+        if state not in ('completed', 'failed'):
+            return
+        if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+            return
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT endpoint,p256dh,auth,enabled,job_kinds_json FROM sf_push_subscriptions WHERE enabled=TRUE"
+            )
+            rows = cur.fetchall() or []
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        payload = {
+            'kind': kind,
+            'state': state,
+            'job_id': job_id,
+            'title': title,
+            'url': '/#tab-history',
+            'mp3_url': mp3_url or '',
+        }
+        try:
+            body = json.dumps(payload, separators=(',', ':'))
+        except Exception:
+            body = '{"kind":"' + kind + '","state":"' + state + '"}'
+
+        from pywebpush import webpush  # type: ignore
+
+        for r in rows:
+            try:
+                endpoint = str(r[0] or '')
+                p256dh = str(r[1] or '')
+                auth = str(r[2] or '')
+                enabled = bool(r[3])
+                kinds_raw = str(r[4] or '[]')
+                if not enabled or not endpoint or not p256dh or not auth:
+                    continue
+                try:
+                    kinds = json.loads(kinds_raw) if kinds_raw else []
+                except Exception:
+                    kinds = []
+                if isinstance(kinds, list) and kind and (kind not in [str(x) for x in kinds]):
+                    continue
+
+                webpush(
+                    subscription_info={
+                        'endpoint': endpoint,
+                        'keys': {'p256dh': p256dh, 'auth': auth},
+                    },
+                    data=body,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={'sub': VAPID_SUBJECT},
+                    timeout=6,
+                )
+            except Exception:
+                # TODO: garbage-collect invalid subscriptions on 410/404
+                continue
+    except Exception:
+        return
+
+
+@app.get('/api/notifications/vapid_public')
+def api_notifications_vapid_public(request: Request):
+    _require_passphrase(request)
+    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+        return {'ok': False, 'error': 'push_not_configured'}
+    return {'ok': True, 'public_key': VAPID_PUBLIC_KEY}
+
+
+@app.get('/api/notifications/settings')
+def api_notifications_settings(request: Request):
+    _require_passphrase(request)
+    device_id = str(request.query_params.get('device_id') or '').strip()
+    if not device_id:
+        return {'ok': False, 'error': 'missing_device_id'}
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT enabled, job_kinds_json FROM sf_push_subscriptions WHERE device_id=%s ORDER BY updated_at DESC LIMIT 1",
+            (device_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return {'ok': True, 'enabled': False, 'job_kinds': ['produce_audio']}
+        enabled = bool(row[0])
+        raw = str(row[1] or '[]')
+        try:
+            kinds = json.loads(raw) if raw else []
+        except Exception:
+            kinds = []
+        if not isinstance(kinds, list):
+            kinds = []
+        return {'ok': True, 'enabled': enabled, 'job_kinds': kinds}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@app.post('/api/notifications/settings')
+def api_notifications_settings_set(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    _require_passphrase(request)
+    device_id = str((payload or {}).get('device_id') or '').strip()
+    if not device_id:
+        return {'ok': False, 'error': 'missing_device_id'}
+    kinds = (payload or {}).get('job_kinds')
+    if not isinstance(kinds, list):
+        kinds = []
+    kinds2 = [str(x) for x in kinds if str(x).strip()]
+    now = int(time.time())
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE sf_push_subscriptions SET job_kinds_json=%s, updated_at=%s WHERE device_id=%s",
+            (json.dumps(kinds2, separators=(',', ':')), now, device_id),
+        )
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return {'ok': True}
+
+
+@app.post('/api/notifications/subscribe')
+def api_notifications_subscribe(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    _require_passphrase(request)
+    device_id = str((payload or {}).get('device_id') or '').strip()
+    sub = (payload or {}).get('subscription')
+    ua = str((payload or {}).get('ua') or '').strip()
+    kinds = (payload or {}).get('job_kinds')
+    if not isinstance(kinds, list):
+        kinds = ['produce_audio']
+    kinds2 = [str(x) for x in kinds if str(x).strip()]
+
+    if not device_id or not isinstance(sub, dict):
+        return {'ok': False, 'error': 'missing_device_or_subscription'}
+    endpoint = str(sub.get('endpoint') or '').strip()
+    keys = sub.get('keys') if isinstance(sub.get('keys'), dict) else {}
+    p256dh = str((keys or {}).get('p256dh') or '').strip()
+    auth = str((keys or {}).get('auth') or '').strip()
+    if not endpoint or not p256dh or not auth:
+        return {'ok': False, 'error': 'bad_subscription'}
+
+    now = int(time.time())
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO sf_push_subscriptions (device_id,endpoint,p256dh,auth,ua,enabled,job_kinds_json,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,TRUE,%s,%s,%s) "
+            "ON CONFLICT (endpoint) DO UPDATE SET device_id=EXCLUDED.device_id,p256dh=EXCLUDED.p256dh,auth=EXCLUDED.auth,ua=EXCLUDED.ua,enabled=TRUE,job_kinds_json=EXCLUDED.job_kinds_json,updated_at=EXCLUDED.updated_at",
+            (device_id, endpoint, p256dh, auth, ua, json.dumps(kinds2, separators=(',', ':')), now, now),
+        )
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    return {'ok': True}
+
+
+@app.post('/api/notifications/unsubscribe')
+def api_notifications_unsubscribe(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    _require_passphrase(request)
+    endpoint = str((payload or {}).get('endpoint') or '').strip()
+    device_id = str((payload or {}).get('device_id') or '').strip()
+    now = int(time.time())
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        if endpoint:
+            cur.execute("UPDATE sf_push_subscriptions SET enabled=FALSE, updated_at=%s WHERE endpoint=%s", (now, endpoint))
+        elif device_id:
+            cur.execute("UPDATE sf_push_subscriptions SET enabled=FALSE, updated_at=%s WHERE device_id=%s", (now, device_id))
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return {'ok': True}
+
+
+@app.get('/manifest.webmanifest')
+def manifest_webmanifest():
+    body = {
+        'name': 'StoryForge',
+        'short_name': 'StoryForge',
+        'start_url': '/?pwa=1',
+        'display': 'standalone',
+        'background_color': '#0b1020',
+        'theme_color': '#0b1020',
+        'icons': [],
+    }
+    return Response(content=json.dumps(body), media_type='application/manifest+json', headers={'Cache-Control': 'no-store'})
+
+
+@app.get('/sw.js')
+def service_worker_js():
+    # Minimal SW: handle push and notification click
+    js = r"""
+self.addEventListener('push', function(event){
+  try{
+    var data = {};
+    try{ data = event.data ? event.data.json() : {}; }catch(e){ data = {}; }
+    var kind = String(data.kind||'job');
+    var state = String(data.state||'completed');
+    var title = (state==='failed') ? 'Job failed' : 'Job completed';
+    if (kind==='produce_audio') title = (state==='failed') ? 'Produce audio failed' : 'Produce audio completed';
+    var body = String(data.title||data.job_id||'');
+    var url = String(data.url||'/');
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body: body,
+        data: {url: url, raw: data},
+        tag: kind + ':' + state,
+        renotify: false,
+      })
+    );
+  }catch(e){}
+});
+
+self.addEventListener('notificationclick', function(event){
+  try{ event.notification.close(); }catch(e){}
+  var url = '/';
+  try{ url = (event.notification && event.notification.data && event.notification.data.url) ? event.notification.data.url : '/'; }catch(e){}
+  event.waitUntil(
+    clients.matchAll({type:'window', includeUncontrolled:true}).then(function(clis){
+      for (var i=0;i<clis.length;i++){
+        var c=clis[i];
+        try{ if (c && c.focus){ c.focus(); c.navigate(url); return; } }catch(e){}
+      }
+      try{ return clients.openWindow(url); }catch(e){}
+    })
+  );
+});
+"""
+    return Response(content=js, media_type='application/javascript', headers={'Cache-Control': 'no-store'})
 
 
 @app.get('/api/deploy/status')
