@@ -808,6 +808,7 @@ function __sfSetDeployBar(on, msg){
 
 function __sfStartDeployWatch(){
   // Debug-only: show deploy progress bar inside the debug boot area.
+  // Design goal: NO idle polling. Use SSE to learn when deploy starts/ends.
   try{
     var dbg = null;
     try{ dbg = localStorage.getItem('sf_debug_ui'); }catch(e){}
@@ -816,12 +817,12 @@ function __sfStartDeployWatch(){
 
     var lastUpdated = 0;
     var lastState = '';
+    var depES = null;
+    var depReconnectTimer = null;
+    var depBackoffMs = 900;
 
-    function tick(){
-      fetch('/api/deploy/status', {cache:'no-store'}).then(function(r){
-        if (!r.ok) throw new Error('HTTP '+r.status);
-        return r.json();
-      }).then(function(j){
+    function apply(j){
+      try{
         if (!j || !j.ok) return;
         var st = String(j.state||'idle');
         var msg = String(j.message||'');
@@ -845,42 +846,42 @@ function __sfStartDeployWatch(){
 
         lastUpdated = upd || lastUpdated;
         lastState = st;
-      }).catch(function(_e){
-        // Quiet failure; don't break the page.
-      });
-    }
-
-    tick();
-
-    var intervalMs = 5000;
-    var idleHits = 0;
-    function schedule(){
-      try{
-        // Only poll deploy status when debug UI is enabled.
-        var dbg = true;
-        try{ dbg = (localStorage.getItem('sf_debug_ui') !== '0'); }catch(_e){}
-        if (!dbg) return;
-
-        setTimeout(function(){
-          try{
-            tick();
-            // If not deploying, back off heavily to avoid constant requests.
-            if (lastState !== 'deploying'){
-              idleHits += 1;
-              intervalMs = Math.min(60000, Math.max(15000, intervalMs));
-              // Keep polling (slowly) even when idle so we can catch a deploy that starts
-              // later without requiring a full page reload (common on mobile/iOS).
-              // intervalMs will back off up to 60s while idle.
-            }else{
-              idleHits = 0;
-              intervalMs = 5000;
-            }
-          }catch(_e){}
-          schedule();
-        }, intervalMs);
       }catch(_e){}
     }
-    schedule();
+
+    function stop(){
+      try{ if(depReconnectTimer){ clearTimeout(depReconnectTimer); depReconnectTimer=null; } }catch(_e){}
+      try{ if(depES){ depES.close(); depES=null; } }catch(_e){}
+    }
+
+    function scheduleReconnect(){
+      try{ if(depReconnectTimer) return; }catch(_e){}
+      try{ stop(); }catch(_e){}
+      var delay = Math.max(400, Math.min(10000, Number(depBackoffMs||900)));
+      depBackoffMs = Math.min(10000, Math.floor(delay*1.7));
+      try{
+        depReconnectTimer = setTimeout(function(){
+          depReconnectTimer = null;
+          start();
+        }, delay);
+      }catch(_e){}
+    }
+
+    function start(){
+      stop();
+      try{
+        depES = new EventSource('/api/deploy/stream');
+        depES.onopen = function(){ depBackoffMs = 900; };
+        depES.onmessage = function(ev){
+          try{ apply(JSON.parse(ev.data||'{}')); }catch(_e){}
+        };
+        depES.onerror = function(_e){ scheduleReconnect(); };
+      }catch(_e){
+        scheduleReconnect();
+      }
+    }
+
+    start();
   }catch(e){}
 }
 
@@ -6385,6 +6386,71 @@ def api_deploy_status():
     except Exception:
         # Best-effort: never break the UI
         return {'ok': True, 'state': 'unknown', 'message': '', 'updated_at': 0}
+
+
+@app.get('/api/deploy/stream')
+async def api_deploy_stream():
+    """SSE stream for deploy state.
+
+    This is debug-UI only on the client. Server-side is public but low-impact.
+
+    Emits a JSON payload like /api/deploy/status whenever state/updated_at changes.
+    """
+
+    async def gen():
+        import asyncio
+
+        last_upd = None
+        last_state = None
+
+        while True:
+            try:
+                def _load():
+                    conn = db_connect()
+                    try:
+                        db_init(conn)
+                        cur = conn.cursor()
+                        cur.execute("SELECT value_json, updated_at FROM sf_settings WHERE key='deploy_state'")
+                        row = cur.fetchone()
+                        if not row:
+                            return {'ok': True, 'state': 'idle', 'message': '', 'updated_at': 0}
+                        vraw = str(row[0] or '').strip()
+                        try:
+                            v = json.loads(vraw) if vraw else {}
+                        except Exception:
+                            v = {}
+                        return {
+                            'ok': True,
+                            'state': str(v.get('state') or 'idle'),
+                            'message': str(v.get('message') or ''),
+                            'updated_at': int(row[1] or 0),
+                        }
+                    finally:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+
+                j = await asyncio.to_thread(_load)
+                upd = int((j or {}).get('updated_at') or 0)
+                st = str((j or {}).get('state') or '')
+
+                # Only emit when something changes (or first tick)
+                if last_upd is None or upd != last_upd or st != last_state:
+                    yield f"data: {json.dumps(j, separators=(',', ':'))}\n\n"
+                    last_upd = upd
+                    last_state = st
+            except Exception:
+                # Best-effort: keep stream alive.
+                yield f"data: {json.dumps({'ok': True, 'state': 'unknown', 'message': '', 'updated_at': 0}, separators=(',', ':'))}\n\n"
+
+            await asyncio.sleep(2.5)
+
+    headers = {
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+    }
+    return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
 
 
 def _require_deploy_token(request: Request) -> None:
