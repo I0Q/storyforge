@@ -1251,6 +1251,7 @@ def index(response: Response):
       <div class='row' style='margin-top:10px;gap:12px;flex-wrap:wrap'>
         <button id='notifEnableBtn' type='button' onclick='notifEnable()'>Enable on this device</button>
         <button id='notifDisableBtn' class='secondary' type='button' onclick='notifDisable()'>Disable on this device</button>
+        <button id='notifTestBtn' class='secondary' type='button' onclick='notifTest()'>Send test notification</button>
       </div>
       <div style='margin-top:12px;font-weight:950;'>Job types</div>
       <div class='muted'>Select which job kinds trigger a push on completion.</div>
@@ -1663,6 +1664,16 @@ function notifDisable(){
       notifOut('Disabled.');
     });
   }).catch(function(e){ notifOut('Disable failed: '+String(e&&e.message?e.message:e), 'err'); });
+}
+
+function notifTest(){
+  notifOut('Sending test…');
+  return fetchJsonAuthed('/api/notifications/test', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({device_id:notifDeviceId()})})
+    .then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'test_failed');
+      notifOut('Test sent.');
+    })
+    .catch(function(e){ notifOut('Test failed: '+String(e&&e.message?e.message:e), 'err'); });
 }
 
 function safeJson(s){
@@ -6907,6 +6918,53 @@ def api_notifications_unsubscribe(request: Request, payload: dict[str, Any] = Bo
         except Exception:
             pass
     return {'ok': True}
+
+
+@app.post('/api/notifications/test')
+def api_notifications_test(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    _require_passphrase(request)
+    device_id = str((payload or {}).get('device_id') or '').strip()
+    if not device_id:
+        return {'ok': False, 'error': 'missing_device_id'}
+    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+        return {'ok': False, 'error': 'push_not_configured'}
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT endpoint,p256dh,auth FROM sf_push_subscriptions WHERE enabled=TRUE AND device_id=%s ORDER BY updated_at DESC LIMIT 1",
+            (device_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if not row:
+        return {'ok': False, 'error': 'no_subscription_for_device'}
+
+    endpoint, p256dh, auth = str(row[0] or ''), str(row[1] or ''), str(row[2] or '')
+    if not endpoint or not p256dh or not auth:
+        return {'ok': False, 'error': 'bad_subscription'}
+
+    try:
+        body = json.dumps({'kind': 'test', 'state': 'completed', 'job_id': 'test', 'title': 'Test notification', 'url': '/#tab-history'}, separators=(',', ':'))
+        from pywebpush import webpush  # type: ignore
+
+        webpush(
+            subscription_info={'endpoint': endpoint, 'keys': {'p256dh': p256dh, 'auth': auth}},
+            data=body,
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={'sub': VAPID_SUBJECT},
+            timeout=6,
+        )
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'test_send_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.get('/manifest.webmanifest')
