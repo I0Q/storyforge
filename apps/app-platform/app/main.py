@@ -3148,7 +3148,11 @@ function loadVoices(){
           chips += chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
         }
 
-        if (v.voice_ref) chips += chip('ref ' + String(v.voice_ref), '');
+        // Engine chip (show which engine this voice uses)
+        try{
+          var eng = String(v.engine||'').trim();
+          if (eng) chips += chip('engine ' + eng, '');
+        }catch(_e){}
 
         traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
       }catch(e){ traitsHtml=''; }
