@@ -243,8 +243,8 @@ INDEX_BASE_CSS = base_css("""\
     .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);}
 
     /* Notifications job kinds */
-    .notifKindRow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0;}
-    .notifKindRow input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
+    .notifPill{user-select:none;}
+    .notifPill input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
     .notifKindName{font-weight:950;word-break:break-word;overflow-wrap:anywhere;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -1551,15 +1551,17 @@ function notifRenderKinds(selected){
     var host=document.getElementById('notifKinds');
     if (!host) return;
     var kinds = notifKindsList();
-    var h='';
+    var h="<div class='checkLine' style='margin-top:6px'>";
     for (var i=0;i<kinds.length;i++){
       var k = kinds[i];
       var on = !!selected[k];
-      h += "<label class='notifKindRow'>"
+      // Render as pills (same visual language as provider engine pills)
+      h += "<label class='checkPill notifPill'>"
         + "<input type='checkbox' data-kind='"+escAttr(k)+"' " + (on?'checked':'') + " />"
         + "<span class='notifKindName'>"+escapeHtml(k)+"</span>"
         + "</label>";
     }
+    h += "</div>";
     host.innerHTML = h;
   }catch(e){}
 }
