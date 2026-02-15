@@ -55,5 +55,8 @@ fi
 # Use the known-good torch+cuda env (same as tortoise_pip)
 PY=/raid/storyforge_envs/micromamba_root/envs/tortoise_pip/bin/python
 
-# Scaffold runner will currently write a short silent wav so we can test full plumbing.
-$PY /raid/storyforge_test/tools/styletts2_runner.py --repo "$REPO_DIR" --text "$TEXT" --voice_ref "$REF" --out "$OUT"
+# Run StyleTTS2 (LibriTTS) inference.
+# REF is expected to be a reference wav path (downloaded by tinybox /v1/tts when given a URL).
+export STYLETT2_REPO_DIR="$REPO_DIR"
+export STYLETT2_MODEL_DIR="${STYLETT2_MODEL_DIR:-/raid/styletts2_models/libritts_official}"
+$PY /raid/storyforge_test/tools/styletts2_runner.py --text "$TEXT" --ref "$REF" --out "$OUT"
