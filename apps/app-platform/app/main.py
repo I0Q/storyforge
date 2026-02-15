@@ -291,10 +291,23 @@ INDEX_BASE_CSS = base_css("""\
     .hide{display:none}
     /* iOS Safari: <input type=color> won't open when display:none.
        Keep the input in DOM but visually hidden; tap the visible swatch and programmatically click(). */
-    /* iOS color input: we intentionally show it briefly next to the swatch (display toggle),
-       because iOS won't open the picker if the input is display:none. */
+    /* iOS color input: we intentionally show it briefly next to the swatch (display toggle).
+       When hidden (wrapper display:none) it doesn't affect layout; when shown it renders as a tiny swatch. */
     .colorPickWrap{display:inline-block;}
-    .colorPickHidden{width:16px;height:16px;border-radius:999px;border:1px solid rgba(255,255,255,.16);padding:0;margin:0;background:transparent;vertical-align:middle;}
+    .colorPickHidden{
+      -webkit-appearance:none;
+      appearance:none;
+      width:16px;
+      height:16px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      padding:0;
+      margin:0;
+      background:transparent;
+      vertical-align:middle;
+      box-shadow:none;
+      outline:none;
+    }
     .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
     .colorPickHidden::-webkit-color-swatch{border:0;border-radius:999px;}
 
