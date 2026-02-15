@@ -7088,7 +7088,15 @@ def api_story_audio_list(story_id: str):
             db_init(conn)
             cur = conn.cursor()
             cur.execute(
-                'SELECT id, job_id, label, mp3_url, meta_json, created_at FROM sf_story_audio WHERE story_id=%s ORDER BY created_at DESC LIMIT 50',
+                """
+SELECT a.id, a.job_id, a.label, a.mp3_url, a.meta_json, a.created_at,
+       j.sfml_url, j.meta_json
+FROM sf_story_audio a
+LEFT JOIN jobs j ON j.id = a.job_id
+WHERE a.story_id=%s
+ORDER BY a.created_at DESC
+LIMIT 50
+""",
                 (story_id,),
             )
             rows = cur.fetchall()
@@ -7096,7 +7104,27 @@ def api_story_audio_list(story_id: str):
             conn.close()
         out = []
         for r in rows:
-            out.append({'id': int(r[0]), 'job_id': str(r[1] or ''), 'label': str(r[2] or ''), 'mp3_url': str(r[3] or ''), 'meta_json': str(r[4] or ''), 'created_at': int(r[5] or 0)})
+            # r: id, job_id, label, mp3_url, meta_json, created_at, sfml_url, job_meta_json
+            engine = ''
+            try:
+                jm = str(r[7] or '').strip()
+                if jm:
+                    jmj = json.loads(jm)
+                    if isinstance(jmj, dict) and jmj.get('engine'):
+                        engine = str(jmj.get('engine') or '').strip()
+            except Exception:
+                engine = ''
+
+            out.append({
+                'id': int(r[0]),
+                'job_id': str(r[1] or ''),
+                'label': str(r[2] or ''),
+                'mp3_url': str(r[3] or ''),
+                'meta_json': str(r[4] or ''),
+                'created_at': int(r[5] or 0),
+                'sfml_url': str(r[6] or ''),
+                'engine': engine,
+            })
         return {'ok': True, 'items': out}
     except Exception as e:
         return {'ok': False, 'error': f'list_failed: {type(e).__name__}: {str(e)[:200]}'}

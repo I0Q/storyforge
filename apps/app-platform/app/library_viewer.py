@@ -590,12 +590,22 @@ function loadAudio(){{
           var it=items[i]||{{}};
           var label=String(it.label||'');
           var url=String(it.mp3_url||'');
+          var eng = String(it.engine||'');
+          var sfml = String(it.sfml_url||'');
           html += "<div class='audioItem'>"+
             "<div class='audioLabel'>"+escapeHtml(label||('Audio '+String(i+1)))+"</div>"+
+            (eng?"<div class='muted' style='margin-top:4px'>engine: <span class='pill'>"+escapeHtml(eng)+"</span></div>":"")+
             "<div class='fadeLine' style='margin-top:6px'>"+
               "<div class='fadeText' title='"+escAttr(url||'')+"'>"+escapeHtml(url||'')+"</div>"+
               (url?"<button class='copyBtn' type='button' data-copy='"+escAttr(url)+"' onclick='copyFromAttr(this)' aria-label='Copy'>"+copyIconSvg()+"</button>":"")+
             "</div>"+
+            (sfml?(
+              "<div class='fadeLine' style='margin-top:6px'>"+
+                "<div class='fadeText' title='"+escAttr(sfml)+"'>SFML: "+escapeHtml(sfml)+"</div>"+
+                "<button class='copyBtn' type='button' data-copy='"+escAttr(sfml)+"' onclick='copyFromAttr(this)' aria-label='Copy sfml'>"+copyIconSvg()+"</button>"+
+                "<a class='pill' style='text-decoration:none' href='"+escAttr(sfml)+"' target='_blank' rel='noopener'>Open</a>"+
+              "</div>"
+            ):"")+
             "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+
             "</div>"+
@@ -654,17 +664,17 @@ if ($('mdCode')) {{
                 "",
                 DEBUG_BANNER_HTML.replace("__BUILD__", str(build)),
                 "",
+                "<div class='vTabs'>",
+                "  <button id='vtab-story' class='vTab active' type='button' onclick=\"showVTab('story')\">Story</button>",
+                "  <button id='vtab-chars' class='vTab' type='button' onclick=\"showVTab('chars')\">Characters</button>",
+                "  <button id='vtab-audio' class='vTab' type='button' onclick=\"showVTab('audio')\">Audio</button>",
+                "</div>",
+                "",
                 "<div class='card storyTitleCard'>",
                 f"  <div id='titleText' class='titleText storyTitleText'>{title_txt}</div>",
                 "</div>",
                 "<div id='titleEdit' class='hide titleEdit'>",
                 f"  <input id='titleInput' value='{title_txt}' />",
-                "</div>",
-                "",
-                "<div class='vTabs'>",
-                "  <button id='vtab-story' class='vTab active' type='button' onclick=\"showVTab('story')\">Story</button>",
-                "  <button id='vtab-chars' class='vTab' type='button' onclick=\"showVTab('chars')\">Characters</button>",
-                "  <button id='vtab-audio' class='vTab' type='button' onclick=\"showVTab('audio')\">Audio</button>",
                 "</div>",
                 "",
                 "<div id='vp-story' class='vPane'>",
