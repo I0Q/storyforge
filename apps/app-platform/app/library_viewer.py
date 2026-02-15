@@ -46,7 +46,18 @@ function copyBoot(){
   }catch(e){}
 }
 // Don't leave it stuck on booting…
-try{ setTimeout(function(){ try{ var t=__sfEnsureBootText(); if(!t) return; var s=String(t.textContent||''); if(s.indexOf('JS: booting')!==-1) t.textContent=s.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok'); }catch(e){} }, 0); }catch(e){}
+function __sfFixBooting(){
+  try{
+    var t=__sfEnsureBootText();
+    if(!t) return;
+    var s=String(t.textContent||'');
+    if(s.indexOf('JS: booting')!==-1){
+      t.textContent=s.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
+    }
+  }catch(e){}
+}
+try{ setTimeout(__sfFixBooting, 0); }catch(e){}
+try{ setTimeout(__sfFixBooting, 500); }catch(e){}
 </script>
 """
 
@@ -504,6 +515,49 @@ function escapeHtml(s){{
     .replace(/>/g,'&gt;');
 }}
 
+function escAttr(s){{
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}}
+
+function copyIconSvg(){{
+  return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"+
+    "<path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4\"/>"+
+    "</svg>";
+}}
+
+function copyToClipboard(text){{
+  try{{
+    if (navigator.clipboard && navigator.clipboard.writeText){{
+      return navigator.clipboard.writeText(text).catch(function(_e){{
+        var ta=document.createElement('textarea');
+        ta.value=text; document.body.appendChild(ta);
+        ta.select();
+        try{{document.execCommand('copy');}}catch(__e){{}}
+        ta.remove();
+      }});
+    }}
+  }}catch(e){{}}
+  try{{
+    var ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta);
+    ta.select();
+    try{{document.execCommand('copy');}}catch(_e){{}}
+    ta.remove();
+  }}catch(e){{}}
+}}
+
+function copyFromAttr(el){{
+  var v='';
+  try{{ v = (el && el.getAttribute) ? (el.getAttribute('data-copy') || '') : ''; }}catch(e){{}}
+  if (!v) return;
+  try{{ copyToClipboard(v); toastShowNow('Copied', 'ok', 1200); }}catch(_e){{}}
+}}
+
 function renderMdSimple(md){{
   var lines = String(md||'').split('\\n');
   var out=[];
@@ -662,7 +716,10 @@ function loadAudio(){{
           var url=String(it.mp3_url||'');
           html += "<div class='audioItem'>"+
             "<div class='audioLabel'>"+escapeHtml(label||('Audio '+String(i+1)))+"</div>"+
-            "<div class='muted' style='margin-top:6px'>"+escapeHtml(url||'')+"</div>"+
+            "<div class='fadeLine' style='margin-top:6px'>"+
+              "<div class='fadeText' title='"+escAttr(url||'')+"'>"+escapeHtml(url||'')+"</div>"+
+              (url?"<button class='copyBtn' type='button' data-copy='"+escAttr(url)+"' onclick='copyFromAttr(this)' aria-label='Copy'>"+copyIconSvg()+"</button>":"")+
+            "</div>"+
             "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+
             "</div>"+

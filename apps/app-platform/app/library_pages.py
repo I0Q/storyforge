@@ -71,6 +71,19 @@ LIBRARY_BASE_CSS = """
     .job{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0b1020;margin:10px 0;}
     .pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:900;border:1px solid var(--line);color:var(--muted)}
     .err{color:var(--bad);font-weight:950;margin-top:10px;}
+
+    /* Debug banner + copy button (match main page) */
+    .boot{margin:8px 0 10px 0;margin-top:10px;padding:10px 12px;border-radius:14px;border:1px dashed rgba(168,179,216,.35);background:rgba(7,11,22,.35);display:flex;align-items:center;gap:10px;}
+    .boot strong{color:var(--text);}
+    .copyBtn{border:1px solid var(--line);background:transparent;color:var(--text);font-weight:900;border-radius:10px;padding:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;}
+    .copyBtn:active{transform:translateY(1px);}
+    .copyBtn svg{display:block;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;}
+    .copyBtn:hover{background:rgba(255,255,255,0.06);}
+
+    /* No-wrap horizontally-scrollable text row (match main page) */
+    .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
+    .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .fadeText::-webkit-scrollbar{display:none;}
   
 """
 
