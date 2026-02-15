@@ -1719,6 +1719,26 @@ function fmtTs(ts){
   }
 }
 
+function jobAbort(jobId){
+  try{
+    jobId = String(jobId||'').trim();
+    if (!jobId) return;
+    if (!confirm('Abort job ' + jobId + '?')) return;
+    fetchJsonAuthed('/api/jobs/abort', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id: jobId})
+    }).then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'abort_failed');
+      try{ toastShowNow('Aborted', 'ok', 1800); }catch(_e){}
+      // refresh quickly
+      try{ loadHistory(true); }catch(_e){}
+    }).catch(function(e){
+      try{ toastShowNow('Abort failed: ' + String(e&&e.message?e.message:e), 'err', 2400); }catch(_e){}
+    });
+  }catch(e){}
+}
+
 // --- Notifications (Web Push) ---
 function notifDeviceId(){
   try{
@@ -2031,7 +2051,19 @@ function renderJobs(jobs){
     const isProduce = (String(job.kind||'') === 'produce_audio');
     const playable = (String(job.state||'')==='completed' && job.mp3_url);
 
-    const actions = (playable && (isSample || isProduce)) ? (function(){
+    const actions = (function(){
+      var h = '';
+
+      const runningish = (String(job.state||'')==='running' || String(job.state||'')==='queued');
+      const abortable = runningish && (isSample || isProduce || isVoiceMeta);
+      if (abortable){
+        h += `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
+          + `<button type='button' class='secondary' onclick="jobAbort('${escAttr(job.id||'')}')">Abort</button>`
+          + `</div>`;
+      }
+
+      if (!(playable && (isSample || isProduce))) return h;
+
       var btn2 = '';
       if (isSample){
         try{
@@ -2049,13 +2081,15 @@ function renderJobs(jobs){
           else btn2 = (meta ? `<button type='button' class='saveStoryAudioBtn' onclick="saveJobToStoryAudio('${escAttr(job.id||'')}')">Save</button>` : `<button type='button' class='saveStoryAudioBtn' onclick="alert('Missing metadata (story_id).')">Save</button>`);
         }catch(_e){ btn2=''; }
       }
-      return (
+
+      h += (
         `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
         + `<button type='button' class='secondary' onclick="jobPlay('${escAttr(job.id||'')}','${escAttr(job.mp3_url||'')}')">Play</button>`
         + btn2
         + `</div>`
       );
-    })() : '';
+      return h;
+    })();
 
     const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
     const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
@@ -6959,6 +6993,53 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
 
 
+@app.post('/api/jobs/abort')
+def api_jobs_abort(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Abort a running/queued job.
+
+    - Marks the job state as aborted in the DB.
+    - Best-effort: calls Tinybox (/v1/jobs/abort) to kill any active subprocesses tied to this job.
+
+    Auth: passphrase session middleware.
+    Payload: {id: <job_id>}
+    """
+    try:
+        job_id = str((payload or {}).get('id') or (payload or {}).get('job_id') or '').strip()
+        if not job_id:
+            return {'ok': False, 'error': 'missing_id'}
+
+        now = int(time.time())
+
+        # Update DB state first (so UI reflects abort even if Tinybox kill fails).
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE jobs SET state=%s, finished_at=%s WHERE id=%s",
+                ('aborted', now, job_id),
+            )
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        # Best-effort: request Tinybox to kill job subprocesses.
+        try:
+            requests.post(
+                GATEWAY_BASE + '/v1/jobs/abort',
+                json={'job_id': job_id},
+                headers=_h(),
+                timeout=8,
+            )
+        except Exception:
+            pass
+
+        return {'ok': True, 'job_id': job_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'abort_failed: {type(e).__name__}: {e}'}
 
 
 
@@ -9450,7 +9531,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                 def do_one(i: int, chunk: str, gpu: int | None):
                     r = requests.post(
                         GATEWAY_BASE + '/v1/tts',
-                        json={'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads},
+                        json={'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads, 'job_id': job_id},
                         headers=_h(),
                         timeout=1800,
                     )
@@ -9538,6 +9619,26 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                     },
                 )
             except Exception as e:
+                # If the job was aborted, don't overwrite it as failed.
+                try:
+                    conn2 = db_connect()
+                    st2 = ''
+                    try:
+                        db_init(conn2)
+                        cur2 = conn2.cursor()
+                        cur2.execute('SELECT state FROM jobs WHERE id=%s', (job_id,))
+                        row2 = cur2.fetchone()
+                        st2 = str(row2[0] or '') if row2 else ''
+                    finally:
+                        try:
+                            conn2.close()
+                        except Exception:
+                            pass
+                    if st2 == 'aborted':
+                        return
+                except Exception:
+                    pass
+
                 det = ''
                 try:
                     import traceback
