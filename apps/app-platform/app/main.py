@@ -5414,6 +5414,132 @@ function clearHighlights(){
     )
     return HTMLResponse(html)
 
+@app.get('/ui/test-tone.wav')
+def ui_test_tone_wav():
+    # Tiny WAV for UI testing (triggers the global audio dock)
+    try:
+        import io, math, struct, wave
+        sr = 22050
+        dur_s = 0.25
+        freq = 880.0
+        n = int(sr * dur_s)
+        buf = io.BytesIO()
+        with wave.open(buf, 'wb') as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            for i in range(n):
+                t = i / sr
+                # simple sine with fade in/out to avoid clicks
+                amp = 0.25
+                fade = 0.02
+                if t < fade:
+                    amp *= (t / fade)
+                if t > dur_s - fade:
+                    amp *= max(0.0, (dur_s - t) / fade)
+                v = amp * math.sin(2 * math.pi * freq * t)
+                w.writeframes(struct.pack('<h', int(max(-1.0, min(1.0, v)) * 32767)))
+        data = buf.getvalue()
+        return Response(content=data, media_type='audio/wav', headers={'Cache-Control': 'no-store'})
+    except Exception:
+        return Response(content=b'', media_type='audio/wav', headers={'Cache-Control': 'no-store'})
+
+
+@app.get('/base-template', response_class=HTMLResponse)
+def base_template_page(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    build = APP_BUILD
+
+    style_css = INDEX_BASE_CSS
+    body_top = (
+        str(DEBUG_BANNER_BOOT_JS)
+        + str(USER_MENU_JS)
+        + str(DEBUG_PREF_APPLY_JS)
+        + str(AUDIO_DOCK_JS)
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Base template</div></div>"
+        "      <div class='muted'>Reference page: header + debug + player + monitor + sample middle.</div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
+  __DEBUG_BANNER_HTML__
+
+  <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>Sample middle</div>
+    <div class='muted'>Tap Play to trigger the shared floating audio player.</div>
+
+    <div class='row' style='justify-content:space-between;align-items:center;margin-top:10px'>
+      <div class='muted' style='font-weight:950'>Test tone</div>
+      <button type='button' class='secondary' onclick='playTestTone()'>Play</button>
+    </div>
+
+    <div class='row' style='margin-top:10px'>
+      <input id='audioUrl' placeholder='Or paste any audio URL…' />
+      <button type='button' onclick='playUrl()'>Play URL</button>
+    </div>
+  </div>
+
+  __MONITOR__
+"""
+
+    body_bottom = """
+__MONITOR_JS__
+<script>
+function playTestTone(){
+  try{
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio('/ui/test-tone.wav?v=' + String(window.__SF_BUILD||''), 'Test tone');
+      return;
+    }
+    window.open('/ui/test-tone.wav', '_blank');
+  }catch(e){}
+}
+
+function playUrl(){
+  try{
+    var u = String((document.getElementById('audioUrl')||{}).value||'').trim();
+    if (!u) return;
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio(u, 'URL audio');
+      return;
+    }
+    window.open(u, '_blank');
+  }catch(e){}
+}
+</script>
+"""
+
+    html = render_page(
+        title='StoryForge - Base template',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
+
+    html = (html
+        .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
+        .replace('__BUILD__', str(build))
+    )
+    return HTMLResponse(html)
+
+
 @app.post('/api/todos')
 def api_todos_add(request: Request, payload: dict = Body(default={})):
     err = _todo_api_check(request)

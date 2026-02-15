@@ -33,7 +33,10 @@ USER_MENU_HTML = """
             </div>
             <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
           </div>
-          <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
+          <div class='uActions'>
+            <a href='/base-template'><button class='secondary' type='button'>Base template</button></a>
+            <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
+          </div>
         </div>
       </div>
 """
