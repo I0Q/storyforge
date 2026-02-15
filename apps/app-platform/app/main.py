@@ -5191,7 +5191,11 @@ def todo_page(request: Request, response: Response):
     .todoItem.hi .todoText{color:var(--text);}
     .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
     .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
-    .todoItem input{margin-top:3px;transform:scale(1.15);} 
+
+    /* Override INDEX_BASE_CSS input{width:100%} so checkboxes don't become full-width on iOS */
+    .todoMain input[type=checkbox]{width:auto;flex:0 0 auto;}
+    .todoItem input{margin-top:3px;transform:scale(1.15);width:auto;}
+
     .todoTextWrap{min-width:0;}
     .todoText{line-height:1.25;}
     .todoMeta{color:var(--muted);font-size:12px;margin-top:4px;}
