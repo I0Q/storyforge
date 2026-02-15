@@ -102,5 +102,9 @@ function __sfPlayAudio(url, title){
     }
   }catch(e){}
 }
+
+// Ensure the dock exists early (hidden) so pages can rely on it.
+try{ __sfEnsureAudioDock(); }catch(_e){}
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ __sfEnsureAudioDock(); }catch(_e){} }); }catch(_e){}
 </script>
 """

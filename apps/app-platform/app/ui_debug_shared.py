@@ -20,6 +20,21 @@ DEBUG_BANNER_HTML = """
       </svg>
     </button>
   </div>
+  <script>
+  // Flip to JS: ok even if the boot JS ran before this HTML existed.
+  try{
+    setTimeout(function(){
+      try{
+        var bt=document.getElementById('bootText');
+        if (!bt) return;
+        var t=String(bt.textContent||'');
+        if (t.indexOf('JS: booting')!==-1){
+          bt.textContent = t.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
+        }
+      }catch(_e){}
+    }, 0);
+  }catch(_e){}
+  </script>
 """
 
 # NOTE: This is copied from apps/app-platform/app/main.py (DEBUG_BANNER_BOOT_JS).
