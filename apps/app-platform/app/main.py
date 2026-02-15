@@ -290,10 +290,12 @@ INDEX_BASE_CSS = base_css("""\
     .hide{display:none}
     /* iOS Safari: <input type=color> won't open when display:none.
        Keep the input in DOM but visually hidden; tap the visible swatch and programmatically click(). */
-    .colorPickWrap{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;}
-    .colorPickHidden{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;background:transparent;}
+    /* iOS color input: we intentionally show it briefly next to the swatch (display toggle),
+       because iOS won't open the picker if the input is display:none. */
+    .colorPickWrap{display:inline-block;}
+    .colorPickHidden{width:16px;height:16px;border-radius:999px;border:1px solid rgba(255,255,255,.16);padding:0;margin:0;background:transparent;vertical-align:middle;}
     .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
-    .colorPickHidden::-webkit-color-swatch{border:0;}
+    .colorPickHidden::-webkit-color-swatch{border:0;border-radius:999px;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -4132,10 +4134,10 @@ function openColorPick(){
   try{
     var pk=$('colorPick');
     if (!pk) return;
-    var w=$('colorPickWrap'); if (w) w.style.display='block';
+    var w=$('colorPickWrap'); if (w) w.style.display='inline-block';
     _colorReturnSetup('colorPick', 'colorPickWrap', function(v){ try{ setEditColorHex(v); }catch(_e){} });
     pk.focus();
-    pk.click();
+    setTimeout(function(){ try{ pk.click(); }catch(_e){} }, 260);
   }catch(e){}
 }
 
@@ -4932,10 +4934,10 @@ function openVoiceColorPick(){
   try{
     var pk=document.getElementById('voiceColorPick');
     if (!pk) return;
-    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='block';
+    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='inline-block';
     _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
     pk.focus();
-    pk.click();
+    setTimeout(function(){ try{ pk.click(); }catch(_e){} }, 260);
   }catch(e){}
 }
 
