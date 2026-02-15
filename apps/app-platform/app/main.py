@@ -6326,6 +6326,43 @@ def api_deploy_token_fingerprint():
         return {'ok': True, 'sha256_8': '', 'configured': bool(SF_DEPLOY_TOKEN)}
 
 
+@app.post('/api/deploy/backfill_job_error_text')
+def api_deploy_backfill_job_error_text(request: Request):
+    """One-time backfill: move legacy error strings from jobs.sfml_url -> jobs.error_text.
+
+    Safe to re-run; it only updates rows where:
+    - error_text is empty
+    - sfml_url looks like an error string (starts with 'error:')
+
+    Auth: requires x-sf-deploy-token.
+    """
+    _require_deploy_token(request)
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+UPDATE jobs
+SET error_text = sfml_url,
+    sfml_url = ''
+WHERE COALESCE(error_text, '') = ''
+  AND COALESCE(sfml_url, '') LIKE 'error:%'
+"""
+            )
+            n = int(cur.rowcount or 0)
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        return {'ok': True, 'updated': n}
+    except Exception as e:
+        return {'ok': False, 'error': f'backfill_failed:{type(e).__name__}:{str(e)[:200]}'}
+
+
 @app.get('/api/debug/latency')
 def api_debug_latency(request: Request):
     """Token-gated latency probe to debug slow UI loads.
