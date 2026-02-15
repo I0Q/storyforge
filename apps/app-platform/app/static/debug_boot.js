@@ -117,7 +117,9 @@
       }catch(e){}
     }
 
-    function start(){
+    var pollTimer = null;
+
+    function startSse(){
       stop();
       try{
         es = new EventSource('/api/deploy/stream');
@@ -129,7 +131,24 @@
       }
     }
 
-    start();
+    function startPoll(){
+      // Fallback for environments that buffer/kill SSE.
+      try{
+        if (pollTimer) return;
+        pollTimer = setInterval(function(){
+          try{
+            fetch('/api/deploy/status?ts=' + Date.now(), {cache:'no-store'}).then(function(r){
+              if (!r.ok) return null;
+              return r.json();
+            }).then(function(j){ if (j) apply(j); }).catch(function(){});
+          }catch(e){}
+        }, 1200);
+      }catch(e){}
+    }
+
+    // Try SSE, but always enable polling as a reliability fallback.
+    startSse();
+    startPoll();
   }
 
   // minimal error-to-bootText (best-effort)
