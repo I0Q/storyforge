@@ -99,7 +99,7 @@ function __sfPositionUserMenu(){
         m.style.left = 'auto';
         m.style.right = '14px';
         // Use env(safe-area-inset-top) so it doesn't go under the notch.
-        m.style.top = 'calc(14px + env(safe-area-inset-top))';
+        m.style.top = 'calc(68px + env(safe-area-inset-top))';
         m.style.bottom = 'auto';
         m.style.maxWidth = 'calc(100vw - 28px)';
         m.style.overflowY = 'auto';
