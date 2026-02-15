@@ -2200,6 +2200,27 @@ function startJobsStream(){
 let metricsES = null;
 let monitorEnabled = true;
 let lastMetrics = null;
+let metricsIntervalSec = 10; // 10s by default (dock closed)
+function _metricsUrl(){
+  try{
+    var s = Number(metricsIntervalSec||10);
+    if (!isFinite(s) || s<=0) s = 10;
+    s = Math.max(1, Math.min(30, s));
+    return '/api/metrics/stream?interval=' + String(s);
+  }catch(e){
+    return '/api/metrics/stream?interval=10';
+  }
+}
+function setMetricsInterval(sec){
+  try{
+    var s = Number(sec||10);
+    if (!isFinite(s) || s<=0) s = 10;
+    s = Math.max(1, Math.min(30, s));
+    if (Number(metricsIntervalSec||0) === Number(s||0)) return;
+    metricsIntervalSec = s;
+    if (monitorEnabled) startMetricsStream();
+  }catch(e){}
+}
 
 // Debug UI toggle (controls Build/JS banner visibility)
 function loadDebugPref(){
@@ -2293,7 +2314,7 @@ function startMetricsStream(){
   stopMetricsStream();
   try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
   // SSE stream (server pushes metrics continuously)
-  metricsES = new EventSource('/api/metrics/stream');
+  metricsES = new EventSource(_metricsUrl());
   metricsES.onmessage = (ev) => {
     try{
       const m = JSON.parse(ev.data);
@@ -3623,6 +3644,7 @@ function openMonitor(){
   try{ document.body.style.position='fixed'; document.body.style.top = '-' + String(window.__sfScrollY||0) + 'px'; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }catch(e){}
   try{ document.body.classList.add('sheetOpen'); }catch(e){}
   const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+  try{ setMetricsInterval(1); }catch(e){}
   startMetricsStream();
   if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
 }
@@ -3637,6 +3659,7 @@ function closeMonitor(){
   try{ document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width=''; }catch(e){}
   try{ window.scrollTo(0, window.__sfScrollY||0); }catch(e){}
   try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+  try{ setMetricsInterval(10); }catch(e){}
 }
 
 function closeMonitorEv(ev){
