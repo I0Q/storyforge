@@ -1106,6 +1106,7 @@ def index(response: Response):
   <link rel="stylesheet" href="/static/sfml_editor.css?v=5" />
   <script src="/static/sfml_editor.js?v=7"></script>
   __DEBUG_BANNER_BOOT_JS__
+  __USER_MENU_JS__
   <script>
   // Register service worker for Web Push (required for iOS PWA push)
   (function(){
@@ -3804,6 +3805,7 @@ try{
         .replace("__INDEX_BASE_CSS__", INDEX_BASE_CSS)
         .replace("__DEBUG_BANNER_HTML__", DEBUG_BANNER_HTML)
         .replace("__DEBUG_BANNER_BOOT_JS__", DEBUG_BANNER_BOOT_JS)
+        .replace("__USER_MENU_JS__", USER_MENU_JS)
         .replace("__BUILD__", str(build))
         .replace("__VOICE_SERVERS__", voice_servers_html)
         .replace("__USER_MENU_HTML__", USER_MENU_HTML)
