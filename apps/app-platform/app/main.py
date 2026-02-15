@@ -293,16 +293,21 @@ INDEX_BASE_CSS = base_css("""\
     .swatchInput{
       -webkit-appearance:none;
       appearance:none;
-      width:16px;
-      height:16px;
+      display:block;
+      width:16px !important;
+      height:16px !important;
+      min-width:16px !important;
+      max-width:16px !important;
+      min-height:16px !important;
+      max-height:16px !important;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.16);
-      padding:0;
+      padding:0 !important;
       margin:0;
       background:transparent;
       box-shadow:none;
       outline:none;
-      flex:0 0 16px;
+      flex:0 0 auto !important;
     }
     .swatchInput::-webkit-color-swatch-wrapper{padding:0;border:0;}
     .swatchInput::-webkit-color-swatch{border:0;border-radius:999px;}
