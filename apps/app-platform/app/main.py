@@ -5288,6 +5288,110 @@ function addTodo(){
 </script>
 """
 
+    build = APP_BUILD
+
+    style_css = TODO_BASE_CSS
+    body_top = (
+        str(DEBUG_BANNER_BOOT_JS)
+        + str(USER_MENU_JS)
+        + str(DEBUG_PREF_APPLY_JS)
+        + str(AUDIO_DOCK_JS)
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>TODO</div></div>"
+        "      <div class='muted'>Internal tracker (check/uncheck requires login).</div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/#tab-jobs'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
+  __DEBUG_BANNER_HTML__
+
+  <div class="bar">
+    <div class="muted"></div>
+    <div class="right">
+      <div class="muted" style="font-weight:950">Archived</div>
+      <label class="switch" aria-label="Toggle archived">
+        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
+        <span class="slider"></span>
+      </label>
+      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
+      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
+    </div>
+  </div>
+
+  <div class="card">
+    __BODY_HTML__
+  </div>
+
+  __MONITOR__
+"""
+
+    body_bottom = """
+__MONITOR_JS__
+<script>
+function jsonFetch(url, opts){
+  opts = opts || {};
+  opts.credentials = 'include';
+  return fetch(url, opts).then(function(r){
+    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
+    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+  });
+}
+
+function toggleArchived(on){
+  try{
+    var u=new URL(window.location.href);
+    if (on) u.searchParams.set('arch','1'); else u.searchParams.delete('arch');
+    window.location.href=u.toString();
+  }catch(e){}
+}
+
+function onTodoToggle(cb){
+  try{
+    var id = cb && cb.getAttribute ? cb.getAttribute('data-id') : '';
+    if (!id) return;
+    var url = cb.checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
+    jsonFetch(url, {method:'POST'}).catch(function(_e){ window.location.reload(); });
+  }catch(e){}
+}
+
+function deleteTodo(id){
+  try{ if(!confirm('Delete TODO #' + id + '?')) return; }catch(e){}
+  jsonFetch('/api/todos/'+String(id)+'/delete_auth', {method:'POST'})
+    .then(function(j){ if(!j||!j.ok) throw new Error((j&&j.error)||'delete_failed'); window.location.reload(); })
+    .catch(function(e){ alert('Delete failed: ' + String(e&&e.message?e.message:e)); });
+}
+
+function toggleHighlight(id){
+  jsonFetch('/api/todos/'+String(id)+'/toggle_highlight_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
+}
+
+function archiveDone(){
+  jsonFetch('/api/todos/archive_done_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
+}
+
+function clearHighlights(){
+  jsonFetch('/api/todos/clear_highlights_auth', {method:'POST'})
+    .then(function(_j){ window.location.reload(); })
+    .catch(function(_e){ window.location.reload(); });
+}
+</script>
+"""
+
     html = render_page(
         title='StoryForge - TODO',
         style_css=style_css,
@@ -5300,11 +5404,13 @@ function addTodo(){
     html = (html
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
         .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
         .replace('__BUILD__', str(build))
         .replace('__ARCH_CHECKED__', arch_checked)
         .replace('__BODY_HTML__', body_html)
     )
-    return html
+    return HTMLResponse(html)
 
 @app.post('/api/todos')
 def api_todos_add(request: Request, payload: dict = Body(default={})):
