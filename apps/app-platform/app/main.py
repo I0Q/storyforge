@@ -288,29 +288,11 @@ INDEX_BASE_CSS = base_css("""\
     .copyBtn:hover{background:rgba(255,255,255,0.06);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
-    /* Color picker: use a visible <input type=color> styled as the swatch.
-       iOS Safari events are most reliable when the input itself is the tap target. */
-    .swatchInput{
-      -webkit-appearance:none;
-      appearance:none;
-      display:block;
-      width:16px !important;
-      height:16px !important;
-      min-width:16px !important;
-      max-width:16px !important;
-      min-height:16px !important;
-      max-height:16px !important;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.16);
-      padding:0 !important;
-      margin:0;
-      background:transparent;
-      box-shadow:none;
-      outline:none;
-      flex:0 0 auto !important;
-    }
-    .swatchInput::-webkit-color-swatch-wrapper{padding:0;border:0;}
-    .swatchInput::-webkit-color-swatch{border:0;border-radius:999px;}
+    /* iOS Safari: <input type=color> won't open when display:none.
+       Keep the input in DOM but visually hidden; tap the visible swatch and programmatically click(). */
+    .colorPickHidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;background:transparent;}
+    .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
+    .colorPickHidden::-webkit-color-swatch{border:0;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -4002,7 +3984,8 @@ def voices_edit_page(voice_id: str, response: Response):
 
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <input id='colorPick' type='color' class='swatchInput' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
+      <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
+      <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
       <input id='color_hex' type='hidden' value='__CHEX__' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4796,7 +4779,8 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <input id='voiceColorPick' type='color' class='swatchInput' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
+      <input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' onblur='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
       <input id='voiceColorHex' type='hidden' value='' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4928,10 +4912,12 @@ function voiceColorHex(name){
 function setVoiceSwatchHex(hex){
   try{
     var hx=document.getElementById('voiceColorHex');
+    var sw=document.getElementById('voiceSwatch');
     var pk=document.getElementById('voiceColorPick');
     var v = String(hex||'').trim();
     if (hx) hx.value = v;
     if (pk) pk.value = v || '#64748b';
+    if (sw) sw.style.background = v || '#64748b';
   }catch(e){}
 }
 function openVoiceColorPick(){
