@@ -6790,7 +6790,7 @@ def _push_notify_job_state(kind: str, state: str, job_id: str, title: str, mp3_u
 
 @app.get('/api/notifications/vapid_public')
 def api_notifications_vapid_public(request: Request):
-    _require_passphrase(request)
+    # Session auth is enforced by passphrase middleware; do not call an undefined helper.
     if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
         return {'ok': False, 'error': 'push_not_configured'}
     return {'ok': True, 'public_key': VAPID_PUBLIC_KEY}
@@ -6798,7 +6798,6 @@ def api_notifications_vapid_public(request: Request):
 
 @app.get('/api/notifications/settings')
 def api_notifications_settings(request: Request):
-    _require_passphrase(request)
     device_id = str(request.query_params.get('device_id') or '').strip()
     if not device_id:
         return {'ok': False, 'error': 'missing_device_id'}
@@ -6831,7 +6830,6 @@ def api_notifications_settings(request: Request):
 
 @app.post('/api/notifications/settings')
 def api_notifications_settings_set(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
-    _require_passphrase(request)
     device_id = str((payload or {}).get('device_id') or '').strip()
     if not device_id:
         return {'ok': False, 'error': 'missing_device_id'}
@@ -6859,7 +6857,6 @@ def api_notifications_settings_set(request: Request, payload: dict[str, Any] = B
 
 @app.post('/api/notifications/subscribe')
 def api_notifications_subscribe(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
-    _require_passphrase(request)
     device_id = str((payload or {}).get('device_id') or '').strip()
     sub = (payload or {}).get('subscription')
     ua = str((payload or {}).get('ua') or '').strip()
@@ -6899,7 +6896,6 @@ def api_notifications_subscribe(request: Request, payload: dict[str, Any] = Body
 
 @app.post('/api/notifications/unsubscribe')
 def api_notifications_unsubscribe(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
-    _require_passphrase(request)
     endpoint = str((payload or {}).get('endpoint') or '').strip()
     device_id = str((payload or {}).get('device_id') or '').strip()
     now = int(time.time())
@@ -6922,7 +6918,6 @@ def api_notifications_unsubscribe(request: Request, payload: dict[str, Any] = Bo
 
 @app.post('/api/notifications/test')
 def api_notifications_test(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
-    _require_passphrase(request)
     device_id = str((payload or {}).get('device_id') or '').strip()
     if not device_id:
         return {'ok': False, 'error': 'missing_device_id'}
