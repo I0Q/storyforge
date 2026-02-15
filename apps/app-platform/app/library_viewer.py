@@ -525,8 +525,8 @@ function escAttr(s){{
 }}
 
 function copyIconSvg(){{
-  return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"+
-    "<path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4\"/>"+
+  return "<svg viewBox='0 0 24 24' aria-hidden='true'>"+
+    "<path stroke-linecap='round' stroke-linejoin='round' d='M11 7H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-4M11 7V5a2 2 0 114 0v2M11 7h4'/>"+
     "</svg>";
 }}
 
