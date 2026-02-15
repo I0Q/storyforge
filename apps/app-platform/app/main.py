@@ -288,8 +288,10 @@ INDEX_BASE_CSS = base_css("""\
     .copyBtn:hover{background:rgba(255,255,255,0.06);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
-    /* iOS Safari: <input type=color> won't open when display:none; keep it offscreen instead. */
-    .colorPickHidden{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;}
+    /* iOS Safari: <input type=color> won't open when display:none.
+       Overlay an invisible color input on top of the visible swatch so the swatch remains the only visible element. */
+    .swatchPick{position:relative;overflow:hidden;}
+    .colorPickOverlay{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -3981,9 +3983,10 @@ def voices_edit_page(voice_id: str, response: Response):
 
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='editSwatch' class='swatch' title='Color swatch' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
+      <span id='editSwatch' class='swatch swatchPick' title='Pick color' style='background:#64748b;cursor:pointer'>
+        <input id='colorPick' type='color' class='colorPickOverlay' value='__CHEX__' onchange='setEditColorHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='color_hex' type='hidden' value='__CHEX__' />
-      <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -4747,9 +4750,10 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
+      <span id='voiceSwatch' class='swatch swatchPick' title='Pick color' style='background:#64748b;cursor:pointer'>
+        <input id='voiceColorPick' type='color' class='colorPickOverlay' value='#64748b' onchange='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='voiceColorHex' type='hidden' value='' />
-      <input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
