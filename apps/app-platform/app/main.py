@@ -4084,6 +4084,14 @@ def voices_edit_page(voice_id: str, response: Response):
     <div class='term' id='traits' style='margin-top:10px;white-space:pre-wrap;'>__VTRAITS__</div>
   </div>
 
+  <div class='card'>
+    <div class='row' style='justify-content:space-between;align-items:center'>
+      <div style='font-weight:950'>Raw traits JSON</div>
+      <button class='secondary' type='button' onclick='copyTraitsRaw()'>Copy</button>
+    </div>
+    <div class='term' id='traits_raw' style='margin-top:10px;white-space:pre-wrap;'>__VTRAITS__</div>
+  </div>
+
   __MONITOR__
 
   <div class='row' style='justify-content:space-between;margin-top:12px'>
@@ -4155,6 +4163,10 @@ function playSample(){
   }catch(e){}
 }
 
+function copyTraitsRaw(){
+  try{ copyText((document.getElementById('traits_raw')||{}).textContent||''); }catch(e){}
+}
+
 async function analyzeVoice(){
   try{
     var btns=document.querySelectorAll('button');
@@ -4164,7 +4176,9 @@ async function analyzeVoice(){
     var r = await fetch('/api/voices/analyze', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({voice_id:'__VID_RAW__'})});
     var j = await r.json();
     if (j && j.ok){
-      document.getElementById('traits').textContent = JSON.stringify(j.traits, null, 2);
+      var txt = JSON.stringify(j.traits, null, 2);
+      document.getElementById('traits').textContent = txt;
+      try{ document.getElementById('traits_raw').textContent = txt; }catch(_e){}
     }else{
       alert((j && j.error) ? j.error : 'Analyze failed');
     }
@@ -4338,6 +4352,7 @@ def voices_new_page(response: Response):
     <select id='engineSel'>
       <option value='tortoise' selected>tortoise</option>
       <option value='xtts'>xtts</option>
+      <option value='styletts2'>styletts2</option>
     </select>
 
     <div id='tortoiseBox' class='hide'>
@@ -4388,6 +4403,7 @@ function setEngineUi(){
   var xb = document.getElementById('xttsBox');
   if (tb) tb.classList.toggle('hide', e !== 'tortoise');
   if (xb) xb.classList.toggle('hide', e !== 'xtts');
+  // styletts2: no extra engine-specific fields for now
 }
 
 function setVoiceSwatchHex(hex){
