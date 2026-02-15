@@ -7189,6 +7189,10 @@ LIMIT 50
             prod_preview = str(r[9] or '')
 
             job_sfml_url = str(r[10] or '')
+            # Legacy: sfml_url was sometimes abused as a log/error/details field.
+            if not (job_sfml_url.startswith('http://') or job_sfml_url.startswith('https://')):
+                job_sfml_url = ''
+
             job_engine = ''
             try:
                 jm = str(r[11] or '').strip()
