@@ -4001,12 +4001,13 @@ def voices_edit_page(voice_id: str, response: Response):
       </button>
     </div>
 
-    <div class='muted' style='margin-top:12px'>Enabled</div>
-    <label class='switch'>
-      <input id='enabled' type='checkbox' __ENABLED__ />
-      <span class='slider'></span>
-    </label>
-    <div class='muted' style='margin-top:6px'>Show in curated list</div>
+    <div class='row' style='gap:10px;align-items:center;margin-top:12px'>
+      <div class='muted'>Enabled</div>
+      <label class='switch' style='margin:0'>
+        <input id='enabled' type='checkbox' __ENABLED__ />
+        <span class='slider'></span>
+      </label>
+    </div>
 
   </div>
 
@@ -4051,7 +4052,6 @@ def voices_edit_page(voice_id: str, response: Response):
       <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
       <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
     </div>
-    <div class='muted'>Auto-generated metadata for matching characters to voices.</div>
     <input id='voice_traits_json' type='hidden' value='__VTRAITS__' />
     <div id='traitsBox' class='term' style='margin-top:10px'>Loading…</div>
     <details class='rawBox' style='margin-top:10px'>
