@@ -238,7 +238,7 @@ INDEX_BASE_CSS = base_css("""\
     .gpuChip.claimed{opacity:0.55;}
 
     /* inline checkbox pills */
-    .checkLine{display:flex;align-items:center;gap:8px;}
+    .checkLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
     .checkLine input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
     .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
