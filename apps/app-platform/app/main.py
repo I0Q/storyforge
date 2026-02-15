@@ -288,24 +288,14 @@ INDEX_BASE_CSS = base_css("""\
     .copyBtn:hover{background:rgba(255,255,255,0.06);}
     .kvs div.k{color:var(--muted)}
     .hide{display:none}
-    /* iOS Safari: <input type=color> won't open when display:none.
-       Keep the input offscreen, and use a <label for=...> as the visible swatch.
-       This keeps the swatch clickable without layering UI on top of it. */
-    .colorPickOffscreen{
-      position:absolute;
-      left:-9999px;
-      top:auto;
-      width:0;
-      height:0;
-      opacity:0;
-      pointer-events:none;
-      border:0;
-      padding:0;
-      margin:0;
-      background:transparent;
-      -webkit-appearance:none;
-      appearance:none;
-    }
+    /* Color picker: use an explicit modal wrapper for iOS reliability (no hidden color inputs in layout). */
+    .colorModal{position:fixed;inset:0;z-index:9999;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.35);}
+    .colorModal.show{display:flex;}
+    .colorModalCard{width:min(520px,92vw);margin:18px;padding:12px 12px 14px 12px;border-radius:16px;background:rgba(20,22,40,.96);border:1px solid rgba(255,255,255,.10);box-shadow:0 16px 60px rgba(0,0,0,.55);}
+    .colorModalRow{display:flex;gap:10px;align-items:center;justify-content:space-between;}
+    .colorModalTitle{font-weight:900;}
+    .colorModalInput{width:88px;height:44px;border:0;background:transparent;padding:0;margin:0;}
+    .colorModalBtns{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -1156,6 +1146,19 @@ def index(response: Response):
   </div>
 
   __DEBUG_BANNER_HTML__
+
+  <div id='colorModal' class='colorModal' onclick='colorModalBgClick(event)'>
+    <div class='colorModalCard'>
+      <div class='colorModalRow'>
+        <div class='colorModalTitle'>Pick color</div>
+        <input id='colorModalInput' class='colorModalInput' type='color' value='#64748b' onchange='colorModalChanged(this.value)' />
+      </div>
+      <div class='colorModalBtns'>
+        <button class='secondary' type='button' onclick='closeColorModal()'>Cancel</button>
+        <button type='button' onclick='closeColorModal()'>Done</button>
+      </div>
+    </div>
+  </div>
 
   <div class='tabs'>
     <button id='tab-history' class='tab active' onclick='showTab("history")'>Jobs</button>
@@ -3992,13 +3995,25 @@ def voices_edit_page(voice_id: str, response: Response):
 
   __DEBUG_BANNER_HTML__
 
+  <div id='colorModal' class='colorModal' onclick='colorModalBgClick(event)'>
+    <div class='colorModalCard'>
+      <div class='colorModalRow'>
+        <div class='colorModalTitle'>Pick color</div>
+        <input id='colorModalInput' class='colorModalInput' type='color' value='#64748b' onchange='colorModalChanged(this.value)' />
+      </div>
+      <div class='colorModalBtns'>
+        <button class='secondary' type='button' onclick='closeColorModal()'>Cancel</button>
+        <button type='button' onclick='closeColorModal()'>Done</button>
+      </div>
+    </div>
+  </div>
+
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
 
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <input id='colorPick' type='color' class='colorPickOffscreen' value='__CHEX__' onchange='setEditColorHex(this.value)' aria-label='Pick color' />
-      <label id='editSwatch' for='colorPick' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer'></label>
+      <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick="openColorModal('edit')"></span>
       <input id='color_hex' type='hidden' value='__CHEX__' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4114,7 +4129,8 @@ function setEditColorHex(h){
 }
 
 function openColorPick(){
-  try{ var pk=$('colorPick'); if (pk) pk.click(); }catch(e){}
+  // legacy hook (kept for safety)
+  try{ openColorModal('edit'); }catch(e){}
 }
 
 function genEditVoiceName(){
@@ -4758,13 +4774,25 @@ def voices_new_page(response: Response):
 
   __DEBUG_BANNER_HTML__
 
+  <div id='colorModal' class='colorModal' onclick='colorModalBgClick(event)'>
+    <div class='colorModalCard'>
+      <div class='colorModalRow'>
+        <div class='colorModalTitle'>Pick color</div>
+        <input id='colorModalInput' class='colorModalInput' type='color' value='#64748b' onchange='colorModalChanged(this.value)' />
+      </div>
+      <div class='colorModalBtns'>
+        <button class='secondary' type='button' onclick='closeColorModal()'>Cancel</button>
+        <button type='button' onclick='closeColorModal()'>Done</button>
+      </div>
+    </div>
+  </div>
+
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Generate voice</div>
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <input id='voiceColorPick' type='color' class='colorPickOffscreen' value='#64748b' onchange='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
-      <label id='voiceSwatch' for='voiceColorPick' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer'></label>
+      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick="openColorModal('gen')"></span>
       <input id='voiceColorHex' type='hidden' value='' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4897,16 +4925,60 @@ function setVoiceSwatchHex(hex){
   try{
     var hx=document.getElementById('voiceColorHex');
     var sw=document.getElementById('voiceSwatch');
-    var pk=document.getElementById('voiceColorPick');
     var v = String(hex||'').trim();
     if (hx) hx.value = v;
     if (sw) sw.style.background = v || '#64748b';
-    if (pk) pk.value = v || '#64748b';
   }catch(e){}
 }
 
-function openVoiceColorPick(){
-  try{ var pk=document.getElementById('voiceColorPick'); if (pk) pk.click(); }catch(e){}
+// Unified color picker modal (works on iOS + desktop)
+window.__SF_COLOR_TARGET = '';
+function openColorModal(which){
+  try{
+    var m=document.getElementById('colorModal');
+    var inp=document.getElementById('colorModalInput');
+    if (!m || !inp) return;
+    which = String(which||'');
+    window.__SF_COLOR_TARGET = which;
+
+    var cur = '#64748b';
+    try{
+      if (which==='gen') cur = String((document.getElementById('voiceColorHex')||{}).value||'').trim() || String((document.getElementById('voiceSwatch')||{}).style.background||'').trim() || '#64748b';
+      if (which==='edit') cur = String((document.getElementById('color_hex')||{}).value||'').trim() || String((document.getElementById('editSwatch')||{}).style.background||'').trim() || '#64748b';
+    }catch(_e){}
+    if (cur && cur.charAt(0)!=='#') cur = '#64748b';
+
+    inp.value = cur;
+    m.classList.add('show');
+
+    // Must be in the same user gesture; still, iOS sometimes needs a tick.
+    try{ inp.focus(); }catch(_e){}
+    try{ inp.click(); }catch(_e){}
+    try{ setTimeout(function(){ try{ inp.click(); }catch(_e){} }, 60); }catch(_e){}
+  }catch(e){}
+}
+
+function closeColorModal(){
+  try{
+    var m=document.getElementById('colorModal');
+    if (m) m.classList.remove('show');
+  }catch(e){}
+}
+
+function colorModalBgClick(ev){
+  try{
+    if (!ev) return;
+    if (ev.target && ev.target.id==='colorModal') closeColorModal();
+  }catch(e){}
+}
+
+function colorModalChanged(hex){
+  try{
+    var v=String(hex||'').trim();
+    if (!v) return;
+    if (window.__SF_COLOR_TARGET==='gen') setVoiceSwatchHex(v);
+    if (window.__SF_COLOR_TARGET==='edit') setEditColorHex(v);
+  }catch(e){}
 }
 
 function $(id){ return document.getElementById(id); }
