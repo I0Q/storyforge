@@ -681,6 +681,86 @@ DEBUG_BANNER_HTML = """
       </svg>
     </button>
   </div>
+  <script>
+  // Deploy bar watcher (debug UI only). Uses SSE so there is no idle polling.
+  (function(){
+    try{
+      var v = null;
+      try{ v = localStorage.getItem('sf_debug_ui'); }catch(e){}
+      var debugOn = (v===null || v==='' || v==='1');
+      if (!debugOn) return;
+
+      var t0 = 0;
+      var timer = null;
+      function fmt(sec){ sec=Math.max(0, sec|0); var m=Math.floor(sec/60); var s=sec%60; return String(m)+':' + (s<10?('0'+String(s)):String(s)); }
+      function setBar(on, msg){
+        try{
+          var el=document.getElementById('bootDeploy');
+          if (!el) return;
+          if (on){
+            el.classList.remove('hide');
+            if (msg){ try{ el.querySelector('.muted').textContent = String(msg||'StoryForge updating…'); }catch(_e){} }
+            if (!t0) t0 = Date.now();
+            if (!timer){
+              timer = setInterval(function(){
+                try{ var tt=document.getElementById('bootDeployTimer'); if(!tt) return; tt.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }catch(_e){}
+              }, 1000);
+            }
+          }else{
+            el.classList.add('hide');
+            t0 = 0;
+            try{ if (timer) clearInterval(timer); }catch(_e){}
+            timer = null;
+            try{ var tt=document.getElementById('bootDeployTimer'); if(tt) tt.textContent='0:00'; }catch(_e){}
+          }
+        }catch(_e){}
+      }
+
+      var lastState = '';
+      var lastUpdated = 0;
+      var es = null;
+      var rt = null;
+      var backoff = 900;
+
+      function stop(){ try{ if(rt){ clearTimeout(rt); rt=null; } }catch(_e){} try{ if(es){ es.close(); es=null; } }catch(_e){} }
+      function schedule(){
+        try{ if(rt) return; }catch(_e){}
+        stop();
+        var d = Math.max(400, Math.min(10000, Number(backoff||900)));
+        backoff = Math.min(10000, Math.floor(d*1.7));
+        try{ rt = setTimeout(function(){ rt=null; start(); }, d); }catch(_e){}
+      }
+      function apply(j){
+        try{
+          if (!j || !j.ok) return;
+          var st = String(j.state||'idle');
+          var msg = String(j.message||'');
+          var upd = Number(j.updated_at||0);
+          if (st === 'deploying') setBar(true, msg||'StoryForge updating…');
+          else setBar(false, '');
+          if (lastState === 'deploying' && st !== 'deploying'){
+            if (upd && upd !== lastUpdated){
+              setTimeout(function(){ try{ window.location.reload(); }catch(_e){} }, 450);
+            }
+          }
+          lastState = st;
+          lastUpdated = upd || lastUpdated;
+        }catch(_e){}
+      }
+      function start(){
+        stop();
+        try{
+          es = new EventSource('/api/deploy/stream');
+          es.onopen = function(){ backoff = 900; };
+          es.onmessage = function(ev){ try{ apply(JSON.parse(ev.data||'{}')); }catch(_e){} };
+          es.onerror = function(_e){ schedule(); };
+        }catch(_e){ schedule(); }
+      }
+
+      start();
+    }catch(_e){}
+  })();
+  </script>
 """
 
 DEBUG_BANNER_BOOT_JS = """
