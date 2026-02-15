@@ -669,7 +669,7 @@ DEBUG_BANNER_HTML = """
   <div id='boot' class='boot muted'>
     <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
     <div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>
-      <div class='muted' style='font-weight:950'>StoryForge updating…</div>
+      <div class='muted' style='font-weight:950'>StoryForge updating...</div>
       <div class='updateTrack' style='margin-top:6px;position:relative'>
         <div class='updateProg'></div>
         <div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>
@@ -711,7 +711,7 @@ window.__SF_LAST_ERR = '';
         if (!t) return null;
         t.insertAdjacentHTML('afterend',
           "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>"+
-            "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
+            "<div class='muted' style='font-weight:950'>StoryForge updating...</div>"+
             "<div class='updateTrack' style='margin-top:6px;position:relative'>"+
               "<div class='updateProg'></div>"+
               "<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>"+
@@ -728,7 +728,7 @@ window.__SF_LAST_ERR = '';
         if (!el) return;
         if (on){
           el.classList.remove('hide');
-          if (msg){ try{ el.querySelector('.muted').textContent = String(msg||'StoryForge updating…'); }catch(_e){} }
+          if (msg){ try{ el.querySelector('.muted').textContent = String(msg||'StoryForge updating...'); }catch(_e){} }
           if (!t0) t0 = Date.now();
           if (!timer){
             timer = setInterval(function(){
@@ -765,7 +765,7 @@ window.__SF_LAST_ERR = '';
         var st = String(j.state||'idle');
         var msg = String(j.message||'');
         var upd = Number(j.updated_at||0);
-        if (st === 'deploying') setBar(true, msg||'StoryForge updating…');
+        if (st === 'deploying') setBar(true, msg||'StoryForge updating...');
         else setBar(false, '');
         if (lastState === 'deploying' && st !== 'deploying'){
           if (upd && upd !== lastUpdated){
@@ -831,7 +831,7 @@ function __sfEnsureBootBanner(){
         if (!dep){
           t.insertAdjacentHTML('afterend',
             "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>"+
-              "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
+              "<div class='muted' style='font-weight:950'>StoryForge updating...</div>"+
               "<div class='updateTrack' style='margin-top:6px;position:relative'>"+
                 "<div class='updateProg'></div>"+
                 "<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>"+
@@ -843,9 +843,9 @@ function __sfEnsureBootBanner(){
       return t;
     }
 
-    boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} • JS: ok</span>` +
+    boot.innerHTML = `<span id='bootText'><strong>Build</strong>: ${window.__SF_BUILD} - JS: ok</span>` +
       `<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>` +
-        `<div class='muted' style='font-weight:950'>StoryForge updating…</div>` +
+        `<div class='muted' style='font-weight:950'>StoryForge updating...</div>` +
         `<div class='updateTrack' style='margin-top:6px;position:relative'>` +
           `<div class='updateProg'></div>` +
           `<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>` +
@@ -867,7 +867,7 @@ function __sfSetDebugInfo(msg){
   try{
     window.__SF_LAST_ERR = msg || '';
     var t = __sfEnsureBootBanner();
-    if (t) t.textContent = 'Build: ' + window.__SF_BUILD + ' • JS: ' + (window.__SF_LAST_ERR || 'ok');
+    if (t) t.textContent = 'Build: ' + window.__SF_BUILD + ' - JS: ' + (window.__SF_LAST_ERR || 'ok');
   }catch(e){}
 }
 
@@ -903,7 +903,7 @@ function __sfSetDeployBar(on, msg){
     if (on){
       el.classList.remove('hide');
       if (msg){
-        try{ el.querySelector('.muted').textContent = String(msg||'Deploying…'); }catch(_e){}
+        try{ el.querySelector('.muted').textContent = String(msg||'Deploying...'); }catch(_e){}
       }
       if (!window.__SF_DEPLOY_T0) window.__SF_DEPLOY_T0 = Date.now();
       try{ __sfDeployTimerTick(); }catch(_e){}
@@ -942,7 +942,7 @@ function __sfStartDeployWatch(){
         var upd = Number(j.updated_at||0);
 
         if (st === 'deploying'){
-          __sfSetDeployBar(true, msg || 'StoryForge updating…');
+          __sfSetDeployBar(true, msg || 'StoryForge updating...');
         }else{
           __sfSetDeployBar(false, '');
         }
