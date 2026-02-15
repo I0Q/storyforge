@@ -68,11 +68,11 @@ function __sfPositionUserMenu(){
 
     var vv = null;
     try{ vv = window.visualViewport || null; }catch(_e){}
-    var vx = 0, vy = 0, vw = (window.innerWidth||0), vh = (window.innerHeight||0);
+    // NOTE: getBoundingClientRect() is already relative to the *visual* viewport.
+    // Do NOT add visualViewport.offsetTop/offsetLeft here (double counts on iOS).
+    var vw = (window.innerWidth||0), vh = (window.innerHeight||0);
     try{
       if (vv){
-        vx = Number(vv.offsetLeft||0) || 0;
-        vy = Number(vv.offsetTop||0) || 0;
         vw = Number(vv.width||vw) || vw;
         vh = Number(vv.height||vh) || vh;
       }
@@ -95,14 +95,14 @@ function __sfPositionUserMenu(){
     var top = (r.bottom + 8);
     top = __sfMenuClamp(top, pad, (vh || 0) - h - pad);
 
-    m.style.left = String(vx + left) + 'px';
-    m.style.top = String(vy + top) + 'px';
+    m.style.left = String(left) + 'px';
+    m.style.top = String(top) + 'px';
     m.style.right = 'auto';
     m.style.bottom = 'auto';
 
     // Guard against iOS clipping by constraining menu height.
     try{
-      var maxH = (vy + vh) - (vy + top) - pad;
+      var maxH = (vh) - (top) - pad;
       if (isFinite(maxH) && maxH > 80){
         m.style.maxHeight = String(Math.floor(maxH)) + 'px';
         m.style.overflowY = 'auto';
