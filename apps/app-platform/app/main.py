@@ -290,10 +290,11 @@ INDEX_BASE_CSS = base_css("""\
     .hide{display:none}
     /* iOS Safari: <input type=color> won't open when display:none.
        Keep it in the DOM (not display:none), but tucked into a 0x0 overflow-hidden container. */
-    .colorPickNest{position:relative;width:0;height:0;overflow:hidden;}
-    .colorPickHidden{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;background:transparent;}
-    .colorPickHidden::-webkit-color-swatch-wrapper{padding:0;border:0;}
-    .colorPickHidden::-webkit-color-swatch{border:0;}
+    /* Color picker input: keep it in DOM (iOS), but invisible and centered behind the swatch. */
+    .swatch{position:relative;}
+    .colorPickBehind{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none;}
+    .colorPickBehind::-webkit-color-swatch-wrapper{padding:0;border:0;}
+    .colorPickBehind::-webkit-color-swatch{border:0;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
     .switch input{display:none;}
@@ -3985,8 +3986,9 @@ def voices_edit_page(voice_id: str, response: Response):
 
     <div class='muted'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
-      <div class='colorPickNest'><input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' aria-label='Pick color' /></div
+      <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'>
+        <input id='colorPick' type='color' class='colorPickBehind' value='__CHEX__' onchange='setEditColorHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='color_hex' type='hidden' value='__CHEX__' />
       <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
@@ -4751,8 +4753,9 @@ def voices_new_page(response: Response):
 
     <div class='k'>Voice name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'></span>
-      <div class='colorPickNest'><input id='voiceColorPick' type='color' class='colorPickHidden' value='#64748b' onchange='setVoiceSwatchHex(this.value)' aria-label='Pick color' /></div
+      <span id='voiceSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openVoiceColorPick()'>
+        <input id='voiceColorPick' type='color' class='colorPickBehind' value='#64748b' onchange='setVoiceSwatchHex(this.value)' aria-label='Pick color' />
+      </span>
       <input id='voiceColorHex' type='hidden' value='' />
       <input id='voiceName' placeholder='Luna' style='flex:1;min-width:0' />
       <button type='button' class='copyBtn' onclick='genVoiceName()' aria-label='Random voice name' title='Random voice name'>
