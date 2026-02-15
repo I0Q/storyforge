@@ -6173,8 +6173,12 @@ async def api_deploy_stream():
     async def gen():
         import asyncio
 
+        # Send an immediate byte so proxies don't buffer the headers forever.
+        yield ": boot\n\n"
+
         last_upd = None
         last_state = None
+        tick = 0
 
         while True:
             try:
@@ -6208,20 +6212,28 @@ async def api_deploy_stream():
                 upd = int((j or {}).get('updated_at') or 0)
                 st = str((j or {}).get('state') or '')
 
-                # Only emit when something changes (or first tick)
+                # Emit on change (or first tick).
                 if last_upd is None or upd != last_upd or st != last_state:
                     yield f"data: {json.dumps(j, separators=(',', ':'))}\n\n"
                     last_upd = upd
                     last_state = st
+                else:
+                    # Keepalive so intermediaries keep the stream flowing.
+                    if (tick % 6) == 0:
+                        yield ": keepalive\n\n"
             except Exception:
                 # Best-effort: keep stream alive.
                 yield f"data: {json.dumps({'ok': True, 'state': 'unknown', 'message': '', 'updated_at': 0}, separators=(',', ':'))}\n\n"
 
+            tick += 1
             await asyncio.sleep(2.5)
 
     headers = {
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
         'X-Accel-Buffering': 'no',
+        'Connection': 'keep-alive',
     }
     return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
 
