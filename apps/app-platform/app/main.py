@@ -4207,9 +4207,6 @@ function renderTraits(){
 try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(_e){} }); }catch(e){}
 try{ renderTraits(); }catch(e){}
 
-try{ document.addEventListener('DOMContentLoaded'try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraitsFromHidden(); }catch(_e){} }); }catch(e){}
-try{ renderTraitsFromHidden(); }catch(e){}
-
 function setEditColorHex(hex){
   try{ document.getElementById('color_hex').value = String(hex||''); }catch(e){}
   try{ document.getElementById('editSwatch').style.background = String(hex||''); }catch(e){}
