@@ -6536,6 +6536,41 @@ def api_deploy_status():
         return {'ok': True, 'state': 'unknown', 'message': '', 'updated_at': 0}
 
 
+@app.get('/api/runtime_fingerprint')
+def api_runtime_fingerprint():
+    """Public, non-sensitive runtime fingerprint.
+
+    This verifies what code is actually running in App Platform (vs what the
+    deploy workflow *thinks* it deployed).
+    """
+    try:
+        import hashlib
+        import subprocess
+
+        boot_js_hash = hashlib.sha256((DEBUG_BANNER_BOOT_JS or '').encode('utf-8', 'replace')).hexdigest()[:12]
+        dbg_html_hash = hashlib.sha256((DEBUG_BANNER_HTML or '').encode('utf-8', 'replace')).hexdigest()[:12]
+
+        git_sha = None
+        try:
+            git_sha = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                stderr=subprocess.DEVNULL,
+                timeout=0.25,
+            ).decode().strip() or None
+        except Exception:
+            git_sha = None
+
+        return {
+            'ok': True,
+            'sf_build': int(APP_BUILD or 0),
+            'boot_js_hash': boot_js_hash,
+            'debug_html_hash': dbg_html_hash,
+            'git_sha': git_sha,
+        }
+    except Exception as e:
+        return {'ok': False, 'error': 'runtime_fingerprint_failed', 'detail': str(e)[:200]}
+
+
 @app.get('/api/deploy/stream')
 async def api_deploy_stream():
     """SSE stream for deploy state.
