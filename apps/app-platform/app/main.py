@@ -5168,142 +5168,10 @@ def todo_page(request: Request, response: Response):
 
     arch_checked = 'checked' if show_arch else ''
 
-
-
     build = APP_BUILD
 
-    style_css = TODO_BASE_CSS
-    body_top = (
-        DEBUG_BANNER_BOOT_JS
-        + "\n" + USER_MENU_JS
-        + "\n" + DEBUG_PREF_APPLY_JS
-        + "\n" + AUDIO_DOCK_JS
-    )
-
-    nav_html = (
-        "<div class='navBar'>"
-        "  <div class='top'>"
-        "    <div>"
-        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>TODO</div></div>"
-        "      <div class='muted'>Internal tracker (check/uncheck requires login).</div>"
-        "    </div>"
-        "    <div class='row headActions'>"
-        "      <a href='/#tab-jobs'><button class='secondary' type='button'>Back</button></a>"
-        "      __USER_MENU_HTML__"
-        "    </div>"
-        "  </div>"
-        "</div>"
-    )
-
-    content_html = """
-  __DEBUG_BANNER_HTML__
-
-  <div class="bar">
-    <div class="muted"></div>
-    <div class="right">
-      <div class="muted" style="font-weight:950">Archived</div>
-      <label class="switch" aria-label="Toggle archived">
-        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
-        <span class="slider"></span>
-      </label>
-      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
-      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
-    </div>
-  </div>
-
-  <div class="card">
-    __BODY_HTML__
-  </div>
-
-  <div class='card'>
-    <div class='row' style='justify-content:space-between;align-items:center;gap:10px'>
-      <div class='muted' style='font-weight:950'>Add</div>
-      <button type='button' onclick='addTodo()'>Add</button>
-    </div>
-    <div class='row' style='margin-top:10px'>
-      <input id='newText' placeholder='New todo…' />
-    </div>
-    <div class='row' style='margin-top:10px'>
-      <input id='newCat' placeholder='Category (optional)' />
-    </div>
-    <div id='out' class='muted' style='margin-top:10px'></div>
-  </div>
-"""
-
-    body_bottom = """
-<script>
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function jsonFetch(url, opts){
-  opts = opts || {};
-  opts.credentials = 'include';
-  return fetch(url, opts).then(function(r){
-    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
-    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
-  });
-}
-
-function toggleArchived(on){
-  try{
-    var u=new URL(window.location.href);
-    if (on) u.searchParams.set('arch','1'); else u.searchParams.delete('arch');
-    window.location.href=u.toString();
-  }catch(e){}
-}
-
-function onTodoToggle(cb){
-  try{
-    var id = cb && cb.getAttribute ? cb.getAttribute('data-id') : '';
-    if (!id) return;
-    var url = cb.checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    jsonFetch(url, {method:'POST'}).catch(function(_e){ window.location.reload(); });
-  }catch(e){}
-}
-
-function deleteTodo(id){
-  try{ if(!confirm('Delete TODO #' + id + '?')) return; }catch(e){}
-  jsonFetch('/api/todos/'+String(id)+'/delete_auth', {method:'POST'})
-    .then(function(j){ if(!j||!j.ok) throw new Error((j&&j.error)||'delete_failed'); window.location.reload(); })
-    .catch(function(e){ alert('Delete failed: ' + String(e&&e.message?e.message:e)); });
-}
-
-function toggleHighlight(id){
-  jsonFetch('/api/todos/'+String(id)+'/toggle_highlight_auth', {method:'POST'})
-    .then(function(_j){ window.location.reload(); })
-    .catch(function(_e){ window.location.reload(); });
-}
-
-function archiveDone(){
-  jsonFetch('/api/todos/archive_done_auth', {method:'POST'})
-    .then(function(_j){ window.location.reload(); })
-    .catch(function(_e){ window.location.reload(); });
-}
-
-function clearHighlights(){
-  jsonFetch('/api/todos/clear_highlights_auth', {method:'POST'})
-    .then(function(_j){ window.location.reload(); })
-    .catch(function(_e){ window.location.reload(); });
-}
-
-function addTodo(){
-  try{
-    var t = String((document.getElementById('newText')||{}).value||'').trim();
-    var c = String((document.getElementById('newCat')||{}).value||'').trim();
-    if (!t) return;
-    var out=document.getElementById('out'); if(out) out.textContent='Adding…';
-    jsonFetch('/api/todos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:t, category:c})})
-      .then(function(j){
-        if(!j||!j.ok) throw new Error((j&&j.error)||'add_failed');
-        window.location.reload();
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>'; });
-  }catch(e){}
-}
-</script>
-"""
-
-    build = APP_BUILD
-
-    style_css = TODO_BASE_CSS
+    # Use the same chrome as /base-template (INDEX_BASE_CSS), only the middle differs.
+    style_css = INDEX_BASE_CSS
     body_top = (
         str(DEBUG_BANNER_BOOT_JS)
         + str(USER_MENU_JS)
@@ -5319,7 +5187,7 @@ function addTodo(){
         "      <div class='muted'>Internal tracker (check/uncheck requires login).</div>"
         "    </div>"
         "    <div class='row headActions'>"
-        "      <a href='/#tab-jobs'><button class='secondary' type='button'>Back</button></a>"
+        "      <a href='/'><button class='secondary' type='button'>Back</button></a>"
         "      __USER_MENU_HTML__"
         "    </div>"
         "  </div>"
@@ -5329,20 +5197,23 @@ function addTodo(){
     content_html = """
   __DEBUG_BANNER_HTML__
 
-  <div class="bar">
-    <div class="muted"></div>
-    <div class="right">
-      <div class="muted" style="font-weight:950">Archived</div>
-      <label class="switch" aria-label="Toggle archived">
-        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
-        <span class="slider"></span>
-      </label>
-      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
-      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
+  <div class='card'>
+    <div class='row' style='justify-content:space-between;align-items:center;gap:10px'>
+      <div class='row' style='gap:10px;align-items:center'>
+        <div class='muted' style='font-weight:950'>Archived</div>
+        <label class='switch' aria-label='Toggle archived'>
+          <input id='archToggle' type='checkbox' __ARCH_CHECKED__ onchange='toggleArchived(this.checked)' />
+          <span class='slider'></span>
+        </label>
+      </div>
+      <div class='row' style='gap:10px;justify-content:flex-end;flex-wrap:wrap'>
+        <button class='secondary' type='button' onclick='archiveDone()'>Archive done</button>
+        <button class='secondary' type='button' onclick='clearHighlights()'>Clear highlights</button>
+      </div>
     </div>
   </div>
 
-  <div class="card">
+  <div class='card'>
     __BODY_HTML__
   </div>
 
