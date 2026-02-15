@@ -294,7 +294,22 @@ INDEX_BASE_CSS = base_css("""\
     .colorModalCard{width:min(520px,92vw);margin:18px;padding:12px 12px 14px 12px;border-radius:16px;background:rgba(20,22,40,.96);border:1px solid rgba(255,255,255,.10);box-shadow:0 16px 60px rgba(0,0,0,.55);}
     .colorModalRow{display:flex;gap:10px;align-items:center;justify-content:space-between;}
     .colorModalTitle{font-weight:900;}
-    .colorModalInput{width:88px;height:44px;border:0;background:transparent;padding:0;margin:0;}
+    .colorModalInput{
+      -webkit-appearance:none;
+      appearance:none;
+      width:44px;
+      min-width:44px;
+      height:44px;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:12px;
+      padding:0;
+      margin:0;
+      background:transparent;
+      outline:none;
+      box-shadow:none;
+    }
+    .colorModalInput::-webkit-color-swatch-wrapper{padding:0;border:0;}
+    .colorModalInput::-webkit-color-swatch{border:0;border-radius:10px;}
     .colorModalBtns{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
 
     .switch{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 auto;}
