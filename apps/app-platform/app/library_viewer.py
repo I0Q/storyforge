@@ -595,7 +595,7 @@ function loadAudio(){{
           var prev = String(it.sfml_preview||'');
           html += "<div class='audioItem'>"+
             "<div class='audioLabel'>"+escapeHtml(label||('Audio '+String(i+1)))+"</div>"+
-            (eng?"<div class='muted' style='margin-top:4px'>engine: <span class='pill'>"+escapeHtml(eng)+"</span></div>":"")+
+            "<div class='muted' style='margin-top:4px'>engine: "+(eng?"<span class='pill'>"+escapeHtml(eng)+"</span>":"—")+"</div>"+
             "<div class='fadeLine' style='margin-top:6px'>"+
               "<div class='fadeText' title='"+escAttr(url||'')+"'>"+escapeHtml(url||'')+"</div>"+
               (url?"<button class='copyBtn' type='button' data-copy='"+escAttr(url)+"' onclick='copyFromAttr(this)' aria-label='Copy'>"+copyIconSvg()+"</button>":"")+

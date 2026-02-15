@@ -7165,9 +7165,11 @@ def api_story_audio_list(story_id: str):
             cur.execute(
                 """
 SELECT a.id, a.job_id, a.production_id, a.label, a.mp3_url, a.meta_json, a.created_at,
-       p.sfml_url, p.engine, p.sfml_preview
+       p.sfml_url, p.engine, p.sfml_preview,
+       j.sfml_url, j.meta_json
 FROM sf_story_audio a
 LEFT JOIN sf_productions p ON p.id = a.production_id
+LEFT JOIN jobs j ON j.id = a.job_id
 WHERE a.story_id=%s
 ORDER BY a.created_at DESC
 LIMIT 50
@@ -7179,7 +7181,24 @@ LIMIT 50
             conn.close()
         out = []
         for r in rows:
-            # r: id, job_id, production_id, label, mp3_url, meta_json, created_at, sfml_url, engine, sfml_preview
+            # r: id, job_id, production_id, label, mp3_url, meta_json, created_at,
+            #    p_sfml_url, p_engine, p_sfml_preview,
+            #    j_sfml_url, j_meta_json
+            prod_sfml_url = str(r[7] or '')
+            prod_engine = str(r[8] or '')
+            prod_preview = str(r[9] or '')
+
+            job_sfml_url = str(r[10] or '')
+            job_engine = ''
+            try:
+                jm = str(r[11] or '').strip()
+                if jm:
+                    jmj = json.loads(jm)
+                    if isinstance(jmj, dict) and jmj.get('engine'):
+                        job_engine = str(jmj.get('engine') or '').strip()
+            except Exception:
+                job_engine = ''
+
             out.append({
                 'id': int(r[0]),
                 'job_id': str(r[1] or ''),
@@ -7188,9 +7207,10 @@ LIMIT 50
                 'mp3_url': str(r[4] or ''),
                 'meta_json': str(r[5] or ''),
                 'created_at': int(r[6] or 0),
-                'sfml_url': str(r[7] or ''),
-                'engine': str(r[8] or ''),
-                'sfml_preview': str(r[9] or ''),
+                # Prefer production metadata, fallback to job metadata for legacy rows
+                'sfml_url': prod_sfml_url or job_sfml_url,
+                'engine': prod_engine or job_engine,
+                'sfml_preview': prod_preview,
             })
         return {'ok': True, 'items': out}
     except Exception as e:
