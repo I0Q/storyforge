@@ -681,115 +681,114 @@ DEBUG_BANNER_HTML = """
       </svg>
     </button>
   </div>
-  <script>
-  // Deploy bar watcher (debug UI only). Uses SSE so there is no idle polling.
-  (function(){
-    try{
-      var v = null;
-      try{ v = localStorage.getItem('sf_debug_ui'); }catch(e){}
-      var debugOn = (v===null || v==='' || v==='1');
-      if (!debugOn) return;
-
-      var t0 = 0;
-      var timer = null;
-      function fmt(sec){ sec=Math.max(0, sec|0); var m=Math.floor(sec/60); var s=sec%60; return String(m)+':' + (s<10?('0'+String(s)):String(s)); }
-      function ensureDeployEl(){
-        try{
-          var boot=document.getElementById('boot');
-          if (!boot) return null;
-          var el=document.getElementById('bootDeploy');
-          if (el) return el;
-          var t=document.getElementById('bootText');
-          if (!t) return null;
-          t.insertAdjacentHTML('afterend',
-            "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>"+
-              "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
-              "<div class='updateTrack' style='margin-top:6px;position:relative'>"+
-                "<div class='updateProg'></div>"+
-                "<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>"+
-              "</div>"+
-            "</div>"
-          );
-          return document.getElementById('bootDeploy');
-        }catch(_e){ return null; }
-      }
-
-      function setBar(on, msg){
-        try{
-          var el=ensureDeployEl();
-          if (!el) return;
-          if (on){
-            el.classList.remove('hide');
-            if (msg){ try{ el.querySelector('.muted').textContent = String(msg||'StoryForge updating…'); }catch(_e){} }
-            if (!t0) t0 = Date.now();
-            if (!timer){
-              timer = setInterval(function(){
-                try{ var tt=document.getElementById('bootDeployTimer'); if(!tt) return; tt.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }catch(_e){}
-              }, 1000);
-            }
-          }else{
-            el.classList.add('hide');
-            t0 = 0;
-            try{ if (timer) clearInterval(timer); }catch(_e){}
-            timer = null;
-            try{ var tt=document.getElementById('bootDeployTimer'); if(tt) tt.textContent='0:00'; }catch(_e){}
-          }
-        }catch(_e){}
-      }
-
-      var lastState = '';
-      var lastUpdated = 0;
-      var es = null;
-      var rt = null;
-      var backoff = 900;
-
-      function stop(){ try{ if(rt){ clearTimeout(rt); rt=null; } }catch(_e){} try{ if(es){ es.close(); es=null; } }catch(_e){} }
-      function schedule(){
-        try{ if(rt) return; }catch(_e){}
-        stop();
-        var d = Math.max(400, Math.min(10000, Number(backoff||900)));
-        backoff = Math.min(10000, Math.floor(d*1.7));
-        try{ rt = setTimeout(function(){ rt=null; start(); }, d); }catch(_e){}
-      }
-      function apply(j){
-        try{
-          if (!j || !j.ok) return;
-          var st = String(j.state||'idle');
-          var msg = String(j.message||'');
-          var upd = Number(j.updated_at||0);
-          if (st === 'deploying') setBar(true, msg||'StoryForge updating…');
-          else setBar(false, '');
-          if (lastState === 'deploying' && st !== 'deploying'){
-            if (upd && upd !== lastUpdated){
-              setTimeout(function(){ try{ window.location.reload(); }catch(_e){} }, 450);
-            }
-          }
-          lastState = st;
-          lastUpdated = upd || lastUpdated;
-        }catch(_e){}
-      }
-      function start(){
-        stop();
-        try{
-          es = new EventSource('/api/deploy/stream');
-          es.onopen = function(){ backoff = 900; };
-          es.onmessage = function(ev){ try{ apply(JSON.parse(ev.data||'{}')); }catch(_e){} };
-          es.onerror = function(_e){ schedule(); };
-        }catch(_e){ schedule(); }
-      }
-
-      start();
-    }catch(_e){}
-  })();
-  </script>
 """
 
 DEBUG_BANNER_BOOT_JS = """
 <script>
 // minimal boot script (runs even if the main app script has a syntax error)
+// DEPLOYBAR_WATCHER_V3
 window.__SF_BUILD = '__BUILD__';
 window.__SF_BOOT_TS = Date.now();
 window.__SF_LAST_ERR = '';
+
+// Deploy bar watcher (debug UI only). Uses SSE so there is no idle polling.
+(function(){
+  try{
+    var v = null;
+    try{ v = localStorage.getItem('sf_debug_ui'); }catch(e){}
+    var debugOn = (v===null || v==='' || v==='1');
+    if (!debugOn) return;
+
+    var t0 = 0;
+    var timer = null;
+    function fmt(sec){ sec=Math.max(0, sec|0); var m=Math.floor(sec/60); var s=sec%60; return String(m)+':' + (s<10?('0'+String(s)):String(s)); }
+
+    function ensureDeployEl(){
+      try{
+        var el = document.getElementById('bootDeploy');
+        if (el) return el;
+        var t = document.getElementById('bootText');
+        if (!t) return null;
+        t.insertAdjacentHTML('afterend',
+          "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>"+
+            "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
+            "<div class='updateTrack' style='margin-top:6px;position:relative'>"+
+              "<div class='updateProg'></div>"+
+              "<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>"+
+            "</div>"+
+          "</div>"
+        );
+        return document.getElementById('bootDeploy');
+      }catch(_e){ return null; }
+    }
+
+    function setBar(on, msg){
+      try{
+        var el = ensureDeployEl();
+        if (!el) return;
+        if (on){
+          el.classList.remove('hide');
+          if (msg){ try{ el.querySelector('.muted').textContent = String(msg||'StoryForge updating…'); }catch(_e){} }
+          if (!t0) t0 = Date.now();
+          if (!timer){
+            timer = setInterval(function(){
+              try{ var tt=document.getElementById('bootDeployTimer'); if(!tt) return; tt.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }catch(_e){}
+            }, 1000);
+          }
+        }else{
+          el.classList.add('hide');
+          t0 = 0;
+          try{ if (timer) clearInterval(timer); }catch(_e){}
+          timer = null;
+          try{ var tt=document.getElementById('bootDeployTimer'); if(tt) tt.textContent='0:00'; }catch(_e){}
+        }
+      }catch(_e){}
+    }
+
+    var lastState = '';
+    var lastUpdated = 0;
+    var es = null;
+    var rt = null;
+    var backoff = 900;
+
+    function stop(){ try{ if(rt){ clearTimeout(rt); rt=null; } }catch(_e){} try{ if(es){ es.close(); es=null; } }catch(_e){} }
+    function schedule(){
+      try{ if(rt) return; }catch(_e){}
+      stop();
+      var d = Math.max(400, Math.min(10000, Number(backoff||900)));
+      backoff = Math.min(10000, Math.floor(d*1.7));
+      try{ rt = setTimeout(function(){ rt=null; start(); }, d); }catch(_e){}
+    }
+    function apply(j){
+      try{
+        if (!j || !j.ok) return;
+        var st = String(j.state||'idle');
+        var msg = String(j.message||'');
+        var upd = Number(j.updated_at||0);
+        if (st === 'deploying') setBar(true, msg||'StoryForge updating…');
+        else setBar(false, '');
+        if (lastState === 'deploying' && st !== 'deploying'){
+          if (upd && upd !== lastUpdated){
+            setTimeout(function(){ try{ window.location.reload(); }catch(_e){} }, 450);
+          }
+        }
+        lastState = st;
+        lastUpdated = upd || lastUpdated;
+      }catch(_e){}
+    }
+    function start(){
+      stop();
+      try{
+        es = new EventSource('/api/deploy/stream');
+        es.onopen = function(){ backoff = 900; };
+        es.onmessage = function(ev){ try{ apply(JSON.parse(ev.data||'{}')); }catch(_e){} };
+        es.onerror = function(_e){ schedule(); };
+      }catch(_e){ schedule(); }
+    }
+
+    start();
+  }catch(_e){}
+})();
 
 // Cache-bust HTML on iOS/Safari/CF edge caching: only when Debug UI is enabled.
 // IMPORTANT: avoid refresh loops. Only auto-add ?v=... once per tab/session, and only if v is missing.
