@@ -245,7 +245,7 @@ INDEX_BASE_CSS = base_css("""\
     /* Notifications job kinds */
     .notifPill{user-select:none;}
     .notifPill input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
-    .notifKindName{font-weight:950;word-break:break-word;overflow-wrap:anywhere;}
+    .notifKindName{font-weight:700;font-size:13px;word-break:break-word;overflow-wrap:anywhere;}
     .fadeLine{position:relative;display:flex;align-items:center;gap:8px;min-width:0;}
     .fadeText{flex:1;min-width:0;white-space:nowrap;overflow-x:auto;overflow-y:hidden;color:var(--muted);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .fadeText::-webkit-scrollbar{display:none;}
