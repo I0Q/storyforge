@@ -1568,7 +1568,7 @@ function toggleMenu(){
   if (m.classList.contains('show')) m.classList.remove('show');
   else m.classList.add('show');
 }
-function toggleUserMenu(){ return toggleMenu(); }
+// toggleUserMenu is provided by ui_header_shared.USER_MENU_JS (fixed-position iOS-safe dropdown)
 
 document.addEventListener('click', function(ev){
   try{
