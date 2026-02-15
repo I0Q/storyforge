@@ -3753,7 +3753,18 @@ def api_voice_provider_engines():
                     engs = [e for e in engs if e in allow2]
             except Exception:
                 pass
-            return {'ok': True, 'engines': engs or ['xtts', 'tortoise']}
+            # If the provider allowlist contains engines not reported by the gateway, include them.
+            try:
+                p2 = _get_tinybox_provider() or {}
+                allow2 = p2.get('voice_engines') if isinstance(p2, dict) else None
+                if isinstance(allow2, list) and allow2:
+                    for e2 in allow2:
+                        e2s = str(e2 or '').strip()
+                        if e2s and e2s not in engs:
+                            engs.append(e2s)
+            except Exception:
+                pass
+            return {'ok': True, 'engines': engs or ['xtts', 'tortoise', 'styletts2']}
         return {'ok': False, 'error': 'bad_upstream_shape'}
     except Exception as e:
         return {'ok': False, 'error': f'engines_failed:{type(e).__name__}'}
