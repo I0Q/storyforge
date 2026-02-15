@@ -1618,6 +1618,34 @@ function ensureJobsStream(on){
   }catch(e){}
 }
 
+function fmtDurSec(s){
+  try{
+    s = Number(s||0);
+    if (!(s>=0)) return '-';
+    var h = Math.floor(s/3600);
+    var m = Math.floor((s%3600)/60);
+    var ss = Math.floor(s%60);
+    if (h>0) return String(h)+':' + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+    return String(m)+':' + String(ss).padStart(2,'0');
+  }catch(e){
+    return '-';
+  }
+}
+
+function jobElapsed(job){
+  try{
+    var st = Number(job.started_at||0);
+    if (!st) return 0;
+    var fin = Number(job.finished_at||0);
+    var end = fin ? fin : Math.floor(Date.now()/1000);
+    var d = end - st;
+    if (d < 0) d = 0;
+    return d;
+  }catch(e){
+    return 0;
+  }
+}
+
 function renderJobs(jobs){
   const el=document.getElementById('jobs');
   if (!el) return;
@@ -1681,10 +1709,12 @@ function renderJobs(jobs){
     const isVoiceMeta = (String(job.kind||'') === 'voice_meta');
 
     // Common fields for all jobs
+    const elapsed = jobElapsed(job);
     let rows = ''
       + `<div class='k'>id</div><div>${escapeHtml(String(job.id||''))}</div>`
       + `<div class='k'>started</div><div>${fmtTs(job.started_at)}</div>`
       + `<div class='k'>finished</div><div>${fmtTs(job.finished_at)}</div>`
+      + `<div class='k'>elapsed</div><div>${fmtDurSec(elapsed)}</div>`
       + `<div class='k'>progress</div><div>${progText}${progBar}</div>`;
 
     // Variable fields by job type
