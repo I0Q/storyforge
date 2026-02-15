@@ -5170,8 +5170,34 @@ def todo_page(request: Request, response: Response):
 
     build = APP_BUILD
 
-    # Use the same chrome as /base-template (INDEX_BASE_CSS), only the middle differs.
-    style_css = INDEX_BASE_CSS
+    # Use the same chrome as /base-template (INDEX_BASE_CSS), but keep the TODO list layout styles.
+    style_css = INDEX_BASE_CSS + base_css("""\
+
+    .catHead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px 0;}
+    .catTitle{font-weight:950;font-size:16px;}
+    .catCount{color:var(--muted);font-weight:800;font-size:12px;}
+
+    .todoItem{display:block;margin:10px 0;}
+    /* swipe-delete (implemented as horizontal scroll) */
+    .todoSwipe{display:block;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .todoSwipe::-webkit-scrollbar{display:none;}
+    .todoSwipeInner{display:flex;min-width:100%;}
+    .todoMain{min-width:100%;display:flex;gap:10px;align-items:flex-start;}
+    .todoKill{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:10px;}
+    .todoId{color:var(--muted);font-size:12px;font-weight:900;margin-left:8px;white-space:nowrap;}
+    .todoHiBtn{border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:var(--muted);font-weight:950;border-radius:999px;padding:6px 10px;font-size:12px;line-height:1;cursor:pointer;}
+    .todoHiBtn:active{transform:translateY(1px);}
+    .todoItem.hi{ }
+    .todoItem.hi .todoText{color:var(--text);}
+    .todoDelBtn{background:transparent;border:1px solid rgba(255,77,77,.35);color:var(--bad);font-weight:950;border-radius:12px;padding:10px 12px;}
+    .todoItem.hi .todoHiBtn{border-color:rgba(74,163,255,0.95);color:#ffffff;background:linear-gradient(180deg, rgba(74,163,255,0.95), rgba(31,111,235,0.85));box-shadow:0 8px 18px rgba(31,111,235,0.22);}
+    .todoItem input{margin-top:3px;transform:scale(1.15);} 
+    .todoTextWrap{min-width:0;}
+    .todoText{line-height:1.25;}
+    .todoMeta{color:var(--muted);font-size:12px;margin-top:4px;}
+    .todoPlain{margin:8px 0;color:var(--muted);}
+
+""")
     body_top = (
         str(DEBUG_BANNER_BOOT_JS)
         + str(USER_MENU_JS)
