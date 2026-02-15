@@ -273,7 +273,8 @@ INDEX_BASE_CSS = base_css("""\
     /* inline checkbox pills */
     .checkLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
     .checkLine input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;}
-    .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);}
+    .checkPill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);line-height:1;}
+    .checkPill input[type=radio], .checkPill input[type=checkbox]{width:18px;height:18px;accent-color:#1f6feb;margin:0;}
 
     /* Notifications job kinds */
     .notifPill{user-select:none;}
@@ -2848,9 +2849,23 @@ function prodRenderAssignments(){
     var roster = Array.isArray(st.roster) ? st.roster : [];
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
 
-    // helper: roster option list
+    function getCastEngine(){
+      var eng = '';
+      try{
+        var r1=document.querySelector("input[name='castEngine']:checked");
+        if (r1 && r1.value) eng = String(r1.value||'').trim();
+      }catch(_e){}
+      return eng;
+    }
+
+    // helper: roster option list (filtered by selected engine)
     function optList(selected){
-      return roster.map(function(v){
+      var eng = getCastEngine();
+      var rr = roster;
+      try{
+        if (eng){ rr = roster.filter(function(v){ return String(v.engine||'').trim()===eng; }); }
+      }catch(_e){ rr = roster; }
+      return rr.map(function(v){
         var id=String(v.id||'');
         var nm=String(v.name||v.id||'');
         var t=[];
