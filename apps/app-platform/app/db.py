@@ -79,7 +79,7 @@ def _db_init_schema(conn) -> None:
     """
     cur = conn.cursor()
 
-    cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT \'\',\n  meta_json TEXT NOT NULL DEFAULT \'\',\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  created_at BIGINT NOT NULL\n);')
+    cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT \'\',\n  meta_json TEXT NOT NULL DEFAULT \'\',\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  error_text TEXT NOT NULL DEFAULT \'\',\n  created_at BIGINT NOT NULL\n);')
     # Migrations: add columns to existing jobs table
     try:
         cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT ''")
@@ -87,6 +87,10 @@ def _db_init_schema(conn) -> None:
         pass
     try:
         cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS meta_json TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_text TEXT NOT NULL DEFAULT ''")
     except Exception:
         pass
 

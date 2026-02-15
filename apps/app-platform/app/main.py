@@ -1745,8 +1745,9 @@ function renderJobs(jobs){
     const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
     const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
 
-    const errRow = (String(job.state||'')==='failed' && (job.sfml_url||'')) ? (
-      `<div class='k'>error</div><div class='term' style='white-space:pre-wrap'>${escapeHtml(String(job.sfml_url||'').slice(0,1600))}</div>`
+    const errVal = (job && job.error_text) ? String(job.error_text||'') : '';
+    const errRow = (String(job.state||'')==='failed' && errVal) ? (
+      `<div class='k'>error</div><div class='term' style='white-space:pre-wrap'>${escapeHtml(errVal.slice(0,1600))}</div>`
     ) : '';
 
     const isVoiceMeta = (String(job.kind||'') === 'voice_meta');
@@ -6529,7 +6530,7 @@ def api_voices_create(payload: dict[str, Any]):
                             'state': 'failed',
                             'finished_at': int(time.time()),
                             'segments_done': 0,
-                            'sfml_url': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
+                            'error_text': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
                         },
                     )
 
@@ -6620,7 +6621,7 @@ def api_voices_analyze_metadata(voice_id: str):
                         'state': 'failed',
                         'finished_at': int(time.time()),
                         'segments_done': 0,
-                        'sfml_url': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
+                        'error_text': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
                     },
                 )
 
@@ -8708,7 +8709,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                         'finished_at': int(time.time()),
                         'segments_done': 0,
                         'mp3_url': '',
-                        'sfml_url': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
+                        'error_text': (f"error: {type(e).__name__}: {str(e)[:200]}" + ("\n" + det[:1400] if det else '')),
                     },
                 )
 
