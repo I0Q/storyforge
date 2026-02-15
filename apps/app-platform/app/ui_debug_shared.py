@@ -107,18 +107,19 @@ function __sfSetDebugInfo(msg){
 }
 
 // If the boot banner script fails to run (some Safari edge cases), don't leave it stuck on 'booting…'.
-try{
-  setTimeout(function(){
-    try{
-      var bt=document.getElementById('bootText');
-      if (!bt) return;
-      var t=String(bt.textContent||'');
-      if (t.indexOf('JS: booting')!==-1){
-        bt.textContent = t.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
-      }
-    }catch(_e){}
-  }, 0);
-}catch(_e){}
+function __sfFixBooting(){
+  try{
+    var bt=document.getElementById('bootText');
+    if (!bt) return;
+    var t=String(bt.textContent||'');
+    if (t.indexOf('JS: booting')!==-1){
+      bt.textContent = t.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
+    }
+  }catch(_e){}
+}
+try{ setTimeout(__sfFixBooting, 0); }catch(_e){}
+try{ setTimeout(__sfFixBooting, 500); }catch(_e){}
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ __sfFixBooting(); }catch(_e){} }); }catch(_e){}
 </script>
 """
 
