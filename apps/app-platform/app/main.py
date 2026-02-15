@@ -1193,7 +1193,10 @@ def index(response: Response):
     <div class='card'>
       <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
-        <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+        <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center'>
+          <div class='muted' style='font-size:12px'>Casting engine</div>
+          <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
+          <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
           <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
         </div>
       </div>
@@ -2901,7 +2904,12 @@ function prodSuggestCasting(){
     prodSetBusy(true, 'Suggesting casting…', 'Asking the LLM to match voices to characters');
     if (out) out.textContent='';
 
-    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
+    var eng = 'tortoise';
+    try{
+      var r1=document.querySelector("input[name='castEngine']:checked");
+      if (r1 && r1.value) eng = String(r1.value||'').trim() || 'tortoise';
+    }catch(e){}
+    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId, engine: eng})})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'suggest_failed'); }
         prodSetBusy(false);
@@ -7402,6 +7410,10 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
         if not story_id:
             return {'ok': False, 'error': 'missing_story_id'}
 
+        engine = str((payload or {}).get('engine') or '').strip().lower() or 'tortoise'
+        if engine not in ('tortoise', 'styletts2', 'xtts'):
+            return {'ok': False, 'error': 'bad_engine'}
+
         conn = db_connect()
         try:
             db_init(conn)
@@ -7417,9 +7429,14 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
             chars = ([{'name': 'Narrator', 'role': 'narrator', 'description': ''}] + chars)
         chars.sort(key=lambda c: (0 if str((c or {}).get('role') or '').lower() == 'narrator' or str((c or {}).get('name') or '').strip().lower() == 'narrator' else 1, str((c or {}).get('name') or '')))
 
-        # Build compact voice roster summary
+        # Build compact voice roster summary (filter by engine)
         vrows = []
         for v in voices:
+            try:
+                if engine and str(v.get('engine') or '').strip().lower() != engine:
+                    continue
+            except Exception:
+                pass
             vid = str(v.get('id') or '')
             if not vid:
                 continue
@@ -7458,6 +7475,7 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
                 'Return STRICT JSON only. No markdown.',
                 'Output shape: {"assignments": [{"character":"Name","voice_id":"id","reason":"short"}] }',
                 'Every character must have exactly one assignment.',
+                'Only choose voices from the provided roster (already filtered by engine).',
                 'Prefer matching gender/age/pitch/tone when known, otherwise pick a distinct voice.',
                 'Narrator must be included.',
             ],
