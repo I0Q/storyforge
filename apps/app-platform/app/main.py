@@ -7089,10 +7089,16 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
             try:
                 db_init(conn)
                 cur = conn.cursor()
+
+                # Keep a small preview in DB for UI (full text lives in Spaces).
+                sfml_preview = (sfml or '').strip().replace('\r\n', '\n').replace('\r', '\n')
+                if len(sfml_preview) > 800:
+                    sfml_preview = sfml_preview[:800]
+
                 cur.execute(
                     """
-INSERT INTO sf_productions (id, story_id, label, engine, sfml_sha256, sfml_url, sfml_bytes, casting, params, created_at, updated_at)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)
+INSERT INTO sf_productions (id, story_id, label, engine, sfml_sha256, sfml_url, sfml_bytes, sfml_preview, casting, params, created_at, updated_at)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)
 ON CONFLICT (id) DO NOTHING
 """,
                     (
@@ -7103,6 +7109,7 @@ ON CONFLICT (id) DO NOTHING
                         sfml_sha,
                         sfml_url,
                         int(len(sfml_bytes)),
+                        sfml_preview,
                         json.dumps(casting, separators=(',', ':')),
                         json.dumps(params, separators=(',', ':')),
                         now,

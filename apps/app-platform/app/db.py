@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS sf_productions (
   sfml_sha256 TEXT NOT NULL DEFAULT '',
   sfml_url TEXT NOT NULL DEFAULT '',
   sfml_bytes BIGINT NOT NULL DEFAULT 0,
+  sfml_preview TEXT NOT NULL DEFAULT '',
   casting JSONB NOT NULL DEFAULT '{}'::jsonb,
   params JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at BIGINT NOT NULL,
@@ -280,6 +281,12 @@ def db_init(conn) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_push_device_id_idx ON sf_push_subscriptions (device_id)")
     except Exception:
         pass
+    # Migrations: add preview column
+    try:
+        cur.execute("ALTER TABLE sf_productions ADD COLUMN IF NOT EXISTS sfml_preview TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_productions_story_id_idx ON sf_productions (story_id)")
     except Exception:
