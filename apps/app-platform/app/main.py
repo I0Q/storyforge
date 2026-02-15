@@ -15,8 +15,9 @@ from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 
 from .auth import register_passphrase_auth
-from .ui_header_shared import USER_MENU_HTML
+from .ui_header_shared import USER_MENU_HTML, USER_MENU_JS
 from .ui_audio_shared import AUDIO_DOCK_JS
+from .ui_debug_shared import DEBUG_PREF_APPLY_JS
 from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
@@ -404,6 +405,7 @@ VOICES_BASE_CSS = (
     html,body{overscroll-behavior-y:none;}
     *{box-sizing:border-box;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
+    .brandLink{color:inherit;text-decoration:none;}
 
 """)
     + COMMON_VARS_HEADER_CSS
@@ -3987,6 +3989,9 @@ def voices_edit_page(voice_id: str, response: Response):
 </head>
 <body>
   __DEBUG_BANNER_BOOT_JS__
+  __USER_MENU_JS__
+  __DEBUG_PREF_APPLY_JS__
+  __AUDIO_DOCK_JS__
   <div class='navBar'>
     <div class='top'>
       <div>
@@ -3995,31 +4000,7 @@ def voices_edit_page(voice_id: str, response: Response):
       </div>
       <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' style='stroke:currentColor;fill:none;stroke-width:2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div>
-                <div class='uName'>User</div>
-                <div class='uSub'>Admin</div>
-              </div>
-            </div>
-            <div class='uActions'>
-              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
-            </div>
-          </div>
-        </div>
+        __USER_MENU_HTML__
       </div>
     </div>
   </div>
@@ -4738,6 +4719,10 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
         .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__USER_MENU_JS__', USER_MENU_JS)
+        .replace('__DEBUG_PREF_APPLY_JS__', DEBUG_PREF_APPLY_JS)
+        .replace('__AUDIO_DOCK_JS__', AUDIO_DOCK_JS)
         .replace('__BUILD__', str(build))
     )
     return html
@@ -4792,6 +4777,9 @@ def voices_new_page(response: Response):
 </head>
 <body>
   __DEBUG_BANNER_BOOT_JS__
+  __USER_MENU_JS__
+  __DEBUG_PREF_APPLY_JS__
+  __AUDIO_DOCK_JS__
   <div class='navBar'>
     <div class='top'>
       <div>
@@ -4799,31 +4787,7 @@ def voices_new_page(response: Response):
       </div>
       <div class='row headActions'>
         <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div>
-                <div class='uName'>User</div>
-                <div class='uSub'>Admin</div>
-              </div>
-            </div>
-            <div class='uActions'>
-              <a href='/logout'><button class='secondary' type='button'>Log out</button></a>
-            </div>
-          </div>
-        </div>
+        __USER_MENU_HTML__
       </div>
     </div>
   </div>
@@ -5749,6 +5713,10 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__VOICE_NEW_EXTRA_CSS__', VOICE_NEW_EXTRA_CSS)
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
         .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
+        .replace('__USER_MENU_HTML__', USER_MENU_HTML)
+        .replace('__USER_MENU_JS__', USER_MENU_JS)
+        .replace('__DEBUG_PREF_APPLY_JS__', DEBUG_PREF_APPLY_JS)
+        .replace('__AUDIO_DOCK_JS__', AUDIO_DOCK_JS)
         .replace('__BUILD__', str(build))
     )
     return html
