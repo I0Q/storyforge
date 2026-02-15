@@ -7164,10 +7164,10 @@ def api_story_audio_list(story_id: str):
             cur = conn.cursor()
             cur.execute(
                 """
-SELECT a.id, a.job_id, a.label, a.mp3_url, a.meta_json, a.created_at,
-       j.sfml_url, j.meta_json
+SELECT a.id, a.job_id, a.production_id, a.label, a.mp3_url, a.meta_json, a.created_at,
+       p.sfml_url, p.engine, p.sfml_preview
 FROM sf_story_audio a
-LEFT JOIN jobs j ON j.id = a.job_id
+LEFT JOIN sf_productions p ON p.id = a.production_id
 WHERE a.story_id=%s
 ORDER BY a.created_at DESC
 LIMIT 50
@@ -7179,26 +7179,18 @@ LIMIT 50
             conn.close()
         out = []
         for r in rows:
-            # r: id, job_id, label, mp3_url, meta_json, created_at, sfml_url, job_meta_json
-            engine = ''
-            try:
-                jm = str(r[7] or '').strip()
-                if jm:
-                    jmj = json.loads(jm)
-                    if isinstance(jmj, dict) and jmj.get('engine'):
-                        engine = str(jmj.get('engine') or '').strip()
-            except Exception:
-                engine = ''
-
+            # r: id, job_id, production_id, label, mp3_url, meta_json, created_at, sfml_url, engine, sfml_preview
             out.append({
                 'id': int(r[0]),
                 'job_id': str(r[1] or ''),
-                'label': str(r[2] or ''),
-                'mp3_url': str(r[3] or ''),
-                'meta_json': str(r[4] or ''),
-                'created_at': int(r[5] or 0),
-                'sfml_url': str(r[6] or ''),
-                'engine': engine,
+                'production_id': str(r[2] or ''),
+                'label': str(r[3] or ''),
+                'mp3_url': str(r[4] or ''),
+                'meta_json': str(r[5] or ''),
+                'created_at': int(r[6] or 0),
+                'sfml_url': str(r[7] or ''),
+                'engine': str(r[8] or ''),
+                'sfml_preview': str(r[9] or ''),
             })
         return {'ok': True, 'items': out}
     except Exception as e:
@@ -7236,10 +7228,23 @@ def api_story_audio_save(payload: dict[str, Any] = Body(default={})):  # noqa: B
             title = str((row[0] if row else '') or story_id)
             label = f"{title} — {ts_label}"
 
+            # Best-effort: link saved audio to a durable production recipe.
+            production_id = ''
+            try:
+                cur.execute('SELECT meta_json FROM jobs WHERE id=%s', (job_id,))
+                jrow = cur.fetchone()
+                jm = str((jrow[0] if jrow else '') or '').strip()
+                if jm:
+                    jmj = json.loads(jm)
+                    if isinstance(jmj, dict) and jmj.get('production_id'):
+                        production_id = str(jmj.get('production_id') or '').strip()
+            except Exception:
+                production_id = ''
+
             now = int(time.time())
             cur.execute(
-                'INSERT INTO sf_story_audio (story_id, job_id, label, mp3_url, meta_json, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s)',
-                (story_id, job_id, label, mp3_url, meta_json, now, now),
+                'INSERT INTO sf_story_audio (story_id, job_id, production_id, label, mp3_url, meta_json, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
+                (story_id, job_id, production_id, label, mp3_url, meta_json, now, now),
             )
             conn.commit()
         finally:

@@ -592,6 +592,7 @@ function loadAudio(){{
           var url=String(it.mp3_url||'');
           var eng = String(it.engine||'');
           var sfml = String(it.sfml_url||'');
+          var prev = String(it.sfml_preview||'');
           html += "<div class='audioItem'>"+
             "<div class='audioLabel'>"+escapeHtml(label||('Audio '+String(i+1)))+"</div>"+
             (eng?"<div class='muted' style='margin-top:4px'>engine: <span class='pill'>"+escapeHtml(eng)+"</span></div>":"")+
@@ -605,6 +606,9 @@ function loadAudio(){{
                 "<button class='copyBtn' type='button' data-copy='"+escAttr(sfml)+"' onclick='copyFromAttr(this)' aria-label='Copy sfml'>"+copyIconSvg()+"</button>"+
                 "<a class='pill' style='text-decoration:none' href='"+escAttr(sfml)+"' target='_blank' rel='noopener'>Open</a>"+
               "</div>"
+            ):"")+
+            (prev?(
+              "<pre class='term' style='margin-top:8px;max-height:180px;overflow:auto;-webkit-overflow-scrolling:touch;white-space:pre-wrap'>"+escapeHtml(prev)+"</pre>"
             ):"")+
             "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+

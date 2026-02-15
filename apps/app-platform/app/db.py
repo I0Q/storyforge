@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS sf_story_audio (
   id BIGSERIAL PRIMARY KEY,
   story_id TEXT NOT NULL,
   job_id TEXT NOT NULL,
+  production_id TEXT NOT NULL DEFAULT '',
   label TEXT NOT NULL DEFAULT '',
   mp3_url TEXT NOT NULL DEFAULT '',
   meta_json TEXT NOT NULL DEFAULT '',
@@ -296,12 +297,22 @@ def db_init(conn) -> None:
     except Exception:
         pass
 
+    # Migrations: production_id link
+    try:
+        cur.execute("ALTER TABLE sf_story_audio ADD COLUMN IF NOT EXISTS production_id TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_story_id_idx ON sf_story_audio (story_id)")
     except Exception:
         pass
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_job_id_idx ON sf_story_audio (job_id)")
+    except Exception:
+        pass
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_production_id_idx ON sf_story_audio (production_id)")
     except Exception:
         pass
 
