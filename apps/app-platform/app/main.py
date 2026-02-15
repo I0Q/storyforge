@@ -1284,11 +1284,15 @@ def index(response: Response):
     <div class='card'>
       <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
-        <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center'>
-          <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
-          <div class='muted' style='font-size:12px'>Casting engine</div>
-          <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
-          <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
+        <div>
+          <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center'>
+            <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
+          </div>
+          <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px'>
+            <div class='muted' style='font-size:12px'>Casting engine</div>
+            <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
+            <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
+          </div>
         </div>
       </div>
 
