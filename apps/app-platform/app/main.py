@@ -7055,8 +7055,75 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
         if not sfml.strip():
             return {'ok': False, 'error': 'missing_sfml'}
 
+        # Production primitive: snapshot exactly what we send to the job.
+        engine = str((payload or {}).get('engine') or '').strip()
+        casting = (payload or {}).get('casting')
+        if not isinstance(casting, dict):
+            casting = {}
+        params = (payload or {}).get('params')
+        if not isinstance(params, dict):
+            params = {}
+
+        import hashlib
+
+        sfml_bytes = sfml.encode('utf-8', 'replace')
+        sfml_sha = hashlib.sha256(sfml_bytes).hexdigest()
+
+        # Content-addressed SFML storage (Spaces): sfml/<sha256>.sfml
+        sfml_url = ''
+        try:
+            from .spaces_upload import upload_bytes_dedup
+
+            _k, sfml_url, _existed = upload_bytes_dedup(
+                sfml_bytes,
+                obj_key=f"sfml/{sfml_sha}.sfml",
+                content_type='text/plain; charset=utf-8',
+            )
+        except Exception:
+            sfml_url = ''
+
+        prod_id = f"prod_{int(time.time())}_{story_id.replace('/', '_').replace(' ', '_')[:48]}_{sfml_sha[:8]}"
+        now = int(time.time())
+        try:
+            conn = db_connect()
+            try:
+                db_init(conn)
+                cur = conn.cursor()
+                cur.execute(
+                    """
+INSERT INTO sf_productions (id, story_id, label, engine, sfml_sha256, sfml_url, sfml_bytes, casting, params, created_at, updated_at)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)
+ON CONFLICT (id) DO NOTHING
+""",
+                    (
+                        prod_id,
+                        story_id,
+                        '',
+                        engine,
+                        sfml_sha,
+                        sfml_url,
+                        int(len(sfml_bytes)),
+                        json.dumps(casting, separators=(',', ':')),
+                        json.dumps(params, separators=(',', ':')),
+                        now,
+                        now,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
         job_id = 'produce_' + str(int(time.time())) + '_' + story_id.replace('/', '_').replace(' ', '_')[:48]
-        meta = {'story_id': story_id, 'story_title': title}
+        meta = {
+            'story_id': story_id,
+            'story_title': title,
+            'engine': engine,
+            'production_id': prod_id,
+            'sfml_sha256': sfml_sha,
+            'sfml_url': sfml_url,
+        }
         _job_patch(
             job_id,
             {
@@ -7068,10 +7135,11 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
                 'finished_at': 0,
                 'total_segments': 0,
                 'segments_done': 0,
+                'sfml_url': sfml_url,
             },
         )
 
-        return {'ok': True, 'job_id': job_id}
+        return {'ok': True, 'job_id': job_id, 'production_id': prod_id, 'sfml_url': sfml_url}
     except Exception as e:
         return {'ok': False, 'error': f'produce_failed: {type(e).__name__}: {str(e)[:200]}'}
 

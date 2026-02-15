@@ -175,6 +175,25 @@ CREATE TABLE IF NOT EXISTS sf_castings (
 """
     )
 
+    # Production: re-runnable immutable recipe (what we send to a job)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_productions (
+  id TEXT PRIMARY KEY,
+  story_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  engine TEXT NOT NULL DEFAULT '',
+  sfml_sha256 TEXT NOT NULL DEFAULT '',
+  sfml_url TEXT NOT NULL DEFAULT '',
+  sfml_bytes BIGINT NOT NULL DEFAULT 0,
+  casting JSONB NOT NULL DEFAULT '{}'::jsonb,
+  params JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"""
+    )
+
     # Production: versioned story audio (published when user hits Save from a completed job)
     cur.execute(
         """
@@ -261,6 +280,15 @@ def db_init(conn) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_push_device_id_idx ON sf_push_subscriptions (device_id)")
     except Exception:
         pass
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS sf_productions_story_id_idx ON sf_productions (story_id)")
+    except Exception:
+        pass
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS sf_productions_sfml_sha_idx ON sf_productions (sfml_sha256)")
+    except Exception:
+        pass
+
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS sf_story_audio_story_id_idx ON sf_story_audio (story_id)")
     except Exception:

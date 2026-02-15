@@ -98,3 +98,41 @@ def upload_bytes(data: bytes, key_prefix: str, filename: str, content_type: str)
     )
 
     return obj_key, f"{public_base.rstrip('/')}/{obj_key}"
+
+
+def upload_bytes_dedup(data: bytes, obj_key: str, content_type: str) -> Tuple[str, str, bool]:
+    """Upload bytes to a fixed key if missing.
+
+    Returns (object_key, public_url, existed).
+
+    Useful for content-addressed storage (e.g. sfml/<sha>.sfml).
+    """
+    if not spaces_enabled():
+        raise RuntimeError("spaces_not_configured")
+
+    obj_key = str(obj_key or '').lstrip('/')
+    if not obj_key:
+        raise ValueError('missing_obj_key')
+
+    bucket = _env("SPACES_BUCKET")
+    public_base = _public_base()
+
+    c = _client()
+
+    existed = False
+    try:
+        c.head_object(Bucket=bucket, Key=obj_key)
+        existed = True
+    except Exception:
+        existed = False
+
+    if not existed:
+        c.put_object(
+            Bucket=bucket,
+            Key=obj_key,
+            Body=data,
+            ACL="public-read",
+            ContentType=content_type or "application/octet-stream",
+        )
+
+    return obj_key, f"{public_base.rstrip('/')}/{obj_key}", existed
