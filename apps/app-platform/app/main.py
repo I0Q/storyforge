@@ -18,6 +18,7 @@ from .auth import register_passphrase_auth
 from .ui_header_shared import USER_MENU_HTML, USER_MENU_JS
 from .ui_audio_shared import AUDIO_DOCK_JS
 from .ui_debug_shared import DEBUG_PREF_APPLY_JS
+from .ui_page_shared import render_page
 from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
@@ -3951,6 +3952,7 @@ def voices_root(response: Response):
     return RedirectResponse(url='/#tab-voices', status_code=302)
 
 
+
 @app.get('/voices/{voice_id}/edit', response_class=HTMLResponse)
 def voices_edit_page(voice_id: str, response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -3979,32 +3981,31 @@ def voices_edit_page(voice_id: str, response: Response):
     enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
     vtraits_json = str(v.get('voice_traits_json') or '').strip()
 
-    html = """<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge - Edit Voice</title>
-  <style>__VOICES_BASE_CSS____VOICE_EDIT_EXTRA_CSS__</style>
-</head>
-<body>
-  __DEBUG_BANNER_BOOT_JS__
-  __USER_MENU_JS__
-  __DEBUG_PREF_APPLY_JS__
-  __AUDIO_DOCK_JS__
-  <div class='navBar'>
-    <div class='top'>
-      <div>
-        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>
-        <div class='muted'><code>__VID__</code></div>
-      </div>
-      <div class='row headActions'>
-        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-        __USER_MENU_HTML__
-      </div>
-    </div>
-  </div>
+    style_css = VOICES_BASE_CSS + VOICE_EDIT_EXTRA_CSS
 
+    body_top = (
+        DEBUG_BANNER_BOOT_JS
+        + "\\n" + USER_MENU_JS
+        + "\\n" + DEBUG_PREF_APPLY_JS
+        + "\\n" + AUDIO_DOCK_JS
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Edit voice</div></div>"
+        "      <div class='muted'><code>__VID__</code></div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
   __DEBUG_BANNER_HTML__
 
   <div class='card'>
@@ -4076,631 +4077,152 @@ def voices_edit_page(voice_id: str, response: Response):
   </div>
 
   <div class='card'>
-    <div class='row' style='justify-content:space-between;align-items:baseline;gap:10px'>
-      <div style='font-weight:950;margin-bottom:6px;'>Voice traits</div>
-      <button type='button' class='secondary' onclick='analyzeMeta()'>Analyze voice</button>
+    <div class='row' style='justify-content:space-between;align-items:center'>
+      <div style='font-weight:950'>Voice traits</div>
+      <button class='secondary' type='button' onclick='analyzeVoice()'>Analyze voice</button>
     </div>
-    <input id='voice_traits_json' type='hidden' value='__VTRAITS__' />
-    <div id='traitsBox' class='term' style='margin-top:10px'>Loading…</div>
-    <details class='rawBox' style='margin-top:10px'>
-      <summary>Raw JSON</summary>
-      <pre class='term' style='white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
-    </details>
+    <div class='term' id='traits' style='margin-top:10px;white-space:pre-wrap;'>__VTRAITS__</div>
   </div>
 
-  <div class='card'>
-    <div class='row' style='margin-top:0;justify-content:space-between;gap:10px;flex-wrap:wrap'>
-      <button type='button' class='secondary' onclick='deleteThisVoice()' style='border-color: rgba(255,77,77,.35); color: var(--bad);'>Delete</button>
-      <div class='row' style='gap:10px;justify-content:flex-end;margin-left:auto'>
-        <button type='button' onclick='save()'>Save</button>
-      </div>
-    </div>
+  __MONITOR__
 
-    <div id='out' class='muted' style='margin-top:10px'></div>
+  <div class='row' style='justify-content:space-between;margin-top:12px'>
+    <button class='secondary' type='button' onclick='deleteVoice()' style='border-color:rgba(255,0,72,.35);color:#ff4d6d'>Delete</button>
+    <button type='button' onclick='saveVoice()'>Save</button>
   </div>
+"""
 
+    body_bottom = """
 <script>
-function escJs(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escapeHtml(s){
-  try{ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }catch(e){ return String(s||''); }
-}
-function $(id){ return document.getElementById(id); }
-function val(id){ var el=$(id); if(!el) return ''; return (el.value!=null) ? String(el.value||'') : String(el.textContent||''); }
-function chk(id){ var el=$(id); return !!(el && el.checked); }
+__MONITOR_JS__
 
-// Swatch uses server-provided hex (no client-side color naming logic)
-
-function updateEditSwatch(){
+function copyText(s){
   try{
-    var sw=$('editSwatch');
-    var hx=$('color_hex');
-    if (!sw || !hx) return;
-    sw.style.background = String(hx.value||'').trim() || '#64748b';
-  }catch(e){}
-}
-
-function setEditColorHex(h){
-  try{
-    var hx=$('color_hex');
-    var pk=$('colorPick');
-    if (hx) hx.value = String(h||'').trim();
-    if (pk) pk.value = String(h||'').trim() || '#64748b';
-    updateEditSwatch();
-  }catch(e){}
-}
-
-function _colorReturnSetup(pkId, wrapId, applyFn){
-  try{
-    window.__SF_COLOR_RETURN = { pkId: String(pkId||''), wrapId: String(wrapId||''), apply: applyFn, prev: '' };
-    try{ var el=document.getElementById(window.__SF_COLOR_RETURN.pkId); if (el) window.__SF_COLOR_RETURN.prev = String(el.value||''); }catch(_e){}
-    if (!window.__SF_COLOR_RETURN_HOOKED){
-      window.__SF_COLOR_RETURN_HOOKED = true;
-      window.addEventListener('focus', function(ev){
-        try{
-          // Important: do NOT capture element focus events; we only want window focus return.
-          if (ev && ev.target && ev.target !== window) return;
-          var st = window.__SF_COLOR_RETURN;
-          if (!st || !st.pkId || typeof st.apply !== 'function') return;
-          var el = document.getElementById(st.pkId);
-          if (!el) return;
-          var v = String(el.value||'');
-          if (v && v !== String(st.prev||'')){
-            st.prev = v;
-            try{ st.apply(v); }catch(_e){}
-          }
-          // hide again after the picker is dismissed
-          try{ var w = st.wrapId ? document.getElementById(st.wrapId) : null; if (w) w.style.display='none'; }catch(_e){}
-        }catch(_e){}
-      }, false);
-    }
-  }catch(e){}
-}
-
-function openColorPick(){
-  try{
-    var pk=$('colorPick');
-    if (!pk) return;
-    var w=$('colorPickWrap'); if (w) w.style.display='inline-block';
-    _colorReturnSetup('colorPick', 'colorPickWrap', function(v){ try{ setEditColorHex(v); }catch(_e){} });
-    try{ pk.focus(); }catch(_e){}
-    // Must happen in the same user gesture; iOS can block delayed/programmatic clicks.
-    try{
-      if (pk && typeof pk.showPicker === 'function') pk.showPicker();
-      else pk.click();
-    }catch(_e){ try{ pk.click(); }catch(__e){} }
-  }catch(e){}
-}
-
-function genEditVoiceName(){
-  var out=$('out');
-  var el=$('display_name');
-  if (!el) return;
-  var orig = String(el.value||'');
-  if (out) out.textContent='Picking a color…';
-  fetch('/api/voices/random_name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}), credentials:'include'})
-    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-    .then(function(j){
-      if (!j || !j.ok || !j.name) throw new Error((j&&j.error)||'name_failed');
-      el.value = String(j.name||'').trim();
-      setEditColorHex(String(j.color_hex||'').trim());
-      if (out) out.textContent='';
-    })
-    .catch(function(e){ el.value = orig; if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
-}
-
-try{ setTimeout(updateEditSwatch, 0); }catch(e){}
-
-function updateSampleTextCount(){
-  try{
-    var ta=$('sampleText');
-    var c=$('sampleTextCount');
-    if (!ta || !c) return;
-    var n = (String(ta.value||'')||'').length;
-    c.textContent = String(n) + ' chars';
-  }catch(e){}
-}
-
-function deleteThisVoice(){
-  try{
-    if (!confirm('Delete this voice? This also deletes any associated sample/clip in Spaces.')) return;
-    var out=$('out'); if(out) out.textContent='Deleting…';
-    fetch('/api/voices/__VID_RAW__', {method:'DELETE', credentials:'include'})
-      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-      .then(function(j){
-        if (j && j.ok){
-          try{ toastSet('Deleted', 'ok', 1400); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-          window.location.href='/#tab-voices';
-          return;
-        }
-        if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'delete failed')+'</div>';
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-  }catch(e){}
-}
-
-
-function renderTraits(){
-
-  try{
-    var box=$('traitsBox');
-    var hid=$('voice_traits_json');
-    if (!box || !hid) return;
-    var raw = String(hid.value||'').trim();
-    if (!raw || raw==='—'){
-      box.innerHTML = '<div class="muted">No metadata yet. Tap <b>Analyze voice</b>.</div>';
-      return;
-    }
-    // raw is JSON string stored in DB; it's HTML-escaped in the template but should still be valid JSON.
-    var obj=null;
-    try{ obj = JSON.parse(raw); }catch(e){
-      // try unescape common entities
-      try{
-        var tmp=document.createElement('textarea');
-        tmp.innerHTML = raw;
-        obj = JSON.parse(tmp.value);
-      }catch(_e){ obj=null; }
-    }
-    if (!obj){
-      box.innerHTML = '<div class="err">Could not parse voice traits JSON.</div>';
-      return;
-    }
-
-    var vt = obj.voice_traits || {};
-    var m = obj.measured || {};
-    var f = m.features || {};
-
-    function fmtNum(x, d){
-      try{
-        var n = Number(x);
-        if (!isFinite(n)) return '';
-        return n.toFixed(d==null?2:d);
-      }catch(e){ return ''; }
-    }
-    function chip(txt, cls){
-      txt = String(txt||'').trim();
-      if (!txt) return '';
-      return '<span class="chip '+(cls||'')+'">'+escapeHtml(txt)+'</span>';
-    }
-
-    var tone = Array.isArray(vt.tone) ? vt.tone : [];
-    var toneHtml = tone.length ? tone.map(t=>chip(t,'')).join('') : '<span class="muted">—</span>';
-
-    var dur = (m.duration_s!=null) ? fmtNum(m.duration_s,2)+'s' : '';
-    var lufs = (m.lufs_i!=null) ? fmtNum(m.lufs_i,1)+' LUFS' : '';
-
-    var f0 = (f.f0_hz_median!=null) ? fmtNum(f.f0_hz_median,0)+' Hz' : '';
-    var f0r = (f.f0_hz_p10!=null && f.f0_hz_p90!=null) ? (fmtNum(f.f0_hz_p10,0)+'–'+fmtNum(f.f0_hz_p90,0)+' Hz') : '';
-
-    box.innerHTML = ''
-      + '<div class="traitsGrid">'
-      + '<div class="k">gender</div><div class="v">'+escapeHtml(String(vt.gender||'unknown'))+'</div>'
-      + '<div class="k">age</div><div class="v">'+escapeHtml(String(vt.age||'unknown'))+'</div>'
-      + '<div class="k">pitch</div><div class="v">'+escapeHtml(String(vt.pitch||'unknown'))+(f0?(' • '+escapeHtml(f0)):'')+(f0r?(' <span class="muted">('+escapeHtml(f0r)+')</span>'):'')+'</div>'
-      + '<div class="k">accent</div><div class="v">'+escapeHtml(String(vt.accent||''))+'</div>'
-      + '<div class="k">tone</div><div class="v"><div class="chips">'+toneHtml+'</div></div>'
-      + '<div class="k">duration</div><div class="v">'+(dur?escapeHtml(dur):'<span class="muted">—</span>')+'</div>'
-      + '<div class="k">loudness</div><div class="v">'+(lufs?escapeHtml(lufs):'<span class="muted">—</span>')+'</div>'
-      + '<div class="k">engine</div><div class="v">'+escapeHtml(String(m.engine||''))+'</div>'
-      + '<div class="k">voice_ref</div><div class="v">'+escapeHtml(String(m.voice_ref||''))+'</div>'
-      + (m.tortoise_voice?('<div class="k">tortoise</div><div class="v">'+escapeHtml(String(m.tortoise_voice||''))+'</div>'):'')
-      + '</div>';
-  }catch(e){}
-}
-
-function analyzeMeta(){
-
-  try{
-    var out=$('out'); if(out) out.textContent='Analyzing voice…';
-    fetch('/api/voices/__VID_RAW__/analyze_metadata', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
-      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-      .then(function(j){
-        if (j && j.ok){
-          if(out) out.textContent='Voice analysis job started.';
-          try{ toastSet('Analyzing voice…', 'info', 1800); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
-          setTimeout(function(){ window.location.href='/#tab-history'; }, 250);
-          return;
-        }
-        if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'analyze failed')+'</div>';
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-  }catch(e){ }
-}
-
-function save(){
-  var out=$('out'); if(out) out.textContent='Saving…';
-  var payload={
-    display_name: val('display_name'),
-    color_hex: val('color_hex'),
-    enabled: chk('enabled')
-  };
-  fetch('/api/voices/__VID_RAW__', {method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload)})
-    .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-    .then(function(j){
-      if (j && j.ok){ if(out) out.textContent='Saved.'; setTimeout(function(){ window.location.href='/#tab-voices'; }, 250); return; }
-      if(out) out.innerHTML='<div class="err">'+escJs((j&&j.error)||'save failed')+'</div>';
-    }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e))+'</div>'; });
-}
-
-function __copyText(txt){
-  try{
-    txt = String(txt||'');
-    if (!txt) return;
-    if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).catch(function(){
-        try{
-          var ta=document.createElement('textarea');
-          ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
-          document.body.appendChild(ta);
-          ta.focus(); ta.select();
-          try{ document.execCommand('copy'); }catch(_e){}
-          ta.remove();
-        }catch(_e){}
-      });
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(String(s||''));
       return;
     }
   }catch(e){}
   try{
     var ta=document.createElement('textarea');
-    ta.value=txt; ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
+    ta.value=String(s||'');
     document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    try{ document.execCommand('copy'); }catch(_e){}
-    ta.remove();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
   }catch(e){}
 }
 
 function copySampleUrl(){
+  try{ copyText(document.getElementById('sample_url').value||''); }catch(e){}
+}
+function copyVoiceRef(){
+  try{ copyText(document.getElementById('voice_ref').textContent||''); }catch(e){}
+}
+
+function setEditColorHex(hex){
+  try{ document.getElementById('color_hex').value = String(hex||''); }catch(e){}
+  try{ document.getElementById('editSwatch').style.background = String(hex||''); }catch(e){}
+}
+
+function openColorPick(){
   try{
-    var su=$('sample_url');
-    var txt = su ? String(su.value||'').trim() : '';
-    __copyText(txt);
-    try{ if (typeof toastSet === 'function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(e){}
+    var wrap = document.getElementById('colorPickWrap');
+    var inp = document.getElementById('colorPick');
+    if (wrap) wrap.style.display='inline-block';
+    if (inp){
+      try{ inp.focus(); }catch(e){}
+      try{ inp.click(); }catch(e){}
+    }
+  }catch(e){}
+}
+
+function genEditVoiceName(){
+  try{
+    var names=['Moscow Winter','Silver River','Quiet Ember','Night Lantern','Cold Harbor','Iron Lullaby'];
+    document.getElementById('display_name').value = names[Math.floor(Math.random()*names.length)];
   }catch(e){}
 }
 
 function playSample(){
   try{
-    var su=$('sample_url');
-    var existing = su ? String(su.value||'').trim() : '';
-    if (existing){
-      try{ __sfPlayAudio(existing, 'Voice sample'); }catch(_e){}
+    var url = document.getElementById('sample_url').value||'';
+    if (!url) return;
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio(url, 'Sample: __VID_RAW__');
       return;
     }
-
-    var out=$('out'); if(out) out.textContent='Generating sample…';
-    fetch('/api/voices/__VID_RAW__/sample', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})})
-      .then(function(r){ return r.json().catch(function(){return {ok:false,error:'bad_json'};}); })
-      .then(function(j){
-        if (!j || !j.ok || !j.sample_url){ throw new Error((j&&j.error)||'no_sample_url'); }
-        try{ if (su) su.value = String(j.sample_url||''); }catch(e){}
-        try{ var t=$('sample_url_text'); if (t) { t.textContent = String(j.sample_url||''); t.title = String(j.sample_url||''); } }catch(e){}
-        try{ __sfPlayAudio(String(j.sample_url||''), 'Voice sample'); }catch(_e){}
-        if(out) out.textContent='';
-      })
-      .catch(function(e){ if(out) out.innerHTML='<div class="err">'+escJs(String(e&&e.message?e.message:e))+'</div>'; });
+    window.open(url, '_blank');
   }catch(e){}
 }
 
-function copyVoiceRef(){
+async function analyzeVoice(){
   try{
-    var txt = val('voice_ref');
-    __copyText(txt);
-    try{ if (typeof toastSet==='function'){ toastSet('Copied', 'ok', 1200); if (window.__sfToastInit) window.__sfToastInit(); } }catch(_e){}
+    var btns=document.querySelectorAll('button');
+    for (var i=0;i<btns.length;i++){ if ((btns[i].textContent||'').trim()==='Analyze voice'){ btns[i].disabled=true; } }
   }catch(e){}
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(e){} }); }catch(e){}
-</script>
-
-
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
-    </div>
-  </div>
-
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
-
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
-<script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
   try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
+    var r = await fetch('/api/voices/analyze', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({voice_id:'__VID_RAW__'})});
+    var j = await r.json();
+    if (j && j.ok){
+      document.getElementById('traits').textContent = JSON.stringify(j.traits, null, 2);
+    }else{
+      alert((j && j.error) ? j.error : 'Analyze failed');
+    }
   }catch(e){
-    return true;
+    alert('Analyze failed: ' + String(e));
   }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
   try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
+    var btns2=document.querySelectorAll('button');
+    for (var k=0;k<btns2.length;k++){ if ((btns2[k].textContent||'').trim()==='Analyze voice'){ btns2[k].disabled=false; } }
+  }catch(e){}
+}
+
+async function saveVoice(){
+  try{
+    var payload={
+      voice_id:'__VID_RAW__',
+      display_name: (document.getElementById('display_name').value||'').trim(),
+      color_hex: (document.getElementById('color_hex').value||'').trim(),
+      enabled: !!document.getElementById('enabled').checked
+    };
+    var r=await fetch('/api/voices/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    var j=await r.json();
+    if (!j || !j.ok){
+      alert((j && j.error) ? j.error : 'Save failed');
+      return;
+    }
+    location.href='/#tab-voices';
   }catch(e){
-    return String(ts);
+    alert('Save failed: ' + String(e));
   }
 }
 
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
-    }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
+async function deleteVoice(){
+  try{ if (!confirm('Delete this voice?')) return; }catch(e){}
   try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
+    var r=await fetch('/api/voices/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({voice_id:'__VID_RAW__'})});
+    var j=await r.json();
+    if (!j || !j.ok){
+      alert((j && j.error) ? j.error : 'Delete failed');
+      return;
     }
-  }catch(e){}
-}
-
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
-    };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
+    location.href='/#tab-voices';
+  }catch(e){
+    alert('Delete failed: ' + String(e));
   }
-  startMetricsStream();
 }
-
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
-  try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
-    }
-  }catch(e){}
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
 </script>
-  </body>
-</html>"""
+"""
+
+    html = render_page(
+        title='StoryForge - Edit Voice',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
 
     html = (html
         .replace('__VID__', vid)
@@ -4715,17 +4237,14 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
         .replace('__VTRAITS__', esc(vtraits_json) if vtraits_json else '—')
     )
     html = (html
-        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
-        .replace('__VOICE_EDIT_EXTRA_CSS__', VOICE_EDIT_EXTRA_CSS)
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
-        .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
         .replace('__USER_MENU_HTML__', USER_MENU_HTML)
-        .replace('__USER_MENU_JS__', USER_MENU_JS)
-        .replace('__DEBUG_PREF_APPLY_JS__', DEBUG_PREF_APPLY_JS)
-        .replace('__AUDIO_DOCK_JS__', AUDIO_DOCK_JS)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
         .replace('__BUILD__', str(build))
     )
     return html
+
 
 
 @app.get('/settings/providers/new')
@@ -4762,36 +4281,35 @@ def settings_new_provider_page(response: Response):
     )
 
 
+
 @app.get('/voices/new', response_class=HTMLResponse)
 def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
     build = APP_BUILD
-    # Separate screen for generating/testing a voice before saving.
-    html = '''<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
-  <title>StoryForge - Generate voice</title>
-  <style>__VOICES_BASE_CSS____VOICE_NEW_EXTRA_CSS__</style>
-</head>
-<body>
-  __DEBUG_BANNER_BOOT_JS__
-  __USER_MENU_JS__
-  __DEBUG_PREF_APPLY_JS__
-  __AUDIO_DOCK_JS__
-  <div class='navBar'>
-    <div class='top'>
-      <div>
-        <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>
-      </div>
-      <div class='row headActions'>
-        <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>
-        __USER_MENU_HTML__
-      </div>
-    </div>
-  </div>
 
+    style_css = VOICES_BASE_CSS + VOICE_NEW_EXTRA_CSS
+    body_top = (
+        DEBUG_BANNER_BOOT_JS
+        + "\\n" + USER_MENU_JS
+        + "\\n" + DEBUG_PREF_APPLY_JS
+        + "\\n" + AUDIO_DOCK_JS
+    )
+
+    nav_html = (
+        "<div class='navBar'>"
+        "  <div class='top'>"
+        "    <div>"
+        "      <div class='brandRow'><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class='pageName'>Generate voice</div></div>"
+        "    </div>"
+        "    <div class='row headActions'>"
+        "      <a href='/#tab-voices'><button class='secondary' type='button'>Back</button></a>"
+        "      __USER_MENU_HTML__"
+        "    </div>"
+        "  </div>"
+        "</div>"
+    )
+
+    content_html = """
   __DEBUG_BANNER_HTML__
 
   <div class='card'>
@@ -4826,1532 +4344,152 @@ def voices_new_page(response: Response):
     <div id='tortoiseBox' class='hide'>
       <div class='k'>Tortoise voice</div>
       <div class='row' style='gap:10px;flex-wrap:nowrap'>
-        <select id='tortoiseVoice' style='flex:1;min-width:0'></select>
-        <select id='tortoiseGender' style='flex:0 0 140px'>
-          <option value='any' selected>Any</option>
-          <option value='female'>Female</option>
-          <option value='male'>Male</option>
-        </select>
+        <input id='tortoiseVoice' placeholder='train_dotrice' style='flex:1;min-width:0'/>
       </div>
-      <div class='k'>Quality</div>
-      <select id='tortoisePreset'>
-        <option value='ultrafast'>ultrafast</option>
-        <option value='fast'>fast</option>
-        <option value='standard' selected>standard</option>
-        <option value='high_quality'>high_quality</option>
-      </select>
+      <div class='muted'>Existing Tortoise voice directory name on the provider host.</div>
     </div>
 
-    <div id='clipBox'>
-      <div class='k'>Voice clip</div>
-      <div class='row' style='gap:10px;flex-wrap:nowrap'>
-        <select id='clipMode' style='flex:0 0 160px'>
-          <option value='preset' selected>Choose preset</option>
-          <option value='upload'>Upload</option>
-          <option value='url'>Paste URL</option>
-        </select>
+    <div id='xttsBox' class='hide'>
+      <div class='k'>XTTS reference (wav/mp3 URL)</div>
+      <input id='xttsRef' placeholder='https://.../clip.wav'/>
+      <div class='muted'>We will use this clip as the speaker reference for XTTS.</div>
+    </div>
 
-        <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
-          <select id='clipPreset'></select>
-        </div>
+    <div class='k'>Reference audio (optional)</div>
+    <input id='voiceRefUrl' placeholder='https://.../clip.wav' />
+    <div class='muted'>If provided, we can use it for voice analysis and some engines.</div>
 
-        <div id='clipUploadRow' class='hide' style='flex:1;min-width:0'>
-          <input id='clipFile' type='file' accept='audio/*' />
-        </div>
+    <div class='k'>Sample text</div>
+    <textarea id='sampleText'>The forgotten stories of the past hold echoes of truth that resonate even today. Unveiling their secrets, we embark on a journey of human resilience and transformation.</textarea>
 
-        <div id='clipUrlRow' class='hide' style='flex:1;min-width:0'>
-          <input id='clipUrl' placeholder='https://…/clip.wav' />
-        </div>
+    <div class='row' style='justify-content:space-between;align-items:center;margin-top:10px'>
+      <button class='secondary' type='button' onclick='voicePreview()'>Generate sample</button>
+      <button type='button' onclick='voiceSave()'>Save to roster</button>
+    </div>
+
+    <div id='previewBox' class='hide' style='margin-top:12px'>
+      <div class='muted'>Preview</div>
+      <div class='row' style='justify-content:space-between;align-items:center;margin-top:8px'>
+        <div class='fadeText' id='previewUrlText'></div>
+        <button class='secondary' type='button' onclick='previewPlay()'>Play</button>
       </div>
     </div>
 
-    <div class='k'>Sample text <span class='muted' id='sampleTextCount' style='margin-left:8px'>0 chars</span></div>
-    <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <textarea id='sampleText' placeholder='Hello…' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
-      <button type='button' class='copyBtn' onclick='genSampleText()' aria-label='Random sample text' title='Random sample text' style='align-self:stretch'>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-          <path stroke="currentColor" fill="currentColor" d="M8.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
-          <path stroke="currentColor" fill="currentColor" d="M15.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
-          <path stroke="currentColor" fill="currentColor" d="M15.5 9.5a1 1 0 110-2 1 1 0 010 2z"/>
-          <path stroke="currentColor" fill="currentColor" d="M8.5 16.5a1 1 0 110-2 1 1 0 010 2z"/>
-          <path stroke="currentColor" fill="currentColor" d="M12 13a1 1 0 110-2 1 1 0 010 2z"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class='row' style='margin-top:12px'>
-      <button type='button' onclick='trainAndSave()'>Generate</button>
-    </div>
-
-    <div id='out' class='muted' style='margin-top:10px'></div>
   </div>
 
-<script>
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escAttr(s){
-  // escape for HTML attributes / single-quoted contexts
-  try{
-    return String(s||'')
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;')
-      .replace(/'/g,'&#39;');
-  }catch(e){
-    return '';
-  }
-}
+  __MONITOR__
+"""
 
-function voiceColorHex(name){
-  try{
-    var s = String(name||'').toLowerCase();
-    var words = s.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
-    var map = {
-      ruby:'#ef4444', amber:'#f59e0b', coral:'#fb7185', rose:'#f43f5e', peach:'#fdba74', lilac:'#c4b5fd', violet:'#a78bfa',
-      sapphire:'#60a5fa', sky:'#38bdf8', aqua:'#22d3ee', mint:'#34d399', sage:'#86efac', jade:'#10b981', emerald:'#22c55e', teal:'#14b8a6', pearl:'#e5e7eb',
-      onyx:'#0b0b10', slate:'#64748b', steel:'#94a3b8', cobalt:'#2563eb', indigo:'#4f46e5', navy:'#1e3a8a', forest:'#166534', moss:'#4d7c0f',
-      copper:'#b45309', bronze:'#a16207', umber:'#92400e', ash:'#9ca3af', obsidian:'#111827', graphite:'#6b7280', stone:'#a3a3a3', sand:'#e7d3a7',
-      ivory:'#f5f5dc', gold:'#facc15'
-    };
-    for (var i=words.length-1; i>=0; i--){
-      var w = words[i];
-      if (map[w]) return map[w];
-      if (w.length>1 && w.charAt(w.length-1)==='s'){
-        var w2 = w.slice(0,-1);
-        if (map[w2]) return map[w2];
-      }
-    }
-    var h=0;
-    for (var k=0;k<s.length;k++){ h = ((h<<5)-h) + s.charCodeAt(k); h |= 0; }
-    var hue = Math.abs(h) % 360;
-    return 'hsl(' + hue + ', 70%, 55%)';
-  }catch(e){
-    return '#64748b';
-  }
+    body_bottom = """
+<script>
+__MONITOR_JS__
+
+function setEngineUi(){
+  var e = (document.getElementById('engineSel').value||'').trim();
+  var tb = document.getElementById('tortoiseBox');
+  var xb = document.getElementById('xttsBox');
+  if (tb) tb.classList.toggle('hide', e !== 'tortoise');
+  if (xb) xb.classList.toggle('hide', e !== 'xtts');
 }
 
 function setVoiceSwatchHex(hex){
-  try{
-    var hx=document.getElementById('voiceColorHex');
-    var sw=document.getElementById('voiceSwatch');
-    var pk=document.getElementById('voiceColorPick');
-    var v = String(hex||'').trim();
-    if (hx) hx.value = v;
-    if (pk) pk.value = v || '#64748b';
-    if (sw) sw.style.background = v || '#64748b';
-  }catch(e){}
+  try{ document.getElementById('voiceColorHex').value = String(hex||''); }catch(e){}
+  try{ document.getElementById('voiceSwatch').style.background = String(hex||''); }catch(e){}
 }
+
 function openVoiceColorPick(){
   try{
-    var pk=document.getElementById('voiceColorPick');
-    if (!pk) return;
-    var w=document.getElementById('voiceColorPickWrap'); if (w) w.style.display='inline-block';
-    _colorReturnSetup('voiceColorPick', 'voiceColorPickWrap', function(v){ try{ setVoiceSwatchHex(v); }catch(_e){} });
-    try{ pk.focus(); }catch(_e){}
-    try{
-      if (pk && typeof pk.showPicker === 'function') pk.showPicker();
-      else pk.click();
-    }catch(_e){ try{ pk.click(); }catch(__e){} }
-  }catch(e){}
-}
-
-
-
-function $(id){ return document.getElementById(id); }
-
-function updateSampleTextCount(){
-  try{
-    var ta=$('sampleText');
-    var c=$('sampleTextCount');
-    if (!ta || !c) return;
-    var txt = String(ta.value||'');
-    var chars = txt.length;
-    var words = 0;
-    try{ words = txt.trim() ? txt.trim().split(/\s+/).length : 0; }catch(e){ words = 0; }
-    c.textContent = String(chars) + ' chars • ' + String(words) + ' words';
-  }catch(e){}
-}
-
-function jsonFetch(url, opts){
-  opts = opts || {};
-  opts.credentials = 'include';
-  return fetch(url, opts).then(function(r){
-    if (r.status===401){ window.location.href='/login'; return Promise.reject(new Error('unauthorized')); }
-    return r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
-  });
-}
-
-// user menu
-function toggleMenu(){
-  var m=document.getElementById('topMenu');
-  if (!m) return;
-  if (m.classList.contains('show')) m.classList.remove('show');
-  else m.classList.add('show');
-}
-try{
-  document.addEventListener('click', function(ev){
-    try{
-      var m=document.getElementById('topMenu');
-      if (!m) return;
-      var w=ev.target && ev.target.closest ? ev.target.closest('.menuWrap') : null;
-      if (!w) m.classList.remove('show');
-    }catch(e){}
-    try{ setEngineUi(); }catch(e){}
-  });
-}catch(e){}
-
-function setVis(){
-  var m=(($('clipMode')||{}).value||'upload');
-  var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
-  if(u) u.classList.toggle('hide', m!=='upload');
-  if(p) p.classList.toggle('hide', m!=='preset');
-  if(r) r.classList.toggle('hide', m!=='url');
-}
-
-// Tortoise built-in voices (from Tinybox tortoise install)
-var TORTOISE_VOICES = [
-  'angie','applejack','daniel','deniro','emma','freeman','geralt','halle','jlaw','lj','mol','myself','pat','pat2','rainbow','snakes','tim_reynolds','tom','weaver','william',
-  'train_atkins','train_daws','train_dotrice','train_dreams','train_empire','train_grace','train_kennard','train_lescault','train_mouse'
-];
-var TORTOISE_GENDER = {
-  'angie':'female','emma':'female','halle':'female','jlaw':'female','mol':'female','rainbow':'female','applejack':'female','train_grace':'female',
-  'daniel':'male','deniro':'male','freeman':'male','geralt':'male','lj':'male','myself':'male','pat':'male','pat2':'male','snakes':'male','tim_reynolds':'male','tom':'male','weaver':'male','william':'male',
-  'train_atkins':'male','train_daws':'male','train_dotrice':'male','train_dreams':'male','train_empire':'male','train_kennard':'male','train_lescault':'male','train_mouse':'male'
-};
-
-function loadTortoiseVoices(){
-  var sel=$('tortoiseVoice');
-  if(!sel) return;
-  var gsel=$('tortoiseGender');
-  var g = gsel ? String(gsel.value||'any') : 'any';
-  var voices = TORTOISE_VOICES.slice();
-  if (g==='female' || g==='male') voices = voices.filter(function(v){ return (TORTOISE_GENDER[v]||'any')===g; });
-  if (!voices.length) voices = TORTOISE_VOICES.slice();
-  var cur = '';
-  try{ cur = String(sel.value||'').trim(); }catch(e){}
-  sel.innerHTML='';
-  for (var i=0;i<voices.length;i++){
-    var o=document.createElement('option');
-    o.value=voices[i];
-    o.textContent=voices[i];
-    sel.appendChild(o);
-  }
-  if (cur){ try{ sel.value=cur; }catch(e){} }
-}
-
-function setEngineUi(){
-  var eng = String((($('engineSel')||{}).value||'')).trim();
-  var tb=$('tortoiseBox');
-  if (tb) tb.classList.toggle('hide', eng!=='tortoise');
-
-  // Hide clip UI entirely when tortoise is selected
-  try{
-    var showClip = (eng!=='tortoise');
-    var cb = $('clipBox');
-    if (cb) cb.classList.toggle('hide', !showClip);
-    if (!showClip){
-      if ($('clipPresetRow')) $('clipPresetRow').classList.add('hide');
-      if ($('clipUploadRow')) $('clipUploadRow').classList.add('hide');
-      if ($('clipUrlRow')) $('clipUrlRow').classList.add('hide');
-    } else {
-      // Ensure the correct inline clip control is visible (preset/upload/url)
-      try{ setVis(); }catch(e){}
+    var wrap = document.getElementById('voiceColorPickWrap');
+    var inp = document.getElementById('voiceColorPick');
+    if (wrap) wrap.style.display='inline-block';
+    if (inp){
+      try{ inp.focus(); }catch(e){}
+      try{ inp.click(); }catch(e){}
     }
   }catch(e){}
 }
-
-function loadEngines(){
-  return jsonFetch('/api/voice_provider/engines').then(function(j){
-    var sel=$('engineSel'); if(!sel) return;
-    var prev = '';
-    try{ prev = String(sel.value||'').trim(); }catch(e){}
-
-    sel.innerHTML='';
-    var arr=(j&&j.engines)||[];
-    if (!arr.length){ arr=['tortoise','xtts']; }
-    for(var i=0;i<arr.length;i++){
-      var o=document.createElement('option');
-      o.value=String(arr[i]);
-      o.textContent=String(arr[i]);
-      sel.appendChild(o);
-    }
-    // default to tortoise if available; otherwise keep previous selection
-    try{
-      var hasT = false;
-      for (var k=0;k<sel.options.length;k++){ if (String(sel.options[k].value)==='tortoise') { hasT=true; break; } }
-      if (hasT) sel.value = 'tortoise';
-      else if (prev) sel.value = prev;
-    }catch(e){}
-
-    // Force UI sync even if async timing is weird on iOS
-    try{ setEngineUi(); }catch(e){}
-    try{ setTimeout(function(){ try{ setEngineUi(); }catch(e){} }, 0); }catch(e){}
-    try{ setTimeout(function(){ try{ setEngineUi(); }catch(e){} }, 200); }catch(e){}
-  });
-}
-
-function loadPresets(){
-  function runOnce(){ return jsonFetch('/api/voice_provider/presets'); }
-  return runOnce().catch(function(_e){ return new Promise(function(res){ setTimeout(res, 600); }).then(runOnce); }).then(function(j){
-    var sel=$('clipPreset'); if(!sel) return;
-    sel.innerHTML='';
-
-    if (!j || j.ok===false){
-      var msg = String((j&&j.error)?j.error:'unknown');
-      var st = (j&&j.status!=null) ? (' ' + String(j.status)) : '';
-      sel.innerHTML = "<option value=''>No presets (error"+st+")</option>";
-      var out=$('out');
-      if (out){
-        out.innerHTML = "<div class='err'>Presets failed: " + esc(msg) + (st?(' (HTTP '+esc(String(j.status))+')'):'') + "</div>";
-      }
-      return;
-    }
-
-    var arr=(j&&j.clips)||[];
-    if (!arr.length){
-      sel.innerHTML = "<option value=''>No presets available</option>";
-      return;
-    }
-    function presetLabel(c){
-      try{
-        var nm = String((c&&c.name)||'').trim();
-        var male = {'awb':1,'bdl':1,'jmk':1,'ksp':1,'rms':1};
-        var female = {'clb':1,'slt':1};
-        if (nm && male[nm]) return nm + ' (male)';
-        if (nm && female[nm]) return nm + ' (female)';
-        return String((c&&c.name) || (c&&c.url) || (c&&c.path) || '');
-      }catch(e){
-        return String((c&&c.name) || (c&&c.url) || (c&&c.path) || '');
-      }
-    }
-
-    for(var i=0;i<arr.length;i++){
-      var c=arr[i]||{};
-      var o=document.createElement('option');
-      o.value=String(c.url||c.path||'');
-      o.textContent=presetLabel(c);
-      sel.appendChild(o);
-    }
-  });
-}
-
-function uploadClip(){
-  var f = (($('clipFile')||{}).files||[])[0];
-  if(!f) return Promise.reject('no_file');
-  var fd=new FormData();
-  fd.append('file', f);
-  return fetch('/api/upload/voice_clip', {method:'POST', body: fd, credentials:'include'})
-    .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'bad_json'}; }); })
-    .then(function(j){ if(j&&j.ok&&j.url) return j.url; throw ((j&&j.error)||'upload_failed'); });
-}
-
-function getClipUrl(){
-  var m=(($('clipMode')||{}).value||'upload');
-  if(m==='url'){
-    var u=String((($('clipUrl')||{}).value||'')).trim();
-    if (!u) return Promise.reject('missing_url');
-    return Promise.resolve(u);
-  }
-  if(m==='preset'){
-    var v=String((($('clipPreset')||{}).value||'')).trim();
-    if (!v) return Promise.reject('missing_preset');
-    // If provider returns a Tinybox path, copy it to Spaces first.
-    if (v.indexOf('/')===0){
-      return jsonFetch('/api/voice_provider/preset_to_spaces', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:v})})
-        .then(function(j){
-          if (!j || !j.ok || !j.url) throw new Error((j&&j.error)||'preset_to_spaces_failed');
-          return String(j.url);
-        });
-    }
-    return Promise.resolve(v);
-  }
-  return uploadClip();
-}
-
-function slugify(s){
-  try{
-    s = String(s||'').toLowerCase();
-    s = s.replace(/[^a-z0-9]+/g,'-');
-    s = s.replace(/^-+|-+$/g,'');
-    return s || 'voice';
-  }catch(e){
-    return 'voice';
-  }
-}
-
 
 function genVoiceName(){
-  var out=$('out');
-  var el=$('voiceName');
-  var btn=null;
-  try{ btn = document.querySelector("button[onclick='genVoiceName()']"); }catch(e){}
-
-  var origVal = el ? String(el.value||'') : '';
-  var frames = ['Picking a color', 'Picking a color.', 'Picking a color..', 'Picking a color...'];
-  var i=0; var timer=null;
-  function startAnim(){
-    try{
-      if (el){ el.disabled=true; el.value = frames[0]; }
-      if (btn){ btn.disabled=true; }
-      timer = setInterval(function(){
-        try{ i=(i+1)%frames.length; if (el) el.value = frames[i]; }catch(e){}
-      }, 280);
-    }catch(e){}
-  }
-  function stopAnim(){
-    try{ if (timer) clearInterval(timer); }catch(e){}
-    timer=null;
-    try{ if (el) el.disabled=false; }catch(e){}
-    try{ if (btn) btn.disabled=false; }catch(e){}
-  }
-
-  startAnim();
-  function runOnce(){
-    return jsonFetch('/api/voices/random_name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-  }
-
-  return runOnce()
-    .catch(function(_e){ return new Promise(function(res){ setTimeout(res, 500); }).then(runOnce); })
-    .then(function(j){
-      stopAnim();
-      if (!j || !j.ok || !j.name){
-        if (el) el.value = origVal;
-        throw new Error((j&&j.error)||'name_failed');
-      }
-      if (el) el.value = String(j.name||'').trim();
-      try{ setVoiceSwatchHex(String(j.color_hex||'').trim()); }catch(e){}
-      if (out) out.textContent='';
-    })
-    .catch(function(e){
-      stopAnim();
-      if (el) el.value = origVal;
-      if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
-    });
-}
-
-function genSampleText(){
-  var out=$('out');
-  var ta=$('sampleText');
-  var btn=null;
-  try{ btn = document.querySelector("button[onclick='genSampleText()']"); }catch(e){}
-
-  var origVal = ta ? String(ta.value||'') : '';
-  var origPh = ta ? String(ta.placeholder||'') : '';
-
-  // Put the loading animation in the textarea itself.
-  var frames = [
-    'Generating sample text',
-    'Generating sample text.',
-    'Generating sample text..',
-    'Generating sample text...',
-  ];
-  var i=0;
-  var timer=null;
-
-  function startAnim(){
-    try{
-      if (ta){ ta.disabled=true; ta.value = frames[0]; }
-      try{ updateSampleTextCount(); }catch(e){}
-      if (btn){ btn.disabled=true; }
-      timer = setInterval(function(){
-        try{
-          i = (i+1) % frames.length;
-          if (ta) ta.value = frames[i];
-          try{ updateSampleTextCount(); }catch(e){}
-        }catch(e){}
-      }, 350);
-    }catch(e){}
-  }
-  function stopAnim(){
-    try{ if (timer) clearInterval(timer); }catch(e){}
-    timer=null;
-    try{ if (ta){ ta.disabled=false; } }catch(e){}
-    try{ if (btn){ btn.disabled=false; } }catch(e){}
-  }
-
-  startAnim();
-
-  // Safari sometimes surfaces generic "TypeError: Load failed" for network/proxy failures.
-  // Do a small retry to smooth over transient disconnects.
-  function runOnce(){
-    return jsonFetch('/api/voices/sample_text_random', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-  }
-
-  return runOnce()
-    .catch(function(_e){ return new Promise(function(res){ setTimeout(res, 500); }).then(runOnce); })
-    .then(function(j){
-      stopAnim();
-      if (!j || !j.ok || !j.text){
-        if (ta){ ta.value = origVal; ta.placeholder = origPh; }
-        try{ updateSampleTextCount(); }catch(e){}
-        throw new Error((j&&j.error)||'sample_text_failed');
-      }
-      if (ta) ta.value = String(j.text||'');
-      try{ updateSampleTextCount(); }catch(e){}
-      if (out) out.textContent='';
-    })
-    .catch(function(e){
-      stopAnim();
-      if (ta){ ta.value = origVal; ta.placeholder = origPh; }
-      try{ updateSampleTextCount(); }catch(_e){}
-      if (out) out.innerHTML='<div class="err">'+esc(String(e&&e.message?e.message:e))+'</div>';
-    });
-}
-
-function trainAndSave(){
-  // New UX: generating a sample should NOT auto-save to roster.
-  // Queue a job, redirect to Jobs, then user can Play + Save from the job card.
-  var out=$('out'); if(out) out.textContent='Queuing job…';
-
-  var displayName = String((($('voiceName')||{}).value||'')).trim();
-  var engine = String((($('engineSel')||{}).value||'')).trim();
-  var rid = String((($('id')||{}).value||'')).trim();
-  if (!rid) rid = slugify(displayName);
-  if ($('id')) $('id').value = rid;
-
-  if (!displayName){ if(out) out.innerHTML='<div class="err">Missing voice name</div>'; return; }
-  if (!engine){ if(out) out.innerHTML='<div class="err">Missing engine</div>'; return; }
-
-  // Reuse testSample path (which queues /api/tts_job and redirects to History)
-  return testSample();
-}
-
-function val(id){ var el=$(id); return el?el.value:''; }
-
-function testSample(){
-  var engine = String(val('engineSel') || '').trim();
-  if (!engine) engine = String(val('engine') || '').trim();
-
-  // Prefer using the last trained voice_ref if present; otherwise, try current preset/url/upload.
-  var vref = String(val('voice_ref') || '').trim();
-  var out=$('out'); if(out) out.textContent='Generating…';
-
-  function go(voiceRef){
-    var payload={engine: engine, voice: String(voiceRef||''), text: String(val('sampleText')||val('text')||'') || ('Hello. This is ' + (val('voiceName')||val('id')||'a voice') + '.'), upload:true};
-
-    // Run as a job so progress is visible on the Jobs/History tab.
-    // Provide some metadata so the completed job can offer "Save to roster".
-    payload.display_name = String(val('voiceName')||val('id')||'').trim() || 'Voice';
-    payload.color_hex = String(val('voiceColorHex')||'').trim();
-    payload.roster_id = String(val('id')||'').trim() || slugify(payload.display_name);
-
-    // If engine=tortoise, attach the selected tortoise settings (best-effort).
-    try{
-      if (engine==='tortoise'){
-        var ts = window.__SF_LAST_TORTOISE || {};
-        payload.tortoise_voice = String(ts.voice||'').trim();
-        payload.tortoise_gender = String(ts.gender||'').trim();
-        payload.tortoise_preset = String(ts.preset||'').trim();
-      }
-    }catch(_e){}
-
-    return jsonFetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-      .then(function(j){
-        if (!j || !j.ok || !j.job_id){ if(out) out.innerHTML='<div class="err">'+esc((j&&j.error)||'tts_job_failed')+'</div>'; return; }
-        // Jump straight to Jobs/History so you can watch it.
-        window.location.href = '/#tab-history';
-      }).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
-  }
-
-  if (vref) return go(vref).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
-
-  // If using tortoise, voice_ref is a built-in voice name (not a clip URL).
-  if (engine==='tortoise'){
-    var tv = 'tom';
-    var tg = 'any';
-    var tp = 'standard';
-    try{
-      tv = String((($('tortoiseVoice')||{}).value||'')).trim() || 'tom';
-      tg = String((($('tortoiseGender')||{}).value||'any')).trim() || 'any';
-      tp = String((($('tortoisePreset')||{}).value||'standard')).trim() || 'standard';
-    }catch(_e){}
-    // Persist for later "Save to roster" from the job card.
-    try{ window.__SF_LAST_TORTOISE = {voice: tv, gender: tg, preset: tp}; }catch(_e){}
-
-    // Send selected voice now (Cloud -> Tinybox uses this as tortoise --ref)
-    return go(tv).catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
-  }
-
-  // No trained voice_ref yet (xtts): derive from clip mode.
-  return getClipUrl().then(function(url){ return go(url); })
-    .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){
-  try{ loadEngines(); }catch(e){}
-  try{ loadPresets(); }catch(e){}
-  try{ setVis(); }catch(e){}
-  var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
-  var eg=$('engineSel'); if(eg) eg.addEventListener('change', function(){ try{ setEngineUi(); }catch(e){}; try{ setVis(); }catch(e){} });
-  var tg=$('tortoiseGender'); if(tg) tg.addEventListener('change', function(){ try{ loadTortoiseVoices(); }catch(e){} });
-  try{ loadTortoiseVoices(); }catch(e){}
-  try{ setEngineUi(); }catch(e){}
-  try{ updateSampleTextCount(); }catch(e){}
-  try{ var st=$('sampleText'); if (st) st.addEventListener('input', updateSampleTextCount); }catch(e){}
-
-  // Suggest a random voice name on first load (only if empty)
-  try{ var vn=$('voiceName'); if(vn && !String(vn.value||'').trim()){ genVoiceName(); } }catch(e){}
-
-  // Mark JS as running for the debug banner.
-  try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
-}); }catch(e){}
-try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(e){}
-</script>
-
-
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
-    </div>
-  </div>
-
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
-
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
-<script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
   try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
-  }catch(e){
-    return true;
-  }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
-  try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
-  }catch(e){
-    return String(ts);
-  }
-}
-
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
-    }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
-  try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
-    }
+    var names=['Luna','Juniper','Raven','Mira','Sol','Ivy','Kestrel','Nova'];
+    document.getElementById('voiceName').value = names[Math.floor(Math.random()*names.length)];
   }catch(e){}
 }
 
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
+async function voicePreview(){
   try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
+    var payload={
+      engine: (document.getElementById('engineSel').value||'').trim(),
+      display_name: (document.getElementById('voiceName').value||'').trim(),
+      color_hex: (document.getElementById('voiceColorHex').value||'').trim(),
+      voice_ref: (document.getElementById('voiceRefUrl').value||'').trim(),
+      sample_text: (document.getElementById('sampleText').value||'').trim(),
+      tortoise_voice: (document.getElementById('tortoiseVoice')||{}).value||'',
+      xtts_ref: (document.getElementById('xttsRef')||{}).value||''
     };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
+    var r=await fetch('/api/voices/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    var j=await r.json();
+    if (!j || !j.ok){ alert((j && j.error) ? j.error : 'Preview failed'); return; }
+    document.getElementById('previewUrlText').textContent = j.sample_url || '';
+    document.getElementById('previewBox').classList.remove('hide');
+  }catch(e){
+    alert('Preview failed: ' + String(e));
   }
-  startMetricsStream();
 }
 
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
+function previewPlay(){
   try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
+    var url = (document.getElementById('previewUrlText').textContent||'').trim();
+    if (!url) return;
+    if (typeof window.__sfPlayAudio === 'function'){
+      window.__sfPlayAudio(url, 'Voice preview');
+      return;
     }
+    window.open(url, '_blank');
   }catch(e){}
 }
 
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+async function voiceSave(){
+  try{
+    var payload={
+      engine: (document.getElementById('engineSel').value||'').trim(),
+      display_name: (document.getElementById('voiceName').value||'').trim(),
+      color_hex: (document.getElementById('voiceColorHex').value||'').trim(),
+      voice_ref: (document.getElementById('voiceRefUrl').value||'').trim(),
+      sample_text: (document.getElementById('sampleText').value||'').trim(),
+      tortoise_voice: (document.getElementById('tortoiseVoice')||{}).value||'',
+      xtts_ref: (document.getElementById('xttsRef')||{}).value||''
+    };
+    var r=await fetch('/api/voices/create', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    var j=await r.json();
+    if (!j || !j.ok){ alert((j && j.error) ? j.error : 'Save failed'); return; }
+    location.href='/#tab-voices';
+  }catch(e){
+    alert('Save failed: ' + String(e));
+  }
+}
+
+try{ document.getElementById('engineSel').addEventListener('change', setEngineUi); }catch(e){}
+try{ setEngineUi(); }catch(e){}
 </script>
-  </body>
-</html>'''
+"""
+
+    html = render_page(
+        title='StoryForge - Generate voice',
+        style_css=style_css,
+        body_top_html=body_top,
+        nav_html=nav_html,
+        content_html=content_html,
+        body_bottom_html=body_bottom,
+    )
+
     html = (html
-        .replace('__VOICES_BASE_CSS__', VOICES_BASE_CSS)
-        .replace('__VOICE_NEW_EXTRA_CSS__', VOICE_NEW_EXTRA_CSS)
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
-        .replace('__DEBUG_BANNER_BOOT_JS__', DEBUG_BANNER_BOOT_JS)
         .replace('__USER_MENU_HTML__', USER_MENU_HTML)
-        .replace('__USER_MENU_JS__', USER_MENU_JS)
-        .replace('__DEBUG_PREF_APPLY_JS__', DEBUG_PREF_APPLY_JS)
-        .replace('__AUDIO_DOCK_JS__', AUDIO_DOCK_JS)
+        .replace('__MONITOR__', MONITOR_HTML)
+        .replace('__MONITOR_JS__', MONITOR_JS)
         .replace('__BUILD__', str(build))
     )
-    return html
-@app.get('/todo', response_class=HTMLResponse)
-def todo_page(request: Request, response: Response):
-    response.headers['Cache-Control'] = 'no-store'
-
-    items = []
-    err = ''
-    try:
-        conn = db_connect()
-        try:
-            db_init(conn)
-            items = list_todos_db(conn, limit=800)
-        finally:
-            conn.close()
-    except Exception as e:
-        err = f"db_failed: {type(e).__name__}: {e}"
-
-    show_arch = False
-    try:
-        qp = dict(request.query_params)
-        if (qp.get('arch') == '1') or (qp.get('archived') == '1'):
-            show_arch = True
-    except Exception:
-        pass
-
-    # Hide archived by default
-    if not show_arch:
-        items = [it for it in items if not it.get('archived')]
-
-    def esc(x: str) -> str:
-        return pyhtml.escape(str(x or ''))
-
-    def fmt_ts(ts: Any) -> str:
-        try:
-            v = int(ts)
-        except Exception:
-            return ''
-        if v <= 0:
-            return ''
-        try:
-            # Server-local time. (Good enough for internal TODO display.)
-            return datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M')
-        except Exception:
-            return ''
-
-    # Group by category
-    groups: dict[str, list[dict[str, Any]]] = {}
-    order: list[str] = []
-    for it in items:
-        cat = (it.get('category') or '').strip() or 'General'
-        if cat not in groups:
-            groups[cat] = []
-            order.append(cat)
-        groups[cat].append(it)
-
-    # Render rows with stable data-cat and a dedicated count span (JS updates counts live)
-    body_parts: list[str] = []
-    if err:
-        body_parts.append(f"<div class='err'>{esc(err)}</div>")
-
-    for cat in order:
-        its = groups.get(cat, [])
-        done_n = 0
-        for it in its:
-            st = (it.get('status') or 'open').lower()
-            if st != 'open':
-                done_n += 1
-        total_n = len(its)
-        cat_esc = esc(cat)
-        body_parts.append(
-            "<div class='catHead' data-cat='" + cat_esc + "'>"
-            + "<div class='catTitle'>" + cat_esc + "</div>"
-            + "<div class='catCount'>(<span class='done'>" + str(done_n) + "</span>/<span class='total'>" + str(total_n) + "</span>)</div>"
-            + "</div>"
-        )
-
-        for it in its:
-            st = (it.get('status') or 'open').lower()
-            tid = it.get('id')
-            txt = esc(it.get('text') or '')
-            checked = 'checked' if st != 'open' else ''
-            hi_cls = ' hi' if bool(it.get('highlighted')) else ''
-            created_s = fmt_ts(it.get('created_at'))
-            updated_s = fmt_ts(it.get('updated_at'))
-            meta_parts = []
-            if created_s:
-                meta_parts.append('created ' + esc(created_s))
-            if updated_s and updated_s != created_s:
-                meta_parts.append('updated ' + esc(updated_s))
-            meta_html = "<div class='todoMeta'>" + " • ".join(meta_parts) + "</div>" if meta_parts else ""
-            # If id is missing, render as plain text
-            if tid is None:
-                box = '☑' if checked else '☐'
-                body_parts.append(f"<div class='todoPlain'>{box} {txt}</div>")
-                continue
-
-            # Category is on the container; JS uses it to update counters.
-            body_parts.append(
-                "<div class='todoItem" + hi_cls + "' data-cat='" + cat_esc + "' data-id='" + str(int(tid)) + "'>"
-                + "<div class='todoSwipe'><div class='todoSwipeInner'>"
-                + "<label class='todoMain'>"
-                + "<input type='checkbox' data-id='" + str(int(tid)) + "' " + checked + " onchange='onTodoToggle(this)' />"
-                + "<button class='todoHiBtn' type='button' onclick=\"toggleHighlight(" + str(int(tid)) + ")\" title=\"Highlight\">#" + str(int(tid)) + "</button>"
-                + "<div class='todoTextWrap'>"
-                + "<div class='todoText'>" + txt + "</div>"
-                + meta_html
-                + "</div>"
-                + "</label>"
-                + "<div class='todoKill'><button class='todoDelBtn' type='button' onclick=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\" ontouchend=\"try{event&&event.stopPropagation&&event.stopPropagation();}catch(e){} deleteTodo(" + str(int(tid)) + "); return false;\">Delete</button></div>"
-                + "</div></div>"
-                + "</div>"
-            )
-
-    body_html = "\n".join(body_parts) if body_parts else "<div class='muted'>No TODO items yet.</div>"
-
-    arch_checked = 'checked' if show_arch else ''
-
-    html = '''<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>StoryForge - TODO</title>
-  <style>__TODO_BASE_CSS__</style>
-</head>
-<body>
-  <div class="navBar">
-    <div class="top">
-      <div>
-        <div class="brandRow"><h1><a class='brandLink' href='/'>StoryForge</a></h1><div class="pageName">TODO</div></div>
-        <div class="muted">Internal tracker (check/uncheck requires login).</div>
-      </div>
-      <div class="right">
-        <a href="/#tab-jobs"><button class="secondary" type="button">Back</button></a>
-        <div class='menuWrap'>
-          <button class='userBtn' type='button' onclick='toggleUserMenu()' aria-label='User menu'>
-            <svg viewBox='0 0 24 24' width='20' height='20' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-              <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-            </svg>
-          </button>
-          <div id='topMenu' class='menuCard'>
-            <div class='uTop'>
-              <div class='uAvatar'>
-                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='2'>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M20 21a8 8 0 10-16 0'/>
-                  <path stroke-linecap='round' stroke-linejoin='round' d='M12 11a4 4 0 100-8 4 4 0 000 8z'/>
-                </svg>
-              </div>
-              <div><div class='uName'>User</div><div class='uSub'>Admin</div></div>
-            </div>
-            <div class='uActions'><a href='/logout'><button class='secondary' type='button'>Log out</button></a></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <div class="bar">
-    <div class="muted"></div>
-    <div class="right">
-      <div class="muted" style="font-weight:950">Archived</div>
-      <label class="switch" aria-label="Toggle archived">
-        <input id="archToggle" type="checkbox" __ARCH_CHECKED__ onchange="toggleArchived(this.checked)" />
-        <span class="slider"></span>
-      </label>
-      <button class="secondary" type="button" onclick="archiveDone()">Archive done</button>
-      <button class="secondary" type="button" onclick="clearHighlights()">Clear highlights</button>
-    </div>
-  </div>
-
-  <div class="card">__BODY_HTML__</div>
-
-<script>
-function toggleArchived(on){
-  try{ window.location.href = on ? '/todo?arch=1' : '/todo'; }catch(e){}
-}
-
-function updateCatCount(cat){
-  try{
-    var head = document.querySelector(".catHead[data-cat='"+cat+"']");
-    if (!head) return;
-    var items = document.querySelectorAll(".todoItem[data-cat='"+cat+"'] input[type=checkbox]");
-    var done = 0; var total = items.length;
-    for (var i=0;i<items.length;i++){ if (items[i].checked) done++; }
-    var d = head.querySelector('span.done');
-    var t = head.querySelector('span.total');
-    if (d) d.textContent = String(done);
-    if (t) t.textContent = String(total);
-  }catch(e){}
-}
-
-function onTodoToggle(cb){
-  try{
-    var id = cb.getAttribute('data-id');
-    var wrap = cb.closest ? cb.closest('.todoItem') : null;
-    var cat = wrap ? (wrap.getAttribute('data-cat') || '') : '';
-    if (cat) updateCatCount(cat);
-
-    var checked = !!cb.checked;
-    var url = checked ? ('/api/todos/'+id+'/done_auth') : ('/api/todos/'+id+'/open_auth');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status!==200){
-          // revert
-          try{ cb.checked = !checked; }catch(e){}
-          if (cat) updateCatCount(cat);
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-
-function toggleHighlight(id){
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/toggle_highlight_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-              if (el){
-                if (j.highlighted) el.classList.add('hi');
-                else el.classList.remove('hi');
-              }
-              return;
-            }
-          }catch(e){}
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-
-function deleteTodo(id){
-  if (!confirm('Delete this todo?')) return;
-  try{
-    var url = '/api/todos/' + encodeURIComponent(String(id)) + '/delete_auth';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var j = JSON.parse(xhr.responseText||'{}');
-            if (j && j.ok){
-              try{
-                var el = document.querySelector(".todoItem[data-id='"+String(id)+"']");
-                if (el && el.parentNode) el.parentNode.removeChild(el);
-              }catch(e){}
-              try{ recomputeCounts(); }catch(e){}
-              return;
-            }
-          }catch(e){}
-        }
-        alert('Delete failed');
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Delete failed'); }
-}
-
-
-function clearHighlights(){
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/clear_highlights_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{
-            var els=document.querySelectorAll('.todoItem.hi');
-            for (var i=0;i<els.length;i++){ els[i].classList.remove('hi'); }
-          }catch(e){}
-        } else {
-          alert('Clear highlights failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){ alert('Clear highlights failed'); }
-}
-
-function archiveDone(){
-  if (!confirm('Archive all completed items?')) return;
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/todos/archive_done_auth',true);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if (xhr.readyState===4){
-        if (xhr.status===200){
-          try{ location.reload(); }catch(e){}
-        } else {
-          alert('Archive failed');
-        }
-      }
-    };
-    xhr.send('{}');
-  }catch(e){}
-}
-</script>
-
-
-  <div id='monitorDock' class='dock' onclick='openMonitor()'>
-    <div class='dockInner'>
-      <div style='font-weight:950;'>Monitor</div>
-      <div class='dockStats' id='dockStats'>Monitor off</div>
-    </div>
-  </div>
-
-  <div id='monitorBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeMonitorEv(event)' ontouchend='closeMonitorEv(event)'></div>
-  <div id='monitorSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
-    <div class='sheetInner'>
-      <div class='sheetHandle'></div>
-      <div class='row' style='justify-content:space-between;'>
-        <div>
-          <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
-        </div>
-        <div class='row' style='justify-content:flex-end;'>
-          <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
-        </div>
-      </div>
-
-      <div class='grid2' style='margin-top:10px;'>
-        <div class='meter'>
-          <div class='k'>CPU</div>
-          <div class='v' id='monCpu'>-</div>
-          <div class='bar' id='barCpu'><div></div></div>
-        </div>
-        <div class='meter'>
-          <div class='k'>RAM</div>
-          <div class='v' id='monRam'>-</div>
-          <div class='bar' id='barRam'><div></div></div>
-        </div>
-      </div>
-
-      <div style='font-weight:950;margin-top:12px;'>GPUs</div>
-      <div id='monGpus' class='gpuGrid' style='margin-top:8px;'></div>
-
-      <div style='font-weight:950;margin-top:12px;'>Processes</div>
-      <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
-    </div>
-  </div>
-  
-
-<script>
-let metricsES = null;
-let monitorEnabled = true;
-let lastMetrics = null;
-
-function loadMonitorPref(){
-  try{
-    var v = localStorage.getItem('sf_monitor_enabled');
-    if (v === null) return true;
-    return v === '1';
-  }catch(e){
-    return true;
-  }
-}
-
-function saveMonitorPref(on){
-  try{ localStorage.setItem('sf_monitor_enabled', on ? '1' : '0'); }catch(e){}
-}
-
-function stopMetricsStream(){
-  if (metricsES){
-    try{ metricsES.close(); }catch(e){}
-    metricsES = null;
-  }
-}
-
-var metricsPoll = null;
-function stopMetricsPoll(){
-  if (metricsPoll){
-    try{ clearInterval(metricsPoll); }catch(e){}
-    metricsPoll = null;
-  }
-}
-
-function startMetricsPoll(){
-  if (!monitorEnabled) return;
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  metricsPoll = setInterval(function(){
-    try{
-      jsonFetch('/api/metrics').then(function(m){
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }).catch(function(_e){});
-    }catch(e){}
-  }, 2000);
-}
-
-function setBar(elId, pct){
-  var el=document.getElementById(elId);
-  if (!el) return;
-  var p=Math.max(0, Math.min(100, pct||0));
-  var fill=el.querySelector('div');
-  if (fill) fill.style.width = p.toFixed(0) + '%';
-  el.classList.remove('warn','bad');
-  if (p >= 85) el.classList.add('bad');
-  else if (p >= 60) el.classList.add('warn');
-}
-
-function fmtPct(x){
-  if (x==null) return '-';
-  return (Number(x).toFixed(1)) + '%';
-}
-
-function fmtTs(ts){
-  if (!ts) return '-';
-  try{
-    var d=new Date(ts*1000);
-    return d.toLocaleString();
-  }catch(e){
-    return String(ts);
-  }
-}
-
-function updateDockFromMetrics(m){
-  var el = document.getElementById('dockStats');
-  if (!el) return;
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = (b.cpu_pct!=null) ? Number(b.cpu_pct).toFixed(1)+'%' : '-';
-  var rt = Number(b.ram_total_mb||0); var ru = Number(b.ram_used_mb||0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var ram = rt ? rp.toFixed(1)+'%' : '-';
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  var maxGpu = null;
-  if (gpus.length){
-    maxGpu = 0;
-    for (var i=0;i<gpus.length;i++){
-      var u = Number((gpus[i]||{}).util_gpu_pct||0);
-      if (u > maxGpu) maxGpu = u;
-    }
-  }
-  var gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = 'CPU ' + cpu + ' • RAM ' + ram + ' • GPU ' + gpu;
-}
-
-function renderGpus(b){
-  var el = document.getElementById('monGpus');
-  if (!el) return;
-  var gpus = Array.isArray(b && b.gpus) ? b.gpus : (b && b.gpu ? [b.gpu] : []);
-  if (!gpus.length){
-    el.innerHTML = '<div class="muted">No GPU data</div>';
-    return;
-  }
-
-  el.innerHTML = gpus.slice(0,8).map(function(g,i){
-    g = g || {};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
-    var temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    var right = [power, temp].filter(Boolean).join(' • ');
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-
-    return "<div class='gpuCard'>"+
-      "<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+
-      "<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+
-      "<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+
-      "<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt ? ((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB') : '-')+"</div></div>"+
-      "<div class='bar small' id='barVram"+idx+"'><div></div></div>"+
-    "</div>";
-  }).join('');
-
-  gpus.slice(0,8).forEach(function(g,i){
-    g=g||{};
-    var idx = (g.index!=null) ? g.index : i;
-    var util = Number(g.util_gpu_pct||0);
-    var vt = Number(g.vram_total_mb||0);
-    var vu = Number(g.vram_used_mb||0);
-    var vp = vt ? (vu/vt*100) : 0;
-    setBar('barGpu'+idx, util);
-    setBar('barVram'+idx, vp);
-  });
-}
-
-function updateMonitorFromMetrics(m){
-  var b = (m && m.body) ? m.body : (m || {});
-  var cpu = Number(b.cpu_pct || 0);
-  var c=document.getElementById('monCpu'); if(c) c.textContent = fmtPct(cpu);
-  setBar('barCpu', cpu);
-
-  var rt = Number(b.ram_total_mb || 0);
-  var ru = Number(b.ram_used_mb || 0);
-  var rp = rt ? (ru/rt*100) : 0;
-  var r=document.getElementById('monRam'); if(r) r.textContent = rt ? (ru.toFixed(0) + ' / ' + rt.toFixed(0) + ' MB (' + rp.toFixed(1) + '%)') : '-';
-  setBar('barRam', rp);
-  renderGpus(b);
-
-  var ts = b.ts ? fmtTs(b.ts) : '-';
-  var sub=document.getElementById('monSub'); if(sub) sub.textContent = 'Tinybox time: ' + ts;
-  updateDockFromMetrics(m);
-
-  // processes
-  try{
-    var procs = Array.isArray(b.processes) ? b.processes : [];
-    var pre=document.getElementById('monProc');
-    if (pre){
-      if (!procs.length) pre.textContent = '(no process data)';
-      else {
-        var lines=[];
-        lines.push('PID     %CPU   %MEM   GPU   ELAPSED   COMMAND');
-        lines.push('-----------------------------------------------');
-        for (var i=0;i<procs.length;i++){
-          var p=procs[i]||{};
-          var pid=String(p.pid||'').padEnd(7,' ');
-          var cpuS=(Number(p.cpu_pct||0).toFixed(1)+'').padStart(5,' ');
-          var memS=(Number(p.mem_pct||0).toFixed(1)+'').padStart(5,' ');
-          var gpuS=(p.gpu_mem_mb!=null?Number(p.gpu_mem_mb).toFixed(0)+'MB':'-').padStart(6,' ');
-          var et=String(p.elapsed||'').padEnd(9,' ');
-          var cmd=String(p.args||p.command||p.name||'');
-          lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);
-        }
-        pre.textContent = lines.join(String.fromCharCode(10));
-      }
-    }
-  }catch(e){}
-}
-
-function startMetricsStream(){
-  if (!monitorEnabled) return;
-  stopMetricsStream();
-  try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-  try{
-    var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
-    metricsES = new EventSource('/api/metrics/stream');
-    metricsES.onmessage = function(ev){
-      try{
-        var m = JSON.parse(ev.data || '{}');
-        lastMetrics = m;
-        if (m && m.ok===false){
-          try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-          try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = String((m&&m.error)||'Monitor error'); }catch(e){}
-          return;
-        }
-        updateMonitorFromMetrics(m);
-      }catch(e){}
-    };
-    metricsES.onerror = function(_e){
-      try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor error'; }catch(e){}
-      try{ var sub=document.getElementById('monSub'); if (sub) sub.textContent = 'Monitor error'; }catch(e){}
-      try{ if (typeof startMetricsPoll==='function') try{ if (typeof startMetricsPoll==='function') startMetricsPoll(); }catch(e){} }catch(e){}
-    };
-  }catch(e){}
-}
-
-function setMonitorEnabled(on){
-  monitorEnabled = !!on;
-  saveMonitorPref(monitorEnabled);
-  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
-  if (!monitorEnabled){
-    stopMetricsStream();
-    try{ if (typeof stopMetricsPoll==='function') try{ if (typeof stopMetricsPoll==='function') stopMetricsPoll(); }catch(e){} }catch(e){}
-    try{ var ds=document.getElementById('dockStats'); if (ds) ds.textContent='Monitor off'; }catch(e){}
-    return;
-  }
-  startMetricsStream();
-}
-
-function openMonitor(){
-  if (!monitorEnabled) return;
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.remove('hide'); b.style.display='block'; }
-  if (sh){ sh.classList.remove('hide'); sh.style.display='block'; }
-  try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  startMetricsStream();
-  if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
-}
-
-function closeMonitor(){
-  var b=document.getElementById('monitorBackdrop');
-  var sh=document.getElementById('monitorSheet');
-  if (b){ b.classList.add('hide'); b.style.display='none'; }
-  if (sh){ sh.classList.add('hide'); sh.style.display='none'; }
-  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
-}
-
-function closeMonitorEv(ev){
-  try{ if (ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
-  closeMonitor();
-  return false;
-}
-
-function bindMonitorClose(){
-  try{
-    var btn = document.getElementById('monCloseBtn');
-    if (btn && !btn.__bound){
-      btn.__bound = true;
-      btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false});
-      btn.addEventListener('click', function(ev){ closeMonitorEv(ev); });
-    }
-  }catch(e){}
-}
-
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
-</script>
-  </body>
-</html>'''
-
-    html = html.replace('__BODY_HTML__', body_html).replace('__ARCH_CHECKED__', arch_checked)
-    html = html.replace('__TODO_BASE_CSS__', TODO_BASE_CSS)
     return html
 
 
