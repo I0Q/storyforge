@@ -693,9 +693,30 @@ DEBUG_BANNER_HTML = """
       var t0 = 0;
       var timer = null;
       function fmt(sec){ sec=Math.max(0, sec|0); var m=Math.floor(sec/60); var s=sec%60; return String(m)+':' + (s<10?('0'+String(s)):String(s)); }
+      function ensureDeployEl(){
+        try{
+          var boot=document.getElementById('boot');
+          if (!boot) return null;
+          var el=document.getElementById('bootDeploy');
+          if (el) return el;
+          var t=document.getElementById('bootText');
+          if (!t) return null;
+          t.insertAdjacentHTML('afterend',
+            "<div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>"+
+              "<div class='muted' style='font-weight:950'>StoryForge updating…</div>"+
+              "<div class='updateTrack' style='margin-top:6px;position:relative'>"+
+                "<div class='updateProg'></div>"+
+                "<div id='bootDeployTimer' style='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:950;font-size:12px;letter-spacing:0.2px;text-shadow:0 2px 10px rgba(0,0,0,0.6);pointer-events:none'>0:00</div>"+
+              "</div>"+
+            "</div>"
+          );
+          return document.getElementById('bootDeploy');
+        }catch(_e){ return null; }
+      }
+
       function setBar(on, msg){
         try{
-          var el=document.getElementById('bootDeploy');
+          var el=ensureDeployEl();
           if (!el) return;
           if (on){
             el.classList.remove('hide');
