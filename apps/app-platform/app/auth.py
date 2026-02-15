@@ -123,7 +123,7 @@ def register_passphrase_auth(app: FastAPI) -> None:
         if not _enabled():
             return await call_next(request)
 
-        if request.url.path in ("/login", "/logout", "/ping", "/api/session", "/api/deploy/status", "/api/runtime_fingerprint") or request.url.path.startswith('/static/'):
+        if request.url.path in ("/login", "/logout", "/ping", "/api/session", "/api/deploy/status", "/api/deploy/stream", "/api/runtime_fingerprint") or request.url.path.startswith('/static/'):
             return await call_next(request)
 
         if _is_session_authed(request):
