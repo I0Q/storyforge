@@ -57,25 +57,27 @@ function __sfMenuClamp(v, lo, hi){
 
 function __sfPositionUserMenu(){
   // iOS Safari can clip/tear absolutely-positioned dropdowns inside stacked/filtered containers.
-  // Use viewport-fixed positioning based on the button's bounding rect.
+  // Also: window.innerHeight can be the *layout viewport*, while the visible viewport is visualViewport.
+  // We position relative to the visible viewport and clamp inside it.
   try{
     var btn = document.querySelector('.menuWrap .userBtn');
     var m = document.getElementById('topMenu');
     if (!btn || !m) return;
 
-    // If we're in the mobile bottom-sheet mode, let CSS handle fixed/bottom layout.
+    var r = btn.getBoundingClientRect();
+
+    var vv = null;
+    try{ vv = window.visualViewport || null; }catch(_e){}
+    var vx = 0, vy = 0, vw = (window.innerWidth||0), vh = (window.innerHeight||0);
     try{
-      if (window.innerWidth && window.innerWidth <= 520){
-        m.style.left = '';
-        m.style.right = '';
-        m.style.top = '';
-        m.style.bottom = '';
-        m.style.position = '';
-        return;
+      if (vv){
+        vx = Number(vv.offsetLeft||0) || 0;
+        vy = Number(vv.offsetTop||0) || 0;
+        vw = Number(vv.width||vw) || vw;
+        vh = Number(vv.height||vh) || vh;
       }
     }catch(_e){}
 
-    var r = btn.getBoundingClientRect();
     m.style.position = 'fixed';
     m.style.zIndex = '99999';
 
@@ -89,14 +91,24 @@ function __sfPositionUserMenu(){
     try{ h = Math.max(90, Math.min(320, m.offsetHeight || 140)); }catch(_e){}
 
     var left = (r.right - w);
-    left = __sfMenuClamp(left, pad, (window.innerWidth || 0) - w - pad);
+    left = __sfMenuClamp(left, pad, (vw || 0) - w - pad);
     var top = (r.bottom + 8);
-    top = __sfMenuClamp(top, pad, (window.innerHeight || 0) - h - pad);
+    top = __sfMenuClamp(top, pad, (vh || 0) - h - pad);
 
-    m.style.left = String(left) + 'px';
-    m.style.top = String(top) + 'px';
+    m.style.left = String(vx + left) + 'px';
+    m.style.top = String(vy + top) + 'px';
     m.style.right = 'auto';
     m.style.bottom = 'auto';
+
+    // Guard against iOS clipping by constraining menu height.
+    try{
+      var maxH = (vy + vh) - (vy + top) - pad;
+      if (isFinite(maxH) && maxH > 80){
+        m.style.maxHeight = String(Math.floor(maxH)) + 'px';
+        m.style.overflowY = 'auto';
+        m.style.webkitOverflowScrolling = 'touch';
+      }
+    }catch(_e){}
   }catch(e){}
 }
 
