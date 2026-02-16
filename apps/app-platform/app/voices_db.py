@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS sf_voices (
   sample_text TEXT NOT NULL DEFAULT '',
   sample_url TEXT NOT NULL DEFAULT '',
   voice_traits_json TEXT NOT NULL DEFAULT '',
+  debut BOOLEAN NOT NULL DEFAULT FALSE,
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
@@ -49,6 +50,10 @@ CREATE TABLE IF NOT EXISTS sf_voices (
     # Best-effort migration for older installs
     try:
         cur.execute("ALTER TABLE sf_voices ADD COLUMN IF NOT EXISTS color_hex TEXT NOT NULL DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE sf_voices ADD COLUMN IF NOT EXISTS debut BOOLEAN NOT NULL DEFAULT FALSE")
     except Exception:
         pass
     conn.commit()
@@ -62,7 +67,7 @@ def list_voices_db(conn, limit: int = 500) -> list[dict[str, Any]]:
         pass
 
     cur.execute(
-        "SELECT id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,updated_at "
+        "SELECT id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,debut,updated_at "
         "FROM sf_voices ORDER BY updated_at DESC LIMIT %s",
         (int(limit),),
     )
@@ -80,7 +85,8 @@ def list_voices_db(conn, limit: int = 500) -> list[dict[str, Any]]:
                 "sample_text": r[6] or "",
                 "sample_url": r[7] or "",
                 "voice_traits_json": r[8] or "",
-                "updated_at": r[9],
+                "debut": bool(r[9]) if r[9] is not None else False,
+                "updated_at": r[10],
             }
         )
     return out
@@ -94,7 +100,7 @@ def get_voice_db(conn, voice_id: str) -> dict[str, Any]:
         pass
 
     cur.execute(
-        "SELECT id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at "
+        "SELECT id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,debut,created_at,updated_at "
         "FROM sf_voices WHERE id=%s",
         (voice_id,),
     )
@@ -111,8 +117,9 @@ def get_voice_db(conn, voice_id: str) -> dict[str, Any]:
         "sample_text": r[6] or "",
         "sample_url": r[7] or "",
         "voice_traits_json": r[8] or "",
-        "created_at": r[9],
-        "updated_at": r[10],
+        "debut": bool(r[9]) if r[9] is not None else False,
+        "created_at": r[10],
+        "updated_at": r[11],
     }
 
 

@@ -4054,6 +4054,8 @@ def voices_edit_page(voice_id: str, response: Response):
     stxt = esc(v.get('sample_text') or '')
     surl = esc(v.get('sample_url') or '')
     enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
+    debut = bool(v.get('debut', False))
+    dn_disabled = 'disabled' if debut else ''
     vtraits_json = str(v.get('voice_traits_json') or '').strip()
 
     style_css = VOICES_BASE_CSS + VOICE_EDIT_EXTRA_CSS + MONITOR_COMPONENT_CSS
@@ -4087,8 +4089,7 @@ def voices_edit_page(voice_id: str, response: Response):
     <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
 
     <div class='muted'>ID</div>
-    <input id='voice_id' value='__VID__' style='width:100%;margin-top:8px' />
-    <div class='muted' style='margin-top:6px;'>Changing the ID can break links in existing jobs/castings. Use carefully.</div>
+    <div class='term' style='margin-top:8px;'><code>__VID__</code></div>
 
     <div class='muted' style='margin-top:12px;'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
@@ -4097,7 +4098,7 @@ def voices_edit_page(voice_id: str, response: Response):
         <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
       </span>
       <input id='color_hex' type='hidden' value='__CHEX__' />
-      <input id='display_name' value='__DN__' style='flex:1;min-width:0' />
+      <input id='display_name' value='__DN__' style='flex:1;min-width:0' __DN_DISABLED__ />
       <button type='button' class='copyBtn' onclick='genEditVoiceName()' aria-label='Random voice name' title='Random voice name'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -4361,8 +4362,7 @@ async function analyzeVoice(){
 async function saveVoice(){
   try{
     var payload={
-      voice_id_old:'__VID_RAW__',
-      voice_id_new: (document.getElementById('voice_id') ? (document.getElementById('voice_id').value||'').trim() : '__VID_RAW__'),
+      voice_id:'__VID_RAW__',
       display_name: (document.getElementById('display_name').value||'').trim(),
       color_hex: (document.getElementById('color_hex').value||'').trim(),
       enabled: !!document.getElementById('enabled').checked
@@ -4416,6 +4416,7 @@ async function deleteVoice(){
         .replace('__ENABLED__', enabled_checked)
         .replace('__VID_RAW__', voice_id)
         .replace('__VTRAITS__', esc(vtraits_json) if vtraits_json else '—')
+        .replace('__DN_DISABLED__', dn_disabled)
     )
     html = (html
         .replace('__DEBUG_BANNER_HTML__', DEBUG_BANNER_HTML)
@@ -7105,56 +7106,101 @@ def api_voices_create(payload: dict[str, Any]):
 def api_voices_update(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Update a voice's basic fields.
 
-    Payload supports either:
+    Payload:
       - {voice_id: <id>, display_name, color_hex, enabled}
-      - {voice_id_old: <id>, voice_id_new: <id>, ...} to rename the id.
 
-    NOTE: Renaming ids can break references stored elsewhere; use carefully.
+    Behavior:
+      - If voice.debut is FALSE, renaming display_name will also auto-rename the id (slugified).
+      - If voice.debut is TRUE, display_name is locked (color + enabled still editable).
     """
     try:
-        old_id = str((payload or {}).get('voice_id_old') or (payload or {}).get('voice_id') or '').strip()
-        new_id = str((payload or {}).get('voice_id_new') or (payload or {}).get('voice_id') or '').strip()
-        old_id = validate_voice_id(old_id)
-        new_id = validate_voice_id(new_id)
+        voice_id = str((payload or {}).get('voice_id') or '').strip()
+        voice_id = validate_voice_id(voice_id)
 
         display_name = str((payload or {}).get('display_name') or '').strip()
         color_hex = str((payload or {}).get('color_hex') or '').strip()
         enabled = bool((payload or {}).get('enabled', True))
 
+        def _slugify_id(name: str) -> str:
+            s = str(name or '').strip().lower()
+            s = re.sub(r'[^a-z0-9]+', '-', s)
+            s = s.strip('-')
+            s = s[:64]
+            if not s:
+                s = 'voice'
+            # ensure starts with alnum
+            if not re.match(r'^[a-z0-9]', s):
+                s = 'v-' + s
+            s = s[:64]
+            # normalize
+            s = re.sub(r'-+', '-', s)
+            return s
+
         conn = db_connect()
         try:
             db_init(conn)
-            v = get_voice_db(conn, old_id)
+            v = get_voice_db(conn, voice_id)
+            debut = bool((v or {}).get('debut'))
 
-            # Rename by copy+delete (PK change) in a transaction.
-            cur = conn.cursor()
-            if new_id != old_id:
-                # ensure target missing
-                cur.execute("SELECT 1 FROM sf_voices WHERE id=%s", (new_id,))
-                if cur.fetchone():
-                    return {'ok': False, 'error': 'voice_id_taken'}
+            # Lock name/id once voice has debuted.
+            if debut:
+                if display_name and display_name.strip() != str((v or {}).get('display_name') or '').strip():
+                    return {'ok': False, 'error': 'locked_debut'}
+                new_id = voice_id
+                new_display = str((v or {}).get('display_name') or voice_id)
+            else:
+                # If user changed the name, auto-rename id to match.
+                base_name = display_name or str((v or {}).get('display_name') or voice_id)
+                new_display = base_name
+                new_id = _slugify_id(base_name)
+                try:
+                    new_id = validate_voice_id(new_id)
+                except Exception:
+                    new_id = voice_id
 
+                # Avoid collision by suffixing.
+                if new_id != voice_id:
+                    cur = conn.cursor()
+                    cur.execute("SELECT 1 FROM sf_voices WHERE id=%s", (new_id,))
+                    if cur.fetchone():
+                        # find next free
+                        for i in range(2, 200):
+                            cand = (new_id[: (64 - (len(str(i)) + 1))] + '-' + str(i))[:64]
+                            try:
+                                cand = validate_voice_id(cand)
+                            except Exception:
+                                continue
+                            cur.execute("SELECT 1 FROM sf_voices WHERE id=%s", (cand,))
+                            if not cur.fetchone():
+                                new_id = cand
+                                break
+                        else:
+                            new_id = voice_id
+
+            # Rename by copy+delete (PK change) when needed.
+            if new_id != voice_id:
+                cur = conn.cursor()
                 now = int(time.time())
                 cur.execute(
                     """
-INSERT INTO sf_voices (id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at)
-SELECT %s, engine, voice_ref, display_name, color_hex, enabled, sample_text, sample_url, voice_traits_json, created_at, %s
+INSERT INTO sf_voices (id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,debut,created_at,updated_at)
+SELECT %s, engine, voice_ref, %s, color_hex, enabled, sample_text, sample_url, voice_traits_json, debut, created_at, %s
 FROM sf_voices WHERE id=%s
 """,
-                    (new_id, now, old_id),
+                    (new_id, new_display, now, voice_id),
                 )
-                cur.execute("DELETE FROM sf_voices WHERE id=%s", (old_id,))
+                cur.execute("DELETE FROM sf_voices WHERE id=%s", (voice_id,))
                 conn.commit()
-                old_id = new_id
-                v = get_voice_db(conn, old_id)
+                voice_id = new_id
+                v = get_voice_db(conn, voice_id)
 
             # Update mutable fields
             upsert_voice_db(
                 conn,
-                old_id,
+                voice_id,
                 str(v.get('engine') or ''),
                 str(v.get('voice_ref') or ''),
-                display_name or str(v.get('display_name') or old_id),
+                new_display or str(v.get('display_name') or voice_id),
                 color_hex or str(v.get('color_hex') or ''),
                 enabled,
                 str(v.get('sample_text') or ''),
@@ -7166,7 +7212,7 @@ FROM sf_voices WHERE id=%s
             except Exception:
                 pass
 
-        return {'ok': True, 'voice_id': old_id}
+        return {'ok': True, 'voice_id': voice_id}
     except Exception as e:
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {str(e)[:200]}'}
 
@@ -7734,6 +7780,29 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
                     casting = v if isinstance(v, dict) else {}
         except Exception:
             casting = {}
+
+        # Mark voices as debuted once they are used in a Produce run.
+        try:
+            vids = []
+            if isinstance(casting, dict):
+                # expected shape: {engine:..., assignments:{char: voice_id}}
+                ass = casting.get('assignments') if isinstance(casting.get('assignments'), dict) else None
+                if ass:
+                    for _k, vv in ass.items():
+                        s = str(vv or '').strip()
+                        if s and s not in vids:
+                            vids.append(s)
+            if vids:
+                conn3 = db_connect()
+                try:
+                    db_init(conn3)
+                    cur3 = conn3.cursor()
+                    cur3.execute("UPDATE sf_voices SET debut=TRUE WHERE id = ANY(%s)", (vids,))
+                    conn3.commit()
+                finally:
+                    conn3.close()
+        except Exception:
+            pass
 
         # Snapshot effective runtime params (keep global settings as source of truth; store what was used).
         params = {}
