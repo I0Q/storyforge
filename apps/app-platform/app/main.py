@@ -238,10 +238,11 @@ INDEX_BASE_CSS = base_css("""\
     .codeBox{position:relative;}
 
     /* SFML fullscreen mode (pseudo-fullscreen for iOS) */
-    .sfmlFsBtn{position:absolute;right:10px;top:10px;z-index:5;width:36px;height:36px;
+    .sfmlFsBtn{position:absolute;right:10px;top:10px;z-index:50;width:36px;height:36px;
       border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(11,16,32,0.65);
       display:flex;align-items:center;justify-content:center;color:var(--text);cursor:pointer;
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      pointer-events:auto;
     }
     .sfmlFsBtn svg{width:18px;height:18px;}
 
@@ -3034,23 +3035,6 @@ function prodRenderSfml(sfml){
 
     box.classList.remove('hide');
 
-    // Fullscreen toggle icon (top-right inside editor)
-    try{
-      var fsb = document.getElementById('sfmlFsBtn');
-      if (!fsb){
-        fsb = document.createElement('button');
-        fsb.type = 'button';
-        fsb.id = 'sfmlFsBtn';
-        fsb.className = 'sfmlFsBtn';
-        fsb.innerHTML = __sfmlFsIcon(true);
-        fsb.setAttribute('aria-label', 'Full screen');
-        fsb.setAttribute('title', 'Full screen');
-        fsb.onclick = function(ev){ try{ if(ev&&ev.preventDefault) ev.preventDefault(); }catch(_e){}; try{ prodToggleSfmlFull(); }catch(_e){}; };
-        box.appendChild(fsb);
-      }
-      __sfmlFsSetBtnState(false);
-    }catch(_e){}
-
     // Lightweight editor for now (no Ace). Next step: custom highlighting.
     if (!box.__sfmlInited){
       box.__sfmlInited = true;
@@ -3100,6 +3084,20 @@ function prodRenderSfml(sfml){
         var ta2 = document.getElementById('sfmlText');
         if (ta2 && String(ta2.value||'') !== raw) ta2.value = raw;
       }
+    }catch(_e){}
+
+    // Fullscreen toggle icon (append AFTER editor init so it doesn't get wiped)
+    try{
+      var fsb = document.getElementById('sfmlFsBtn');
+      if (!fsb){
+        fsb = document.createElement('button');
+        fsb.type = 'button';
+        fsb.id = 'sfmlFsBtn';
+        fsb.className = 'sfmlFsBtn';
+        fsb.onclick = function(ev){ try{ if(ev&&ev.preventDefault) ev.preventDefault(); }catch(_e){}; try{ prodToggleSfmlFull(); }catch(_e){}; };
+        box.appendChild(fsb);
+      }
+      __sfmlFsSetBtnState(box.classList.contains('sfmlFull'));
     }catch(_e){}
 
   }catch(e){}
