@@ -238,6 +238,13 @@ INDEX_BASE_CSS = base_css("""\
     .codeBox{position:relative;}
 
     /* SFML fullscreen mode (pseudo-fullscreen for iOS) */
+    .sfmlFsBtn{position:absolute;right:10px;top:10px;z-index:5;width:36px;height:36px;
+      border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(11,16,32,0.65);
+      display:flex;align-items:center;justify-content:center;color:var(--text);cursor:pointer;
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    }
+    .sfmlFsBtn svg{width:18px;height:18px;}
+
     .sfmlFullBackdrop{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99990;}
     .sfmlFull{position:fixed !important;left:0;right:0;top:0;bottom:0;z-index:99991;
       margin:0 !important;border-radius:0 !important;
@@ -245,6 +252,8 @@ INDEX_BASE_CSS = base_css("""\
       padding-top:calc(54px + env(safe-area-inset-top, 0px));
       padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
     }
+    .sfmlFull .sfmlFsBtn{position:fixed;right:12px;top:calc(10px + env(safe-area-inset-top, 0px));z-index:99993;}
+
     .sfmlFullTopbar{position:fixed;left:0;right:0;top:0;z-index:99992;
       padding:10px 12px;
       padding-top:calc(10px + env(safe-area-inset-top, 0px));
@@ -1059,7 +1068,6 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>3) SFML</div>
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
           <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
-          <button type='button' class='secondary' id='prodSfmlFullBtn' disabled onclick='prodToggleSfmlFull()'>Full screen</button>
           <button type='button' id='prodProduceBtn' class='prodGoBtn' disabled onclick='prodProduceAudio()'>Produce</button>
         </div>
       </div>
@@ -2949,6 +2957,28 @@ function prodSfmlSaveNow(sfmlText){
   }catch(e){}
 }
 
+function __sfmlFsIcon(expand){
+  // expand=true => show expand icon; false => show compress icon
+  if (expand){
+    return "<svg viewBox='0 0 24 24' aria-hidden='true'>"+
+      "<path stroke='currentColor' fill='none' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3'/>"+
+    "</svg>";
+  }
+  return "<svg viewBox='0 0 24 24' aria-hidden='true'>"+
+    "<path stroke='currentColor' fill='none' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M9 9H5V5M15 9h4V5M9 15H5v4M15 15h4v4'/>"+
+  "</svg>";
+}
+
+function __sfmlFsSetBtnState(on){
+  try{
+    var b = document.getElementById('sfmlFsBtn');
+    if (!b) return;
+    b.innerHTML = __sfmlFsIcon(!on);
+    b.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+    b.setAttribute('title', on ? 'Exit full screen' : 'Full screen');
+  }catch(e){}
+}
+
 function prodToggleSfmlFull(){
   try{
     var box=document.getElementById('prodSfmlBox');
@@ -2962,6 +2992,7 @@ function prodToggleSfmlFull(){
       try{ if(tb) tb.remove(); }catch(e){}
       try{ document.body.classList.remove('sfmlFullOn'); }catch(e){}
       try{ box.classList.remove('sfmlFull'); }catch(e){}
+      try{ __sfmlFsSetBtnState(false); }catch(e){}
     }
 
     if(on){ cleanup(); return; }
@@ -2969,6 +3000,7 @@ function prodToggleSfmlFull(){
     // enable
     try{ document.body.classList.add('sfmlFullOn'); }catch(e){}
     try{ box.classList.add('sfmlFull'); }catch(e){}
+    try{ __sfmlFsSetBtnState(true); }catch(e){}
 
     // backdrop (tap to close)
     try{
@@ -2979,17 +3011,15 @@ function prodToggleSfmlFull(){
       document.body.appendChild(bd);
     }catch(e){}
 
-    // topbar
+    // topbar (no close button; icon toggles)
     try{
       tb = document.createElement('div');
       tb.id='sfmlFullTopbar';
       tb.className='sfmlFullTopbar';
-      tb.innerHTML = "<div class='t'>SFML</div><div class='sp'></div><button type='button' class='secondary'>Close</button>";
-      tb.querySelector('button').onclick=function(ev){ try{ if(ev&&ev.preventDefault) ev.preventDefault(); }catch(_e){}; try{ prodToggleSfmlFull(); }catch(_e){}; };
+      tb.innerHTML = "<div class='t'>SFML</div><div class='sp'></div>";
       document.body.appendChild(tb);
     }catch(e){}
 
-    // keep editor focused
     try{ box.scrollTop = 0; }catch(e){}
   }catch(e){}
 }
@@ -3003,7 +3033,23 @@ function prodRenderSfml(sfml){
     raw = raw.split("\\r\\n").join("\\n");
 
     box.classList.remove('hide');
-    try{ var fb=document.getElementById('prodSfmlFullBtn'); if(fb) fb.disabled = false; }catch(_e){}
+
+    // Fullscreen toggle icon (top-right inside editor)
+    try{
+      var fsb = document.getElementById('sfmlFsBtn');
+      if (!fsb){
+        fsb = document.createElement('button');
+        fsb.type = 'button';
+        fsb.id = 'sfmlFsBtn';
+        fsb.className = 'sfmlFsBtn';
+        fsb.innerHTML = __sfmlFsIcon(true);
+        fsb.setAttribute('aria-label', 'Full screen');
+        fsb.setAttribute('title', 'Full screen');
+        fsb.onclick = function(ev){ try{ if(ev&&ev.preventDefault) ev.preventDefault(); }catch(_e){}; try{ prodToggleSfmlFull(); }catch(_e){}; };
+        box.appendChild(fsb);
+      }
+      __sfmlFsSetBtnState(false);
+    }catch(_e){}
 
     // Lightweight editor for now (no Ace). Next step: custom highlighting.
     if (!box.__sfmlInited){
