@@ -4457,6 +4457,29 @@ def voices_new_page(response: Response):
       </select>
     </div>
 
+    <div id='styletts2Box' class='hide'>
+      <div class='k'>StyleTTS2 expressiveness</div>
+      <div class='muted'>Higher variation can sound more alive but less stable.</div>
+      <div class='row' style='gap:10px;flex-wrap:wrap'>
+        <div style='flex:1;min-width:140px'>
+          <div class='muted' style='font-size:12px'>alpha (ref mix)</div>
+          <input id='st2Alpha' type='number' step='0.05' min='0' max='1' value='0.30' />
+        </div>
+        <div style='flex:1;min-width:140px'>
+          <div class='muted' style='font-size:12px'>beta (style mix)</div>
+          <input id='st2Beta' type='number' step='0.05' min='0' max='1' value='0.70' />
+        </div>
+        <div style='flex:1;min-width:140px'>
+          <div class='muted' style='font-size:12px'>steps</div>
+          <input id='st2Steps' type='number' step='1' min='4' max='30' value='10' />
+        </div>
+        <div style='flex:1;min-width:140px'>
+          <div class='muted' style='font-size:12px'>scale</div>
+          <input id='st2Scale' type='number' step='0.1' min='0.5' max='3' value='1.0' />
+        </div>
+      </div>
+    </div>
+
     <div id='clipBox'>
       <div class='k'>Voice clip</div>
       <div class='row' style='gap:10px;flex-wrap:nowrap'>
@@ -4665,6 +4688,8 @@ function setEngineUi(){
   var eng = String((($('engineSel')||{}).value||'')).trim();
   var tb=$('tortoiseBox');
   if (tb) tb.classList.toggle('hide', eng!=='tortoise');
+  var sb=$('styletts2Box');
+  if (sb) sb.classList.toggle('hide', eng!=='styletts2');
 
   // Hide clip UI entirely when tortoise is selected
   try{
@@ -4964,6 +4989,16 @@ function testSample(){
         payload.tortoise_voice = String(ts.voice||'').trim();
         payload.tortoise_gender = String(ts.gender||'').trim();
         payload.tortoise_preset = String(ts.preset||'').trim();
+      }
+    }catch(_e){}
+
+    // If engine=styletts2, attach expressiveness knobs.
+    try{
+      if (engine==='styletts2'){
+        payload.styletts2_alpha = Number(val('st2Alpha')||0.30);
+        payload.styletts2_beta = Number(val('st2Beta')||0.70);
+        payload.styletts2_steps = parseInt(String(val('st2Steps')||'10'),10) || 10;
+        payload.styletts2_scale = Number(val('st2Scale')||1.0);
       }
     }catch(_e){}
 
@@ -8839,6 +8874,11 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
             'tortoise_voice': str((payload or {}).get('tortoise_voice') or '').strip(),
             'tortoise_gender': str((payload or {}).get('tortoise_gender') or '').strip(),
             'tortoise_preset': str((payload or {}).get('tortoise_preset') or '').strip(),
+            # styletts2 expressiveness (best-effort)
+            'styletts2_alpha': float((payload or {}).get('styletts2_alpha') or 0.0) if str((payload or {}).get('styletts2_alpha') or '').strip() else 0.0,
+            'styletts2_beta': float((payload or {}).get('styletts2_beta') or 0.0) if str((payload or {}).get('styletts2_beta') or '').strip() else 0.0,
+            'styletts2_steps': int((payload or {}).get('styletts2_steps') or 0) if str((payload or {}).get('styletts2_steps') or '').strip() else 0,
+            'styletts2_scale': float((payload or {}).get('styletts2_scale') or 0.0) if str((payload or {}).get('styletts2_scale') or '').strip() else 0.0,
         }
 
         # For tortoise, enforce a stable voice across all chunks.
@@ -8925,9 +8965,27 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
                     voice_fixed = voice
 
                 def do_one(i: int, chunk: str, gpu: int | None):
+                    payload2 = {'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads, 'job_id': job_id}
+                    try:
+                        if engine == 'styletts2':
+                            a = meta.get('styletts2_alpha')
+                            b = meta.get('styletts2_beta')
+                            st = meta.get('styletts2_steps')
+                            sc = meta.get('styletts2_scale')
+                            if a:
+                                payload2['styletts2_alpha'] = a
+                            if b:
+                                payload2['styletts2_beta'] = b
+                            if st:
+                                payload2['styletts2_steps'] = st
+                            if sc:
+                                payload2['styletts2_scale'] = sc
+                    except Exception:
+                        pass
+
                     r = requests.post(
                         GATEWAY_BASE + '/v1/tts',
-                        json={'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads, 'job_id': job_id},
+                        json=payload2,
                         headers=_h(),
                         timeout=1800,
                     )
