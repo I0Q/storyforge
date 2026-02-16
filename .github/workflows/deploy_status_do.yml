@@ -82,7 +82,13 @@ jobs:
                 exit 3
                 ;;
               CANCELED|CANCELLED)
-                # If DO cancels a deployment due to superseding, keep polling for the next one.
+                # If the deployment for this commit was canceled (typically superseded),
+                # end this watcher so it doesn't block the next queued commit.
+                if echo "$cause" | grep -qi "${sha:0:7}"; then
+                  echo "Deployment canceled for this commit; treating as superseded." >&2
+                  echo "result=superseded" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
                 ;;
               "")
                 ;;
@@ -107,6 +113,7 @@ jobs:
           if [ "$res" = "success" ]; then msg="Deployed"; fi
           if [ "$res" = "failure" ]; then msg="Deploy failed"; fi
           if [ "$res" = "timeout" ]; then msg="Deploy timed out"; fi
+          if [ "$res" = "superseded" ]; then msg="Deploy superseded"; fi
           msg2="$msg (Commit ${GITHUB_SHA:0:7})"
           payload=$(jq -nc --arg m "$msg2" --arg c "${GITHUB_SHA:0:7}" '{message:$m,commit:$c}')
           curl -fsS -X POST "$STORYFORGE_URL/api/deploy/end" \
