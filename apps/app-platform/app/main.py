@@ -1049,7 +1049,7 @@ def index(response: Response):
 
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>1) Story</div>
-      <select id='prodStorySel' style='margin-top:8px;width:100%'></select>
+      <select id='prodStorySel' style='margin-top:8px;width:100%;font-size:16px;padding-top:12px;padding-bottom:12px;'></select>
     </div>
 
     <div class='card'>
