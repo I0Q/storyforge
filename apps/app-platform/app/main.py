@@ -600,6 +600,10 @@ VOICE_NEW_EXTRA_CSS = base_css("""\
 # Standalone pages must include this whenever they include MONITOR_HTML/MONITOR_JS.
 MONITOR_COMPONENT_CSS = base_css("""\
 
+    /* Monitor: reserve bottom space so page buttons never sit behind the dock/sheet */
+    :root{--sfBottomPad:0px;}
+    body{padding-bottom:calc(18px + env(safe-area-inset-bottom) + var(--sfBottomPad, 0px));}
+
     /* Monitor: normalize font + process scroll behavior across templates */
     pre{background:#070b16;color:#d7e1ff;padding:12px;border-radius:12px;overflow:auto;border:1px solid var(--line)}
     .term{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.25;white-space:pre;}
@@ -712,13 +716,78 @@ function startMetricsStream(){
     metricsES.onerror=function(_e){ _metricsScheduleReconnect('Monitor reconnecting…'); };
   }catch(e){ _metricsScheduleReconnect('Monitor reconnecting…'); }
 }
-function setMonitorEnabled(on){ monitorEnabled=!!on; saveMonitorPref(monitorEnabled); try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){} if(!monitorEnabled){ stopMetricsStream(); try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){} try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){} return; } startMetricsStream(); }
-function openMonitor(){ if(!monitorEnabled) return; monitorSheetOpen=true; setMetricsInterval(1); var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.remove('hide'); b.style.display='block'; } if(sh){ sh.classList.remove('hide'); sh.style.display='block'; } try{ document.body.classList.add('sheetOpen'); }catch(e){} startMetricsStream(); if(lastMetrics) updateMonitorFromMetrics(lastMetrics); }
-function closeMonitor(){ monitorSheetOpen=false; setMetricsInterval(10); var b=document.getElementById('monitorBackdrop'); var sh=document.getElementById('monitorSheet'); if(b){ b.classList.add('hide'); b.style.display='none'; } if(sh){ sh.classList.add('hide'); sh.style.display='none'; } try{ document.body.classList.remove('sheetOpen'); }catch(e){} }
+function _sfSetBottomPad(px){
+  try{ document.documentElement.style.setProperty('--sfBottomPad', String(Math.max(0, Math.floor(Number(px||0)))) + 'px'); }catch(e){}
+}
+function _sfUpdateBottomPad(){
+  try{
+    if(!monitorEnabled){ _sfSetBottomPad(0); return; }
+    var sh=document.getElementById('monitorSheet');
+    var dk=document.getElementById('monitorDock');
+    if (monitorSheetOpen && sh && sh.style.display!=='none'){
+      _sfSetBottomPad(sh.getBoundingClientRect().height||0);
+      return;
+    }
+    if (dk && dk.style.display!=='none'){
+      _sfSetBottomPad(dk.getBoundingClientRect().height||0);
+      return;
+    }
+  }catch(e){}
+}
+
+function setMonitorEnabled(on){
+  monitorEnabled=!!on;
+  saveMonitorPref(monitorEnabled);
+  try{ document.documentElement.classList.toggle('monOn', !!monitorEnabled); }catch(e){}
+  if(!monitorEnabled){
+    stopMetricsStream();
+    try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){}
+    try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Monitor off'; }catch(e){}
+    try{ _sfUpdateBottomPad(); }catch(e){}
+    return;
+  }
+  startMetricsStream();
+  try{ _sfUpdateBottomPad(); }catch(e){}
+}
+
+function openMonitor(){
+  if(!monitorEnabled) return;
+  monitorSheetOpen=true;
+  setMetricsInterval(1);
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if(b){ b.classList.remove('hide'); b.style.display='block'; }
+  if(sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+
+  // Lock body scroll so the sheet always feels “stuck” to the bottom (iOS Safari).
+  try{ window.__sfScrollY = window.scrollY || 0; }catch(e){}
+  try{ document.body.classList.add('sheetOpen'); }catch(e){}
+  try{ document.body.style.position='fixed'; document.body.style.top = '-' + String(window.__sfScrollY||0) + 'px'; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }catch(e){}
+
+  startMetricsStream();
+  if(lastMetrics) updateMonitorFromMetrics(lastMetrics);
+  try{ _sfUpdateBottomPad(); }catch(e){}
+}
+
+function closeMonitor(){
+  monitorSheetOpen=false;
+  setMetricsInterval(10);
+  var b=document.getElementById('monitorBackdrop');
+  var sh=document.getElementById('monitorSheet');
+  if(b){ b.classList.add('hide'); b.style.display='none'; }
+  if(sh){ sh.classList.add('hide'); sh.style.display='none'; }
+
+  // Restore scroll.
+  try{ document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width=''; }catch(e){}
+  try{ window.scrollTo(0, window.__sfScrollY||0); }catch(e){}
+  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+  try{ _sfUpdateBottomPad(); }catch(e){}
+}
 function closeMonitorEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeMonitor(); return false; }
 function bindMonitorClose(){ try{ var btn=document.getElementById('monCloseBtn'); if(btn && !btn.__bound){ btn.__bound=true; btn.addEventListener('touchend', function(ev){ closeMonitorEv(ev); }, {passive:false}); btn.addEventListener('click', function(ev){ closeMonitorEv(ev); }); } }catch(e){} }
-try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }); }catch(e){}
-try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); }catch(e){}
+try{ window.addEventListener('resize', function(){ try{ _sfUpdateBottomPad(); }catch(e){} }, {passive:true}); }catch(e){}
+try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); try{ _sfUpdateBottomPad(); }catch(e){} }); }catch(e){}
+try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); try{ _sfUpdateBottomPad(); }catch(e){} }catch(e){}
 </script>
 """
 
