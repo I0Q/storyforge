@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy_status:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 12
     env:
       STORYFORGE_URL: https://storyforge.i0q.com
       DO_APP_ID: 11f8a3b9-7dda-4890-b1c7-b459aa050c2b
@@ -55,7 +55,8 @@ jobs:
           sha="$GITHUB_SHA"
 
           echo "Polling DO deployments for commit ${sha:0:7}…"
-          for i in $(seq 1 360); do
+          # 10 minute timeout (120 * 5s)
+          for i in $(seq 1 120); do
             j=$(curl -fsS "${auth[@]}" "$api?per_page=20")
 
             # Prefer the deployment whose cause mentions this commit SHA (DO typically includes it)
