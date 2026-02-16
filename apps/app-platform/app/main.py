@@ -1273,7 +1273,13 @@ function showTab(name, opts){
 
   // lazy-load tab content
   try{
-    if (name==='history') { try{ bindJobsLazyScroll(); }catch(e){}; loadHistory(true); }
+    if (name==='history') {
+      try{ bindJobsLazyScroll(); }catch(e){};
+      try{ loadHistory(true); }catch(e){}
+      // Ensure live updates start; and add a small delayed retry so the page never sits on "Loading…".
+      try{ startJobsStream(); }catch(e){}
+      try{ setTimeout(function(){ try{ loadHistory(true); }catch(_e){} }, 800); }catch(e){}
+    }
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
     else if (name==='production') loadProduction();

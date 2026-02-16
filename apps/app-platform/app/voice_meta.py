@@ -507,6 +507,13 @@ def analyze_voice_metadata(
         except Exception:
             pass
 
+        # If still unknown, default to adult (better UX than unknown).
+        try:
+            if out_traits.get('age') in ('', 'unknown', None):
+                out_traits['age'] = 'adult'
+        except Exception:
+            pass
+
         # Override with measured pitch bucket if available
         try:
             pb = str(((measured.get('features') or {}).get('pitch_bucket') or '')).strip().lower()
@@ -553,6 +560,18 @@ def analyze_voice_metadata(
                         g = str(gj.get('gender') or 'unknown').strip().lower()
                         if g in ('male','female'):
                             out_traits['gender'] = g
+            except Exception:
+                pass
+
+        # 2b) heuristic fallback (pitch-based) if still unknown.
+        if out_traits["gender"] in ("", "unknown"):
+            try:
+                f0 = (measured.get('features') or {}).get('f0_hz_median')
+                f0v = float(f0) if f0 is not None else None
+                if f0v is not None:
+                    # Very rough heuristic: voices with f0 median above ~170Hz tend to be perceived as female.
+                    out_traits['gender'] = 'female' if f0v >= 170.0 else 'male'
+                    measured['gender_estimated_from_f0'] = True
             except Exception:
                 pass
 
