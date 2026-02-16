@@ -4088,9 +4088,6 @@ def voices_edit_page(voice_id: str, response: Response):
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
 
-    <div class='muted'>ID</div>
-    <div class='term' style='margin-top:8px;'><code>__VID__</code></div>
-
     <div class='muted' style='margin-top:12px;'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='editSwatch' class='swatch' title='Pick color' style='background:__CHEX__;cursor:pointer' onclick='openColorPick()'></span>
