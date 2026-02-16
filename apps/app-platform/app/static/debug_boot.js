@@ -168,3 +168,5 @@
 
   try{ startDeployWatch(); }catch(e){}
 })();
+
+<!-- deploy-smoke 20260216T042607Z -->
