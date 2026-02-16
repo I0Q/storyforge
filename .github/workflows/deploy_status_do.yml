@@ -61,7 +61,9 @@ jobs:
             # Prefer the deployment whose cause mentions this commit SHA (DO typically includes it)
             dep_id=$(echo "$j" | jq -r --arg s "${sha:0:7}" '.deployments[] | select((.cause // "") | contains($s)) | .id' | head -n 1)
             if [ -z "$dep_id" ]; then
-              dep_id=$(echo "$j" | jq -r '.deployments[0].id // empty')
+              echo "[$i] no deployment found yet for commit ${sha:0:7}; waiting…"
+              sleep 5
+              continue
             fi
 
             phase=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.phase // .status // .progress.phase // "")')
@@ -81,14 +83,15 @@ jobs:
                 echo "result=failure" >> "$GITHUB_OUTPUT"
                 exit 3
                 ;;
+              SUPERSEDED)
+                echo "Deployment superseded for this commit." >&2
+                echo "result=superseded" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
               CANCELED|CANCELLED)
-                # If the deployment for this commit was canceled (typically superseded),
-                # end this watcher so it doesn't block the next queued commit.
-                if echo "$cause" | grep -qi "${sha:0:7}"; then
-                  echo "Deployment canceled for this commit; treating as superseded." >&2
-                  echo "result=superseded" >> "$GITHUB_OUTPUT"
-                  exit 0
-                fi
+                echo "Deployment canceled for this commit; treating as superseded." >&2
+                echo "result=superseded" >> "$GITHUB_OUTPUT"
+                exit 0
                 ;;
               "")
                 ;;
