@@ -301,6 +301,12 @@ INDEX_BASE_CSS = base_css("""\
     .pill.bad{color:var(--bad);border-color:rgba(255,77,77,.35)}
     .pill.warn{color:var(--warn);border-color:rgba(255,204,0,.35)}
 
+    /* chips (used in Voices list + traits) */
+    .chips{display:flex;gap:8px;flex-wrap:wrap;}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);font-weight:950;font-size:12px;}
+    .chip.male{border-color:rgba(80,160,255,0.75);background:rgba(80,160,255,0.26);color:rgba(210,235,255,0.98);}
+    .chip.female{border-color:rgba(255,120,200,0.75);background:rgba(255,120,200,0.26);color:rgba(255,225,245,0.98);}
+
     /* voice color swatches */
     .swatch{width:16px;height:16px;border-radius:7px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 6px 14px rgba(0,0,0,0.25);flex:0 0 auto;}
     .kvs{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin-top:8px;font-size:13px;}
@@ -3208,8 +3214,9 @@ function loadVoices(){
 
         var chips = '';
 
-        // gender: show as a pill near the name (not in traits row)
+        // gender chip first (male blue / female pink)
         var g = String(vt.gender||'unknown');
+        if (g==='male' || g==='female') chips += chip(String(g), g);
 
         // age chip
         var a = String(vt.age||'unknown');
@@ -3243,17 +3250,9 @@ function loadVoices(){
       var sw = String(v.color_hex||'').trim() || '#64748b';
       var swHtml = "<span class='swatch' title='" + escAttr(nm) + "' style='background:" + escAttr(sw) + "'></span>";
 
-      var genderPill = '';
-      try{
-        var gg = String((vt && vt.gender) ? vt.gender : '').trim().toLowerCase();
-        if (gg==='male' || gg==='female'){
-          genderPill = "<span class='chip " + gg + "' style='margin:0'>" + escapeHtml(gg) + "</span>";
-        }
-      }catch(_e){}
-
       var card = "<div class='job'>"
         + "<div class='row' style='justify-content:space-between;'>"
-        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + genderPill + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div></div>"
+        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div></div>"
         + "<div>" + pill + "</div>"
         + "</div>"
         + traitsHtml
