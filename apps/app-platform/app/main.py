@@ -7095,12 +7095,58 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
 
         # Production primitive: snapshot exactly what we send to the job.
         engine = str((payload or {}).get('engine') or '').strip()
-        casting = (payload or {}).get('casting')
-        if not isinstance(casting, dict):
+
+        # Snapshot casting at production runtime (source of truth: sf_castings).
+        casting = {}
+        try:
+            conn2 = db_connect()
+            try:
+                db_init(conn2)
+                cur2 = conn2.cursor()
+                cur2.execute('SELECT casting FROM sf_castings WHERE story_id=%s', (story_id,))
+                crow = cur2.fetchone()
+            finally:
+                conn2.close()
+            if crow and crow[0] is not None:
+                v = crow[0]
+                if isinstance(v, str):
+                    casting = json.loads(v) if v.strip() else {}
+                else:
+                    casting = v if isinstance(v, dict) else {}
+        except Exception:
             casting = {}
-        params = (payload or {}).get('params')
-        if not isinstance(params, dict):
-            params = {}
+
+        # Snapshot effective runtime params (keep global settings as source of truth; store what was used).
+        params = {}
+        try:
+            p = _get_tinybox_provider() or {}
+            gpus = []
+            try:
+                gpus = _get_allowed_voice_gpus()
+            except Exception:
+                gpus = []
+            threads = None
+            try:
+                threads = int((p or {}).get('voice_threads') or 0) or None
+            except Exception:
+                threads = None
+            # tortoise-specific knobs that affect determinism
+            tortoise_split_min_text = None
+            try:
+                v = (p or {}).get('tortoise_split_min_text')
+                tortoise_split_min_text = int(v) if v is not None else None
+            except Exception:
+                tortoise_split_min_text = None
+            params = {
+                'engine': engine,
+                'gpus': gpus,
+                'threads': threads,
+                'tortoise_split_min_text': tortoise_split_min_text,
+                'gateway_base': str(GATEWAY_BASE or ''),
+                'provider': 'tinybox',
+            }
+        except Exception:
+            params = {'engine': engine}
 
         import hashlib
 
