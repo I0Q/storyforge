@@ -236,6 +236,26 @@ INDEX_BASE_CSS = base_css("""\
     /* SFML code viewer (line numbers + basic highlighting) */
     .codeBox{background:#070b16;border:1px solid var(--line);border-radius:14px;max-height:55vh;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
     .codeBox{position:relative;}
+
+    /* SFML fullscreen mode (pseudo-fullscreen for iOS) */
+    .sfmlFullBackdrop{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99990;}
+    .sfmlFull{position:fixed !important;left:0;right:0;top:0;bottom:0;z-index:99991;
+      margin:0 !important;border-radius:0 !important;
+      height:auto !important;max-height:none !important;
+      padding-top:calc(54px + env(safe-area-inset-top, 0px));
+      padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    .sfmlFullTopbar{position:fixed;left:0;right:0;top:0;z-index:99992;
+      padding:10px 12px;
+      padding-top:calc(10px + env(safe-area-inset-top, 0px));
+      background:rgba(7,11,22,0.98);
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      display:flex;align-items:center;gap:10px;
+    }
+    .sfmlFullTopbar .t{font-weight:950;}
+    .sfmlFullTopbar .sp{flex:1 1 auto;}
+    body.sfmlFullOn{overflow:hidden;}
+
     .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
     .codeLine{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:2px 12px;}
     .codeLn{color:rgba(168,179,216,0.55);text-align:right;user-select:none;}
@@ -1039,6 +1059,7 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>3) SFML</div>
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
           <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
+          <button type='button' class='secondary' id='prodSfmlFullBtn' disabled onclick='prodToggleSfmlFull()'>Full screen</button>
           <button type='button' id='prodProduceBtn' class='prodGoBtn' disabled onclick='prodProduceAudio()'>Produce</button>
         </div>
       </div>
@@ -2928,6 +2949,51 @@ function prodSfmlSaveNow(sfmlText){
   }catch(e){}
 }
 
+function prodToggleSfmlFull(){
+  try{
+    var box=document.getElementById('prodSfmlBox');
+    if(!box) return;
+    var on = box.classList.contains('sfmlFull');
+    var bd = document.getElementById('sfmlFullBackdrop');
+    var tb = document.getElementById('sfmlFullTopbar');
+
+    function cleanup(){
+      try{ if(bd) bd.remove(); }catch(e){}
+      try{ if(tb) tb.remove(); }catch(e){}
+      try{ document.body.classList.remove('sfmlFullOn'); }catch(e){}
+      try{ box.classList.remove('sfmlFull'); }catch(e){}
+    }
+
+    if(on){ cleanup(); return; }
+
+    // enable
+    try{ document.body.classList.add('sfmlFullOn'); }catch(e){}
+    try{ box.classList.add('sfmlFull'); }catch(e){}
+
+    // backdrop (tap to close)
+    try{
+      bd = document.createElement('div');
+      bd.id='sfmlFullBackdrop';
+      bd.className='sfmlFullBackdrop';
+      bd.onclick=function(){ try{ prodToggleSfmlFull(); }catch(e){} };
+      document.body.appendChild(bd);
+    }catch(e){}
+
+    // topbar
+    try{
+      tb = document.createElement('div');
+      tb.id='sfmlFullTopbar';
+      tb.className='sfmlFullTopbar';
+      tb.innerHTML = "<div class='t'>SFML</div><div class='sp'></div><button type='button' class='secondary'>Close</button>";
+      tb.querySelector('button').onclick=function(ev){ try{ if(ev&&ev.preventDefault) ev.preventDefault(); }catch(_e){}; try{ prodToggleSfmlFull(); }catch(_e){}; };
+      document.body.appendChild(tb);
+    }catch(e){}
+
+    // keep editor focused
+    try{ box.scrollTop = 0; }catch(e){}
+  }catch(e){}
+}
+
 function prodRenderSfml(sfml){
   try{
     var box=document.getElementById('prodSfmlBox');
@@ -2937,6 +3003,7 @@ function prodRenderSfml(sfml){
     raw = raw.split("\\r\\n").join("\\n");
 
     box.classList.remove('hide');
+    try{ var fb=document.getElementById('prodSfmlFullBtn'); if(fb) fb.disabled = false; }catch(_e){}
 
     // Lightweight editor for now (no Ace). Next step: custom highlighting.
     if (!box.__sfmlInited){
