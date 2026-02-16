@@ -60,7 +60,9 @@ sequenceDiagram
 
   U->>SF: POST /api/voices/{voice_id}/analyze_metadata
   SF->>GW: POST (gateway route) /voice_meta/analyze { sample_url, voice_id, ... }
-  GW->>SP: GET sample object (private) OR GW->>SF: request signed/proxied bytes
+  Note over GW,SP: Preferred: GW does NOT talk to Spaces.
+  SF->>SP: GET sample object (Cloud has Spaces creds)
+  SF-->>GW: return bytes (or a gateway/Tailscale URL)
   GW->>TB: POST /v1/audio/gender (bytes or local file path)
   GW->>TB: POST /v1/audio/age (bytes or local file path)
   GW->>SF: POST /api/jobs/{id}/progress (or complete)
@@ -87,8 +89,9 @@ sequenceDiagram
   U->>SF: POST /api/jobs/create kind=produce_audio
   SF->>GW: POST /jobs/dispatch { job_id, sfml_url, settings }
   GW->>TB: POST /v1/produce_audio (or /v1/render) (job payload)
-  TB->>SP: (optional) fetch SFML/assets via gateway or public URLs
-  TB->>SP: upload output audio (or returns local path)
+  Note over TB,SP: Preferred: TB does NOT talk to Spaces.
+  TB-->>GW: returns local output file path OR bytes
+  SF->>SP: upload output audio (Cloud uploads directly)
   GW->>SF: POST /api/jobs/{id}/complete { output_url }
   SF-->>U: Job completed + playable output in Library
 ```
@@ -108,7 +111,7 @@ sequenceDiagram
   SF->>GW: POST /tts { engine, voice_ref/url, text, params }
   GW->>TB: POST /v1/tts
   TB-->>GW: returns local file path OR bytes
-  GW->>SP: upload to Spaces (private/public policy)
+  SF->>SP: upload to Spaces (Cloud uploads directly)
   GW-->>SF: return sample_url
   SF-->>U: UI plays sample; user may Save to roster
 ```
