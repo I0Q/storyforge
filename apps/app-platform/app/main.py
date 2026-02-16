@@ -4459,25 +4459,41 @@ def voices_new_page(response: Response):
 
     <div id='styletts2Box' class='hide'>
       <div class='k'>StyleTTS2 expressiveness</div>
-      <div class='muted'>Higher variation can sound more alive but less stable.</div>
-      <div class='row' style='gap:10px;flex-wrap:wrap'>
-        <div style='flex:1;min-width:140px'>
-          <div class='muted' style='font-size:12px'>alpha (ref mix)</div>
-          <input id='st2Alpha' type='number' step='0.05' min='0' max='1' value='0.30' />
+      <div class='muted'>Start with a preset. Use Advanced only if you want to fine-tune.</div>
+
+      <div class='k' style='margin-top:8px'>Preset</div>
+      <select id='st2Preset' onchange='st2ApplyPreset(this.value)'>
+        <option value='neutral' selected>Neutral (safe)</option>
+        <option value='lively'>Lively (more expressive)</option>
+        <option value='dramatic'>Dramatic (max expression)</option>
+      </select>
+      <div id='st2PresetHelp' class='muted' style='margin-top:6px'>Safe, stable delivery.</div>
+
+      <details style='margin-top:10px'>
+        <summary class='muted' style='cursor:pointer'>Advanced</summary>
+        <div class='row' style='gap:10px;flex-wrap:wrap;margin-top:10px'>
+          <div style='flex:1;min-width:160px'>
+            <div class='muted' style='font-size:12px'>Reference adherence (low → freer)</div>
+            <input id='st2Alpha' type='range' min='0' max='1' step='0.05' value='0.30' oninput='st2SyncLabels()' />
+            <div class='muted' style='font-size:12px'>Value: <span id='st2AlphaV'>0.30</span></div>
+          </div>
+          <div style='flex:1;min-width:160px'>
+            <div class='muted' style='font-size:12px'>Expressiveness (higher → more variation)</div>
+            <input id='st2Beta' type='range' min='0' max='1' step='0.05' value='0.70' oninput='st2SyncLabels()' />
+            <div class='muted' style='font-size:12px'>Value: <span id='st2BetaV'>0.70</span></div>
+          </div>
+          <div style='flex:1;min-width:160px'>
+            <div class='muted' style='font-size:12px'>Quality / detail (more → slower)</div>
+            <input id='st2Steps' type='range' min='4' max='30' step='1' value='10' oninput='st2SyncLabels()' />
+            <div class='muted' style='font-size:12px'>Value: <span id='st2StepsV'>10</span></div>
+          </div>
+          <div style='flex:1;min-width:160px'>
+            <div class='muted' style='font-size:12px'>Style strength (more → stronger character)</div>
+            <input id='st2Scale' type='range' min='0.5' max='3' step='0.1' value='1.0' oninput='st2SyncLabels()' />
+            <div class='muted' style='font-size:12px'>Value: <span id='st2ScaleV'>1.0</span></div>
+          </div>
         </div>
-        <div style='flex:1;min-width:140px'>
-          <div class='muted' style='font-size:12px'>beta (style mix)</div>
-          <input id='st2Beta' type='number' step='0.05' min='0' max='1' value='0.70' />
-        </div>
-        <div style='flex:1;min-width:140px'>
-          <div class='muted' style='font-size:12px'>steps</div>
-          <input id='st2Steps' type='number' step='1' min='4' max='30' value='10' />
-        </div>
-        <div style='flex:1;min-width:140px'>
-          <div class='muted' style='font-size:12px'>scale</div>
-          <input id='st2Scale' type='number' step='0.1' min='0.5' max='3' value='1.0' />
-        </div>
-      </div>
+      </details>
     </div>
 
     <div id='clipBox'>
@@ -5034,6 +5050,43 @@ function testSample(){
     .catch(function(e){ if(out) out.innerHTML='<div class="err">'+esc(String(e))+'</div>'; });
 }
 
+function st2SyncLabels(){
+  try{
+    if($('st2AlphaV')) $('st2AlphaV').textContent = String(val('st2Alpha'));
+    if($('st2BetaV')) $('st2BetaV').textContent = String(val('st2Beta'));
+    if($('st2StepsV')) $('st2StepsV').textContent = String(val('st2Steps'));
+    if($('st2ScaleV')) $('st2ScaleV').textContent = String(val('st2Scale'));
+  }catch(e){}
+}
+
+function st2ApplyPreset(p){
+  try{
+    var preset = String(p||'neutral');
+    var help='';
+    if (preset==='neutral'){
+      help='Safe, stable delivery.';
+      if($('st2Alpha')) $('st2Alpha').value = '0.30';
+      if($('st2Beta')) $('st2Beta').value = '0.70';
+      if($('st2Steps')) $('st2Steps').value = '10';
+      if($('st2Scale')) $('st2Scale').value = '1.0';
+    }else if (preset==='lively'){
+      help='More intonation and energy. Slightly less stable.';
+      if($('st2Alpha')) $('st2Alpha').value = '0.25';
+      if($('st2Beta')) $('st2Beta').value = '0.85';
+      if($('st2Steps')) $('st2Steps').value = '12';
+      if($('st2Scale')) $('st2Scale').value = '1.2';
+    }else if (preset==='dramatic'){
+      help='Maximum expression. Can be less consistent.';
+      if($('st2Alpha')) $('st2Alpha').value = '0.20';
+      if($('st2Beta')) $('st2Beta').value = '0.95';
+      if($('st2Steps')) $('st2Steps').value = '14';
+      if($('st2Scale')) $('st2Scale').value = '1.4';
+    }
+    if($('st2PresetHelp')) $('st2PresetHelp').textContent = help;
+    st2SyncLabels();
+  }catch(e){}
+}
+
 try{ document.addEventListener('DOMContentLoaded', function(){
   try{ loadEngines(); }catch(e){}
   try{ loadPresets(); }catch(e){}
@@ -5043,6 +5096,7 @@ try{ document.addEventListener('DOMContentLoaded', function(){
   var tg=$('tortoiseGender'); if(tg) tg.addEventListener('change', function(){ try{ loadTortoiseVoices(); }catch(e){} });
   try{ loadTortoiseVoices(); }catch(e){}
   try{ setEngineUi(); }catch(e){}
+  try{ st2ApplyPreset(String(val('st2Preset')||'neutral')); }catch(e){}
   try{ updateSampleTextCount(); }catch(e){}
   try{ var st=$('sampleText'); if (st) st.addEventListener('input', updateSampleTextCount); }catch(e){}
 
