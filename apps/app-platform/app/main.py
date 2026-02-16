@@ -3331,9 +3331,20 @@ function loadVoices(){
       var sw = String(v.color_hex||'').trim() || '#64748b';
       var swHtml = "<span class='swatch' title='" + escAttr(nm) + "' style='background:" + escAttr(sw) + "'></span>";
 
+      // If we have a gender chip, move it inline BEFORE the name.
+      var nameLead = '';
+      try{
+        var vtj2 = safeJson(v.voice_traits_json||'') || null;
+        var vt2 = vtj2 ? (vtj2.voice_traits||{}) : {};
+        var gg = String(vt2.gender||'unknown');
+        if (gg==='male' || gg==='female'){
+          nameLead = "<span class='chip "+gg+"' style='margin:0;margin-right:10px'>"+escapeHtml(gg)+"</span>";
+        }
+      }catch(_e){ nameLead=''; }
+
       var card = "<div class='job'>"
         + "<div class='row' style='justify-content:space-between;'>"
-        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div></div>"
+        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + nameLead + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div></div>"
         + "<div>" + pill + "</div>"
         + "</div>"
         + traitsHtml
