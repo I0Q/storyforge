@@ -4018,7 +4018,11 @@ def voices_edit_page(voice_id: str, response: Response):
   <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Basic fields</div>
 
-    <div class='muted'>Display name</div>
+    <div class='muted'>ID</div>
+    <input id='voice_id' value='__VID__' style='width:100%;margin-top:8px' />
+    <div class='muted' style='margin-top:6px;'>Changing the ID can break links in existing jobs/castings. Use carefully.</div>
+
+    <div class='muted' style='margin-top:12px;'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
       <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
       <span id='colorPickWrap' class='colorPickWrap' style='display:none'>
@@ -4287,7 +4291,8 @@ async function analyzeVoice(){
 async function saveVoice(){
   try{
     var payload={
-      voice_id:'__VID_RAW__',
+      voice_id_old:'__VID_RAW__',
+      voice_id_new: (document.getElementById('voice_id') ? (document.getElementById('voice_id').value||'').trim() : '__VID_RAW__'),
       display_name: (document.getElementById('display_name').value||'').trim(),
       color_hex: (document.getElementById('color_hex').value||'').trim(),
       enabled: !!document.getElementById('enabled').checked
@@ -7024,6 +7029,91 @@ def api_voices_create(payload: dict[str, Any]):
         return {'ok': True, 'sample_url': sample_url}
     except Exception as e:
         return {'ok': False, 'error': f'create_failed: {type(e).__name__}: {e}'}
+
+
+@app.post('/api/voices/update')
+def api_voices_update(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Update a voice's basic fields.
+
+    Payload supports either:
+      - {voice_id: <id>, display_name, color_hex, enabled}
+      - {voice_id_old: <id>, voice_id_new: <id>, ...} to rename the id.
+
+    NOTE: Renaming ids can break references stored elsewhere; use carefully.
+    """
+    try:
+        old_id = str((payload or {}).get('voice_id_old') or (payload or {}).get('voice_id') or '').strip()
+        new_id = str((payload or {}).get('voice_id_new') or (payload or {}).get('voice_id') or '').strip()
+        old_id = validate_voice_id(old_id)
+        new_id = validate_voice_id(new_id)
+
+        display_name = str((payload or {}).get('display_name') or '').strip()
+        color_hex = str((payload or {}).get('color_hex') or '').strip()
+        enabled = bool((payload or {}).get('enabled', True))
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            v = get_voice_db(conn, old_id)
+
+            # Rename by copy+delete (PK change) in a transaction.
+            cur = conn.cursor()
+            if new_id != old_id:
+                # ensure target missing
+                cur.execute("SELECT 1 FROM sf_voices WHERE id=%s", (new_id,))
+                if cur.fetchone():
+                    return {'ok': False, 'error': 'voice_id_taken'}
+
+                now = int(time.time())
+                cur.execute(
+                    """
+INSERT INTO sf_voices (id,engine,voice_ref,display_name,color_hex,enabled,sample_text,sample_url,voice_traits_json,created_at,updated_at)
+SELECT %s, engine, voice_ref, display_name, color_hex, enabled, sample_text, sample_url, voice_traits_json, created_at, %s
+FROM sf_voices WHERE id=%s
+""",
+                    (new_id, now, old_id),
+                )
+                cur.execute("DELETE FROM sf_voices WHERE id=%s", (old_id,))
+                conn.commit()
+                old_id = new_id
+                v = get_voice_db(conn, old_id)
+
+            # Update mutable fields
+            upsert_voice_db(
+                conn,
+                old_id,
+                str(v.get('engine') or ''),
+                str(v.get('voice_ref') or ''),
+                display_name or str(v.get('display_name') or old_id),
+                color_hex or str(v.get('color_hex') or ''),
+                enabled,
+                str(v.get('sample_text') or ''),
+                str(v.get('sample_url') or ''),
+            )
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        return {'ok': True, 'voice_id': old_id}
+    except Exception as e:
+        return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/voices/delete')
+def api_voices_delete(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    try:
+        voice_id = validate_voice_id(str((payload or {}).get('voice_id') or ''))
+        conn = db_connect()
+        try:
+            db_init(conn)
+            delete_voice_db(conn, voice_id)
+        finally:
+            conn.close()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'delete_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.post('/api/voices/{voice_id}/analyze_metadata')
