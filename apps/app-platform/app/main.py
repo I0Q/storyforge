@@ -2897,7 +2897,10 @@ function prodProduceAudio(){
     if (out) out.textContent='';
 
     var eng = '';
-    try{ eng = String((($('engineSel')||{}).value||'')).trim(); }catch(_e){ eng=''; }
+    try{
+      var r = document.querySelector('input[name="castEngine"]:checked');
+      eng = r ? String(r.value||'').trim() : '';
+    }catch(_e){ eng=''; }
     fetchJsonAuthed('/api/production/produce_audio', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid, engine: eng})})
       .then(function(j){
         if (!j || !j.ok || !j.job_id){ throw new Error((j&&j.error)||'produce_failed'); }
