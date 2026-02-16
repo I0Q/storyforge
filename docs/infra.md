@@ -49,6 +49,10 @@ Key idea: **Tinybox should not need to reach Spaces directly** for private objec
 
 **Goal:** User triggers Analyze Voice in Cloud UI; the system fetches the voice sample audio and classifies it on Tinybox.
 
+There are two acceptable data paths for the **audio bytes**:
+- **A (preferred):** Cloud fetches from Spaces and sends bytes down to Tinybox via Gateway.
+- **B (fallback):** Tinybox asks Gateway to fetch the bytes from Cloud/Spaces (Tinybox → Gateway → Cloud → Spaces).
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -59,10 +63,22 @@ sequenceDiagram
   participant TB as Tinybox Compute Node
 
   U->>SF: POST /api/voices/{voice_id}/analyze_metadata
-  SF->>SP: GET sample object (Cloud has Spaces creds)
-  SF->>GW: POST (gateway route) /voice_meta/analyze { sample_url, voice_id, bytes? }
-  GW->>TB: POST /v1/audio/gender (bytes or local file path)
-  GW->>TB: POST /v1/audio/age (bytes or local file path)
+
+  alt Path A: Cloud fetches audio and pushes bytes
+    SF->>SP: GET sample object (Cloud has Spaces creds)
+    SF->>GW: POST /voice_meta/analyze { voice_id, bytes }
+    GW->>TB: POST /v1/audio/gender (bytes)
+    GW->>TB: POST /v1/audio/age (bytes)
+  else Path B: Tinybox pulls via Gateway from Cloud/Spaces
+    TB->>GW: GET /internal/audio?voice_id=... (or ?url=...)
+    GW->>SF: GET /api/voices/{voice_id}/sample_bytes (or proxy)
+    SF->>SP: GET sample object
+    SF-->>GW: bytes
+    GW-->>TB: bytes
+    TB->>GW: POST /v1/audio/gender (local bytes)
+    TB->>GW: POST /v1/audio/age (local bytes)
+  end
+
   GW->>SF: POST /api/jobs/{id}/progress (or complete)
   SF-->>U: job card shows completed metadata
 ```
