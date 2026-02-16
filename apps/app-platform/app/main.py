@@ -4501,12 +4501,17 @@ def voices_new_page(response: Response):
       <div class='row' style='gap:10px;flex-wrap:nowrap'>
         <select id='clipMode' style='flex:0 0 160px'>
           <option value='preset' selected>Choose preset</option>
+          <option value='roster'>Use existing voice</option>
           <option value='upload'>Upload</option>
           <option value='url'>Paste URL</option>
         </select>
 
         <div id='clipPresetRow' class='hide' style='flex:1;min-width:0'>
           <select id='clipPreset'></select>
+        </div>
+
+        <div id='clipRosterRow' class='hide' style='flex:1;min-width:0'>
+          <select id='clipRosterVoice'></select>
         </div>
 
         <div id='clipUploadRow' class='hide' style='flex:1;min-width:0'>
@@ -4663,9 +4668,10 @@ try{
 
 function setVis(){
   var m=(($('clipMode')||{}).value||'upload');
-  var u=$('clipUploadRow'), p=$('clipPresetRow'), r=$('clipUrlRow');
+  var u=$('clipUploadRow'), p=$('clipPresetRow'), rr=$('clipRosterRow'), r=$('clipUrlRow');
   if(u) u.classList.toggle('hide', m!=='upload');
   if(p) p.classList.toggle('hide', m!=='preset');
+  if(rr) rr.classList.toggle('hide', m!=='roster');
   if(r) r.classList.toggle('hide', m!=='url');
 }
 
@@ -4798,6 +4804,54 @@ function loadPresets(){
   });
 }
 
+function loadRosterVoiceSamples(){
+  // Populate "Use existing voice" selector with voices that have a sample_url.
+  return jsonFetch('/api/voices')
+    .then(function(j){
+      var sel=$('clipRosterVoice');
+      if(!sel) return;
+      var voices=(j&&j.voices)||[];
+      var opts=[];
+      for (var i=0;i<voices.length;i++){
+        var v=voices[i]||{};
+        var url=String(v.sample_url||'').trim();
+        if(!url) continue;
+        opts.push({
+          id: String(v.id||'').trim(),
+          name: String(v.display_name||v.id||'').trim(),
+          engine: String(v.engine||'').trim(),
+          url: url,
+        });
+      }
+      opts.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+      sel.innerHTML='';
+      for (var k=0;k<opts.length;k++){
+        var o=document.createElement('option');
+        o.value=opts[k].url;
+        o.textContent = opts[k].name + (opts[k].engine?(' ('+opts[k].engine+')'):'');
+        sel.appendChild(o);
+      }
+      if (!opts.length){
+        var o2=document.createElement('option');
+        o2.value='';
+        o2.textContent='(no saved voice samples yet)';
+        sel.appendChild(o2);
+      }
+    })
+    .catch(function(_e){
+      // non-fatal
+      try{
+        var sel=$('clipRosterVoice');
+        if(sel && !sel.options.length){
+          var o=document.createElement('option');
+          o.value='';
+          o.textContent='(failed to load voices)';
+          sel.appendChild(o);
+        }
+      }catch(__e){}
+    });
+}
+
 function uploadClip(){
   var f = (($('clipFile')||{}).files||[])[0];
   if(!f) return Promise.reject('no_file');
@@ -4827,6 +4881,11 @@ function getClipUrl(){
         });
     }
     return Promise.resolve(v);
+  }
+  if(m==='roster'){
+    var rv = String((($('clipRosterVoice')||{}).value||'')).trim();
+    if (!rv) return Promise.reject('missing_roster_voice');
+    return Promise.resolve(rv);
   }
   return uploadClip();
 }
@@ -5090,6 +5149,7 @@ function st2ApplyPreset(p){
 try{ document.addEventListener('DOMContentLoaded', function(){
   try{ loadEngines(); }catch(e){}
   try{ loadPresets(); }catch(e){}
+  try{ loadRosterVoiceSamples(); }catch(e){}
   try{ setVis(); }catch(e){}
   var cm=$('clipMode'); if(cm) cm.addEventListener('change', setVis);
   var eg=$('engineSel'); if(eg) eg.addEventListener('change', function(){ try{ setEngineUi(); }catch(e){}; try{ setVis(); }catch(e){} });
