@@ -33,7 +33,7 @@ jobs:
             exit 1
           fi
           msg="Deploying (Commit ${GITHUB_SHA:0:7})"
-          payload=$(jq -nc --arg m "$msg" '{message:$m}')
+          payload=$(jq -nc --arg m "$msg" --arg c "${GITHUB_SHA:0:7}" '{message:$m,commit:$c}')
           curl -fsS -X POST "$STORYFORGE_URL/api/deploy/start" \
             -H "content-type: application/json" \
             -H "x-sf-deploy-token: $SF_DEPLOY_TOKEN" \
@@ -108,7 +108,7 @@ jobs:
           if [ "$res" = "failure" ]; then msg="Deploy failed"; fi
           if [ "$res" = "timeout" ]; then msg="Deploy timed out"; fi
           msg2="$msg (Commit ${GITHUB_SHA:0:7})"
-          payload=$(jq -nc --arg m "$msg2" '{message:$m}')
+          payload=$(jq -nc --arg m "$msg2" --arg c "${GITHUB_SHA:0:7}" '{message:$m,commit:$c}')
           curl -fsS -X POST "$STORYFORGE_URL/api/deploy/end" \
             -H "content-type: application/json" \
             -H "x-sf-deploy-token: $SF_DEPLOY_TOKEN" \

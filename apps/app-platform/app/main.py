@@ -6571,13 +6571,36 @@ def api_debug_latency(request: Request):
     return out
 
 
+def _deploy_commit_from_payload(payload: dict[str, Any]) -> str:
+    try:
+        c = str((payload or {}).get('commit') or '').strip().lower()
+        if c and len(c) >= 7:
+            return c[:7]
+    except Exception:
+        pass
+    # best-effort parse from message: "... (Commit abcdef0)"
+    try:
+        import re
+
+        msg = str((payload or {}).get('message') or '')
+        m = re.search(r"\bcommit\s+([0-9a-f]{7,40})\b", msg, flags=re.I)
+        if not m:
+            m = re.search(r"\(\s*Commit\s+([0-9a-f]{7,40})\s*\)", msg, flags=re.I)
+        if m:
+            return str(m.group(1) or '').strip().lower()[:7]
+    except Exception:
+        pass
+    return ''
+
+
 @app.post('/api/deploy/start')
 def api_deploy_start(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Mark deploy as started. Call from your deploy hook/pipeline."""
     _require_deploy_token(request)
     now = int(time.time())
     msg = str((payload or {}).get('message') or 'Deploying…')
-    v = {'state': 'deploying', 'message': msg}
+    commit = _deploy_commit_from_payload(payload)
+    v = {'state': 'deploying', 'message': msg, 'commit': commit}
 
     conn = db_connect()
     try:
@@ -6605,12 +6628,30 @@ def api_deploy_end(request: Request, payload: dict[str, Any] = Body(default={}))
     _require_deploy_token(request)
     now = int(time.time())
     msg = str((payload or {}).get('message') or 'Deployed')
-    v = {'state': 'idle', 'message': msg}
+    commit = _deploy_commit_from_payload(payload)
 
     conn = db_connect()
     try:
         db_init(conn)
         cur = conn.cursor()
+
+        # Guard: don't allow an older pipeline to clear a newer deploy.
+        cur.execute("SELECT value_json FROM sf_settings WHERE key='deploy_state' LIMIT 1")
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                cur_state = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            except Exception:
+                cur_state = {}
+            try:
+                cur_deploying = str((cur_state or {}).get('state') or '') == 'deploying'
+                cur_commit = str((cur_state or {}).get('commit') or '').strip().lower()[:7]
+                if cur_deploying and cur_commit and commit and (cur_commit != commit):
+                    return {'ok': True, 'ignored': True, 'reason': 'commit_mismatch'}
+            except Exception:
+                pass
+
+        v = {'state': 'idle', 'message': msg, 'commit': commit}
         cur.execute(
             """
 INSERT INTO sf_settings (key,value_json,updated_at)
