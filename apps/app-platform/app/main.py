@@ -3208,28 +3208,24 @@ function loadVoices(){
 
         var chips = '';
 
-        // gender chip (no label)
+        // gender chip (no label) - first
         var g = String(vt.gender||'unknown');
         if (g && g!=='unknown') chips += chip(String(g), g==='male'?'male':(g==='female'?'female':''));
 
-        // age chip (no label)
+        // age chip
         var a = String(vt.age||'unknown');
         if (a && a!=='unknown') chips += chip(String(a), 'age-' + a);
 
-        // tone chips (no "tone" label)
+        // tone chips
         if (Array.isArray(vt.tone) && vt.tone.length){
           for (var i=0;i<Math.min(3, vt.tone.length);i++) chips += chip(String(vt.tone[i]), '');
         }
 
-        // pitch/f0/ref chips
+        // pitch chip (no f0/hz; pitch already conveys it)
         var pitch = String(vt.pitch||'');
         if (pitch && pitch!=='unknown') chips += chip('pitch ' + pitch, '');
 
-        if (f && f.f0_hz_median!=null){
-          chips += chip('f0 ' + Number(f.f0_hz_median).toFixed(0) + ' Hz', '');
-        }
-
-        // Engine chip (show which engine this voice uses)
+        // Engine chip
         try{
           var eng = String(v.engine||'').trim();
           if (eng) chips += chip('engine ' + eng, '');
