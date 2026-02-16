@@ -2901,7 +2901,7 @@ function prodProduceAudio(){
         if (!j || !j.ok || !j.job_id){ throw new Error((j&&j.error)||'produce_failed'); }
         prodSetSfmlBusy(false);
         // Jump to Jobs so progress is visible.
-        try{ window.location.href = '/#tab-history'; }catch(_e){}
+        try{ showTab('history'); }catch(_e){ try{ window.location.hash = '#tab-history'; }catch(__e){} }
       })
       .catch(function(e){ prodSetSfmlBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
 
