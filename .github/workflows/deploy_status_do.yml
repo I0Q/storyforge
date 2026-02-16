@@ -55,23 +55,47 @@ jobs:
           sha="$GITHUB_SHA"
 
           echo "Polling DO deployments for commit ${sha:0:7}…"
+
+          mode="commit"   # commit|follow
+          commit_id=""
+          commit_created=""
+          dep_id=""
+
           # 10 minute timeout (120 * 5s)
           for i in $(seq 1 120); do
             j=$(curl -fsS "${auth[@]}" "$api?per_page=20")
 
-            # Prefer the deployment whose cause mentions this commit SHA (DO typically includes it)
-            dep_id=$(echo "$j" | jq -r --arg s "${sha:0:7}" '.deployments[] | select((.cause // "") | contains($s)) | .id' | head -n 1)
-            if [ -z "$dep_id" ]; then
-              echo "[$i] no deployment found yet for commit ${sha:0:7}; waiting…"
-              sleep 5
-              continue
+            if [ "$mode" = "commit" ]; then
+              # Find the deployment triggered by this commit
+              dep_id=$(echo "$j" | jq -r --arg s "${sha:0:7}" '.deployments[] | select((.cause // "") | contains($s)) | .id' | head -n 1)
+              if [ -z "$dep_id" ]; then
+                echo "[$i] no deployment found yet for commit ${sha:0:7}; waiting…"
+                sleep 5
+                continue
+              fi
+              if [ -z "$commit_id" ]; then
+                commit_id="$dep_id"
+                commit_created=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.created_at // "")')
+              fi
+            else
+              # Follow the newest deployment created after (or at) the commit deployment.
+              dep_id=$(echo "$j" | jq -r --arg t "$commit_created" --arg cid "$commit_id" '
+                .deployments[]
+                | select((.created_at // "") >= $t)
+                | select(.id != $cid)
+                | .id
+              ' | head -n 1)
+              if [ -z "$dep_id" ]; then
+                # If no newer deployment is visible yet, keep watching the commit deployment id.
+                dep_id="$commit_id"
+              fi
             fi
 
             phase=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.phase // .status // .progress.phase // "")')
             created=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.created_at // "")')
             cause=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.cause // "")')
 
-            echo "[$i] id=$dep_id phase=$phase created_at=$created cause=$cause"
+            echo "[$i] mode=$mode id=$dep_id phase=$phase created_at=$created cause=$cause"
 
             case "$phase" in
               ACTIVE|SUCCEEDED|SUCCESS|COMPLETED)
@@ -84,15 +108,14 @@ jobs:
                 echo "result=failure" >> "$GITHUB_OUTPUT"
                 exit 3
                 ;;
-              SUPERSEDED)
-                echo "Deployment superseded for this commit." >&2
-                echo "result=superseded" >> "$GITHUB_OUTPUT"
-                exit 0
-                ;;
-              CANCELED|CANCELLED)
-                echo "Deployment canceled for this commit; treating as superseded." >&2
-                echo "result=superseded" >> "$GITHUB_OUTPUT"
-                exit 0
+              SUPERSEDED|CANCELED|CANCELLED)
+                if [ "$mode" = "commit" ]; then
+                  echo "Commit deployment ended early ($phase). Following the next deployment to completion…" >&2
+                  mode="follow"
+                else
+                  # A followed deployment was superseded/canceled; keep following.
+                  echo "Followed deployment ended early ($phase). Continuing to follow newest deployment…" >&2
+                fi
                 ;;
               "")
                 ;;
