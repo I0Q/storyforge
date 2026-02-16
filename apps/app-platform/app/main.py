@@ -1779,7 +1779,10 @@ function renderJobs(jobs){
         rows += `<div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${job.mp3_url||""}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
       }
       if (job.sfml_url){
-        rows += `<div class='k'>sfml</div><div class='fadeLine'><div class='fadeText' title='${job.sfml_url||""}'>${job.sfml_url||'-'}</div>${job.sfml_url?`<button class="copyBtn" data-copy="${job.sfml_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+        const s = String(job.sfml_url||'');
+        const isUrl = (s.startsWith('http://') || s.startsWith('https://'));
+        const key = isUrl ? 'sfml' : 'runtime';
+        rows += `<div class='k'>${key}</div><div class='fadeLine'><div class='fadeText' title='${s||""}'>${s||'-'}</div>${s?`<button class="copyBtn" data-copy="${s}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
       }
     }
 
