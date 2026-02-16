@@ -11,14 +11,16 @@ This document is the **single reference** for how StoryForge Cloud, the VPC/Gate
 ### StoryForge Cloud (App Platform)
 - Public UI + API at: `https://storyforge.i0q.com/`
 - Runs FastAPI app in: `storyforge/apps/app-platform/app/main.py`
+- **Spaces access:** Cloud can upload/download to DigitalOcean Spaces **directly** via `boto3` (see `spaces_upload.py`). This does **not** require the Gateway.
 - Auth model:
   - **Human UI**: passphrase cookie (`sf_sid`) via `auth.py`.
   - **Automation / internal callers**: token-gated endpoints (TODO token, deploy token, job token).
 
 ### Gateway (VPC gateway droplet)
 - Purpose: the **private control plane bridge** between Cloud and Tinybox over **Tailscale**.
-- Design intent: Cloud talks to Gateway over the public internet (or DO VPC), then Gateway talks to Tinybox over Tailscale.
-- Should own **all cross-network calls** that require private connectivity or private assets.
+- Design intent: Cloud talks to Gateway (public HTTPS or DO-internal), then Gateway talks to Tinybox over Tailscale.
+- Primary role: **Cloud ↔ Tinybox communication** (job dispatch, status, and any Tinybox-only network reachability).
+- Non-goal: the Gateway is **not** required for Cloud ↔ Spaces; Cloud can talk to Spaces directly.
 
 ### Tinybox Compute Node (on Tinybox)
 - FastAPI service (systemd) providing GPU/compute services and voice/audio classifiers.
@@ -35,7 +37,9 @@ This document is the **single reference** for how StoryForge Cloud, the VPC/Gate
 - StoryForge Cloud → **Gateway** (public HTTPS or DO-internal)
 - Gateway → **Tinybox** (Tailscale-only)
 
-Key idea: **Tinybox should not need to reach Spaces or Cloud directly** for private objects; it should ask via Gateway.
+Key idea: **Tinybox should not need to reach Spaces directly** for private objects; it should ask via the **Gateway/Cloud control plane**.
+- Cloud may still talk to Spaces directly (it has Spaces credentials).
+- Gateway is primarily about Cloud ↔ Tinybox over Tailscale.
 
 ---
 
