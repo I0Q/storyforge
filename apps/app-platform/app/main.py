@@ -5624,6 +5624,12 @@ def base_template_page(response: Response):
     <div style='font-weight:950;margin-bottom:6px;'>StyleTTS2 delivery sweep (temporary)</div>
     <div class='muted'>Type a single line, pick a StyleTTS2 voice, and generate the same line with each delivery style. It will queue multiple jobs and send you to Jobs.</div>
 
+    <div class='muted' style='margin-top:10px'>Engine</div>
+    <select id='sweepEngine' style='margin-top:6px' onchange='loadSweepVoices()'>
+      <option value='styletts2' selected>StyleTTS2</option>
+      <option value='tortoise'>Tortoise</option>
+    </select>
+
     <div class='muted' style='margin-top:10px'>Voice</div>
     <select id='sweepVoice' style='margin-top:6px'></select>
 
@@ -5685,12 +5691,29 @@ async function loadSweepVoices(){
     var sel = document.getElementById('sweepVoice');
     if (!sel) return;
     sel.innerHTML = "<option value=''>Loading…</option>";
+
+    var engSel = String((document.getElementById('sweepEngine')||{}).value||'styletts2').trim();
+
+    // Tortoise voices are built-in names; keep a small curated list for now.
+    if (engSel === 'tortoise'){
+      var tort = ['tom','freeman','snakes'];
+      sel.innerHTML='';
+      for (var i=0;i<tort.length;i++){
+        var o=document.createElement('option');
+        o.value=tort[i];
+        o.textContent=tort[i];
+        sel.appendChild(o);
+      }
+      return;
+    }
+
+    // StyleTTS2 voices come from roster.
     var r = await fetch('/api/voices');
     var j = await r.json();
     var vs = (j && j.ok && Array.isArray(j.voices)) ? j.voices : [];
     var opts = [];
-    for (var i=0;i<vs.length;i++){
-      var v = vs[i] || {};
+    for (var k=0;k<vs.length;k++){
+      var v = vs[k] || {};
       var eng = String(v.engine||'').trim();
       if (eng !== 'styletts2') continue;
       var vid = String(v.id||'').trim();
@@ -5705,11 +5728,11 @@ async function loadSweepVoices(){
       sel.innerHTML = "<option value=''>No StyleTTS2 voices found</option>";
       return;
     }
-    for (var k=0;k<opts.length;k++){
-      var o = document.createElement('option');
-      o.value = opts[k].ref;
-      o.textContent = opts[k].name;
-      sel.appendChild(o);
+    for (var q=0;q<opts.length;q++){
+      var o2 = document.createElement('option');
+      o2.value = opts[q].ref;
+      o2.textContent = opts[q].name;
+      sel.appendChild(o2);
     }
   }catch(e){
     try{ var sel2=document.getElementById('sweepVoice'); if(sel2) sel2.innerHTML = "<option value=''>Failed to load voices</option>"; }catch(_e){}
@@ -5725,13 +5748,15 @@ async function queueSweep(){
     if (!vref){ if(out) out.innerHTML = "<div class='err'>Pick a voice</div>"; return; }
     if (!text){ if(out) out.innerHTML = "<div class='err'>Enter text</div>"; return; }
 
+    var engineSel = String((document.getElementById('sweepEngine')||{}).value||'styletts2').trim();
+
     var styles = ['neutral','calm','urgent','dramatic','whisper','shout'];
     if(out) out.textContent = 'Queuing ' + styles.length + ' jobs…';
 
     for (var i=0;i<styles.length;i++){
       var d = styles[i];
       var payload = {
-        engine: 'styletts2',
+        engine: engineSel,
         voice: vref,
         text: text,
         upload: true,
