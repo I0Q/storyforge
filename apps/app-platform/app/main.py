@@ -2594,6 +2594,45 @@ function removeProvider(id){
   renderProviders(arr);
 }
 
+function prodGetCastEngine(){
+  var eng='';
+  try{
+    var r=document.querySelector("input[name='castEngine']:checked");
+    if (r && r.value) eng = String(r.value||'').trim();
+  }catch(_e){}
+  return eng || 'tortoise';
+}
+
+function prodSetCastEngine(eng, persist){
+  eng = String(eng||'').trim();
+  if (eng!=='tortoise' && eng!=='styletts2') eng = 'tortoise';
+  try{
+    var rs=document.querySelectorAll("input[name='castEngine']");
+    for (var i=0;i<rs.length;i++){
+      var r=rs[i];
+      r.checked = (String(r.value||'')===eng);
+    }
+  }catch(_e){}
+  if (persist){
+    try{ localStorage.setItem('sf_cast_engine', eng); }catch(_e){}
+  }
+}
+
+function prodInitCastEngine(){
+  try{
+    // restore from localStorage on first render
+    var eng='';
+    try{ eng = String(localStorage.getItem('sf_cast_engine')||'').trim(); }catch(_e){}
+    if (eng) prodSetCastEngine(eng, false);
+
+    // persist on change
+    var rs=document.querySelectorAll("input[name='castEngine']");
+    for (var i=0;i<rs.length;i++){
+      rs[i].onchange = function(){ try{ prodSetCastEngine(prodGetCastEngine(), true); }catch(_e){} };
+    }
+  }catch(_e){}
+}
+
 function loadProduction(){
   try{
     var sel=document.getElementById('prodStorySel');
@@ -2614,6 +2653,9 @@ function loadProduction(){
       // reset current state + render
       try{ window.__SF_PROD.story_id = String(sel.value||''); window.__SF_PROD.assignments=[]; window.__SF_PROD.roster=[]; window.__SF_PROD.saved=false; }catch(_e){}
       prodRenderAssignments();
+
+      // init engine choice persistence
+      try{ prodInitCastEngine(); }catch(_e){}
 
       // Load saved casting for initial selection
       try{ prodLoadCasting(String(sel.value||'')); }catch(_e){}
@@ -2648,6 +2690,10 @@ function prodLoadCasting(storyId){
       window.__SF_PROD.roster = j.roster || [];
       window.__SF_PROD.assignments = (j.assignments||[]).map(function(a){ return {character:String(a.character||''), voice_id:String(a.voice_id||''), reason:String(a.reason||''), _editing:false}; });
       window.__SF_PROD.saved = !!j.saved;
+      try{
+        // Prefer saved engine from server; otherwise fall back to localStorage
+        if (j.engine) prodSetCastEngine(String(j.engine||''), true);
+      }catch(_e){}
       if (out) out.textContent='';
       prodRenderAssignments();
 
@@ -2872,7 +2918,7 @@ function prodSaveCasting(silent){
 
     prodSetBusy(true, 'Saving casting…', 'Autosaving your casting choices');
     if (out) out.textContent='';
-    var payload = { story_id: String(st.story_id), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
+    var payload = { story_id: String(st.story_id), engine: prodGetCastEngine(), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
 
     fetchJsonAuthed('/api/production/casting_save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
@@ -6970,7 +7016,14 @@ def api_production_casting_get(story_id: str):
             assigns = list((casting or {}).get('assignments') or [])
         except Exception:
             assigns = []
-        return {'ok': True, 'saved': True, 'assignments': assigns, 'roster': vrows}
+        eng = ''
+        try:
+            eng = str((casting or {}).get('engine') or '').strip().lower()
+        except Exception:
+            eng = ''
+        if eng not in ('tortoise', 'styletts2'):
+            eng = ''
+        return {'ok': True, 'saved': True, 'assignments': assigns, 'engine': eng, 'roster': vrows}
     except Exception as e:
         return {'ok': False, 'error': f'casting_get_failed: {type(e).__name__}: {str(e)[:200]}'}
 
@@ -7497,6 +7550,10 @@ def api_production_casting_save(payload: dict[str, Any] = Body(default={})):  # 
         if not isinstance(assigns, list) or not assigns:
             return {'ok': False, 'error': 'missing_assignments'}
 
+        eng = str((payload or {}).get('engine') or '').strip().lower()
+        if eng not in ('tortoise', 'styletts2'):
+            eng = ''
+
         # Normalize
         norm = []
         for a in assigns:
@@ -7522,7 +7579,7 @@ VALUES (%s, %s::jsonb, %s, %s)
 ON CONFLICT (story_id)
 DO UPDATE SET casting=EXCLUDED.casting, updated_at=EXCLUDED.updated_at
 """,
-                (story_id, json.dumps({'assignments': norm}, separators=(',', ':')), now, now),
+                (story_id, json.dumps({'engine': eng, 'assignments': norm}, separators=(',', ':')), now, now),
             )
             conn.commit()
         finally:
