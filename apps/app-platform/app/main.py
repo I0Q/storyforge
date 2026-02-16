@@ -256,10 +256,10 @@ INDEX_BASE_CSS = base_css("""\
     .sfmlFull .sfmlFsBtn{position:fixed;
       right:calc(10px + env(safe-area-inset-right, 0px));
       top:calc(6px + env(safe-area-inset-top, 0px));
-      z-index:99993;
+      z-index:100011;
     }
 
-    .sfmlFullTopbar{position:fixed;left:0;right:0;top:0;z-index:99992;
+    .sfmlFullTopbar{position:fixed;left:0;right:0;top:0;z-index:100010;
       padding:10px 12px;
       padding-top:calc(10px + env(safe-area-inset-top, 0px));
       background:rgba(7,11,22,0.98);
@@ -268,6 +268,11 @@ INDEX_BASE_CSS = base_css("""\
     }
     .sfmlFullTopbar .t{font-weight:950;}
     .sfmlFullTopbar .sp{flex:1 1 auto;}
+    .sfmlFullTopbar .sfmlFsBtn{position:absolute;
+      right:calc(10px + env(safe-area-inset-right, 0px));
+      top:calc(6px + env(safe-area-inset-top, 0px));
+      z-index:100011;
+    }
     body.sfmlFullOn{overflow:hidden;}
 
     .codeWrap{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;min-width:100%;}
@@ -3043,6 +3048,11 @@ function prodToggleSfmlFull(){
       try{ if(tb) tb.remove(); }catch(e){}
       try{ document.body.classList.remove('sfmlFullOn'); }catch(e){}
       try{ box.classList.remove('sfmlFull'); }catch(e){}
+      // move fs button back into the editor box
+      try{
+        var b = document.getElementById('sfmlFsBtn');
+        if (b && box && b.parentNode !== box) box.appendChild(b);
+      }catch(e){}
       try{ __sfmlFsSetBtnState(false); }catch(e){}
     }
 
@@ -3062,13 +3072,17 @@ function prodToggleSfmlFull(){
       document.body.appendChild(bd);
     }catch(e){}
 
-    // topbar (no close button; icon toggles)
+    // topbar (host the exit fullscreen icon so it's above everything)
     try{
       tb = document.createElement('div');
       tb.id='sfmlFullTopbar';
       tb.className='sfmlFullTopbar';
       tb.innerHTML = "<div class='t'>SFML</div><div class='sp'></div>";
       document.body.appendChild(tb);
+      try{
+        var b2 = document.getElementById('sfmlFsBtn');
+        if (b2) tb.appendChild(b2);
+      }catch(_e){}
     }catch(e){}
 
     try{ box.scrollTop = 0; }catch(e){}
