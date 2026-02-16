@@ -1052,7 +1052,6 @@ def index(response: Response):
   <div id='pane-voices' class='hide'>
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Voices</div>
-      <div class='muted'>Voice roster.</div>
 
       <div class='row rowEnd' style='margin-top:10px;'>
         <a href='/voices/new'><button class='secondary' type='button'>Generate new voice model</button></a>
