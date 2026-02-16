@@ -2896,7 +2896,9 @@ function prodProduceAudio(){
     prodSetSfmlBusy(true, 'Producing audio…', 'Queuing a render job');
     if (out) out.textContent='';
 
-    fetchJsonAuthed('/api/production/produce_audio', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
+    var eng = '';
+    try{ eng = String((($('engineSel')||{}).value||'')).trim(); }catch(_e){ eng=''; }
+    fetchJsonAuthed('/api/production/produce_audio', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid, engine: eng})})
       .then(function(j){
         if (!j || !j.ok || !j.job_id){ throw new Error((j&&j.error)||'produce_failed'); }
         prodSetSfmlBusy(false);

@@ -608,7 +608,10 @@ function loadAudio(){{
               "</div>"
             ):"")+
             (prev?(
-              "<pre class='term' style='margin-top:8px;max-height:180px;overflow:auto;-webkit-overflow-scrolling:touch;white-space:pre-wrap'>"+escapeHtml(prev)+"</pre>"
+              "<details style='margin-top:8px'>"+
+                "<summary class='pill' style='cursor:pointer;user-select:none'>SFML preview</summary>"+
+                "<pre class='term' style='margin-top:8px;max-height:220px;overflow:auto;-webkit-overflow-scrolling:touch;white-space:pre-wrap'>"+escapeHtml(prev)+"</pre>"+
+              "</details>"
             ):"")+
             "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+
