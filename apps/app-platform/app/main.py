@@ -7107,9 +7107,17 @@ def api_voices_analyze_metadata(voice_id: str):
                     },
                 )
 
-        import threading
+        # IMPORTANT: run in a separate process (not a thread) so long-running analysis
+        # cannot starve the web worker (GIL / sync I/O / CPU-bound encoding).
+        try:
+            import multiprocessing as mp
 
-        threading.Thread(target=worker, daemon=True).start()
+            ctx = mp.get_context('fork')
+            ctx.Process(target=worker, daemon=True).start()
+        except Exception:
+            import threading
+
+            threading.Thread(target=worker, daemon=True).start()
         return {'ok': True, 'job_id': job_id}
     except Exception as e:
         return {'ok': False, 'error': f'analyze_failed: {type(e).__name__}: {e}'}
