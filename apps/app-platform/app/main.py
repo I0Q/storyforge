@@ -303,7 +303,7 @@ INDEX_BASE_CSS = base_css("""\
 
     /* chips (used in Voices list + traits) */
     .chips{display:flex;gap:8px;flex-wrap:wrap;}
-    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);font-weight:950;font-size:12px;}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);font-weight:950;font-size:11px;line-height:1;}
     .chip.male{border-color:rgba(80,160,255,0.75);background:rgba(80,160,255,0.26);color:rgba(210,235,255,0.98);}
     .chip.female{border-color:rgba(255,120,200,0.75);background:rgba(255,120,200,0.26);color:rgba(255,225,245,0.98);}
 
@@ -3214,28 +3214,9 @@ function loadVoices(){
 
         var chips = '';
 
-        // gender chip first (male blue / female pink)
+        // gender chip only (male blue / female pink)
         var g = String(vt.gender||'unknown');
         if (g==='male' || g==='female') chips += chip(String(g), g);
-
-        // age chip
-        var a = String(vt.age||'unknown');
-        if (a && a!=='unknown') chips += chip(String(a), 'age-' + a);
-
-        // tone chips
-        if (Array.isArray(vt.tone) && vt.tone.length){
-          for (var i=0;i<Math.min(3, vt.tone.length);i++) chips += chip(String(vt.tone[i]), '');
-        }
-
-        // pitch chip (no f0/hz; pitch already conveys it)
-        var pitch = String(vt.pitch||'');
-        if (pitch && pitch!=='unknown') chips += chip('pitch ' + pitch, '');
-
-        // Engine chip
-        try{
-          var eng = String(v.engine||'').trim();
-          if (eng) chips += chip('engine ' + eng, '');
-        }catch(_e){}
 
         traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
       }catch(e){ traitsHtml=''; }
