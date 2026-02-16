@@ -362,13 +362,13 @@ def db_list_jobs(conn, limit: int = 60, before: int | None = None):
 
     if before is not None:
         cur.execute(
-            'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '
+            'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,error_text,created_at '
             'FROM jobs WHERE created_at < %s ORDER BY created_at DESC LIMIT %s',
             (int(before), int(limit)),
         )
     else:
         cur.execute(
-            'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,created_at '
+            'SELECT id,title,kind,meta_json,state,started_at,finished_at,total_segments,segments_done,mp3_url,sfml_url,error_text,created_at '
             'FROM jobs ORDER BY created_at DESC LIMIT %s',
             (int(limit),),
         )
@@ -387,7 +387,8 @@ def db_list_jobs(conn, limit: int = 60, before: int | None = None):
             'segments_done': int(r[8] or 0),
             'mp3_url': r[9] or '',
             'sfml_url': r[10] or '',
-            'created_at': int(r[11] or 0),
+            'error_text': r[11] or '',
+            'created_at': int(r[12] or 0),
         }
         for r in rows
     ]

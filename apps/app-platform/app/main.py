@@ -1762,6 +1762,7 @@ function renderJobs(jobs){
     const meta = safeJson(job.meta_json||'') || null;
     const isSample = (String(job.kind||'') === 'tts_sample') || (String(job.title||'').indexOf('TTS (')===0);
     const isProduce = (String(job.kind||'') === 'produce_audio');
+    const isVoiceMeta = (String(job.kind||'') === 'voice_meta');
     const playable = (String(job.state||'')==='completed' && job.mp3_url);
 
     const actions = (function(){
@@ -1811,8 +1812,6 @@ function renderJobs(jobs){
     const errRow = (String(job.state||'')==='failed' && errVal) ? (
       `<div class='k'>error</div><div class='term' style='white-space:pre-wrap'>${escapeHtml(errVal.slice(0,1600))}</div>`
     ) : '';
-
-    const isVoiceMeta = (String(job.kind||'') === 'voice_meta');
 
     // Common fields for all jobs
     const elapsed = jobElapsed(job);
