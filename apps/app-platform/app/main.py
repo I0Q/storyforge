@@ -4092,7 +4092,7 @@ def voices_edit_page(voice_id: str, response: Response):
 
     <div class='muted' style='margin-top:12px;'>Display name</div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <span id='editSwatch' class='swatch' title='Pick color' style='background:#64748b;cursor:pointer' onclick='openColorPick()'></span>
+      <span id='editSwatch' class='swatch' title='Pick color' style='background:__CHEX__;cursor:pointer' onclick='openColorPick()'></span>
       <span id='colorPickWrap' class='colorPickWrap' style='display:none'>
         <input id='colorPick' type='color' class='colorPickHidden' value='__CHEX__' onchange='setEditColorHex(this.value)' onblur='setEditColorHex(this.value)' aria-label='Pick color' />
       </span>
@@ -4285,10 +4285,12 @@ function renderTraits(){
 
 try{ document.addEventListener('DOMContentLoaded', function(){
   try{ renderTraits(); }catch(_e){}
+  try{ setEditColorHex((document.getElementById('color_hex')||{}).value||''); }catch(_e){}
   // Mark JS as running for the debug banner.
   try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(_e){}
 }); }catch(e){}
 try{ renderTraits(); }catch(e){}
+try{ setEditColorHex((document.getElementById('color_hex')||{}).value||''); }catch(_e){}
 try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(_e){}
 
 function setEditColorHex(hex){
@@ -9198,6 +9200,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
             'text': text,
             'display_name': str((payload or {}).get('display_name') or '').strip() or 'Voice',
             'roster_id': str((payload or {}).get('roster_id') or '').strip() or '',
+            'color_hex': str((payload or {}).get('color_hex') or '').strip(),
             'sample_text': text,
             # passthrough for roster metadata
             'tortoise_voice': str((payload or {}).get('tortoise_voice') or '').strip(),
