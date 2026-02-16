@@ -3044,15 +3044,16 @@ function prodToggleSfmlFull(){
     var tb = document.getElementById('sfmlFullTopbar');
 
     function cleanup(){
-      try{ if(bd) bd.remove(); }catch(e){}
-      try{ if(tb) tb.remove(); }catch(e){}
-      try{ document.body.classList.remove('sfmlFullOn'); }catch(e){}
-      try{ box.classList.remove('sfmlFull'); }catch(e){}
-      // move fs button back into the editor box
+      // move fs button back into the editor box BEFORE removing the topbar
       try{
         var b = document.getElementById('sfmlFsBtn');
         if (b && box && b.parentNode !== box) box.appendChild(b);
       }catch(e){}
+
+      try{ if(bd) bd.remove(); }catch(e){}
+      try{ if(tb) tb.remove(); }catch(e){}
+      try{ document.body.classList.remove('sfmlFullOn'); }catch(e){}
+      try{ box.classList.remove('sfmlFull'); }catch(e){}
       try{ __sfmlFsSetBtnState(false); }catch(e){}
     }
 
