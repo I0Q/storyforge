@@ -5739,6 +5739,28 @@ async function loadSweepVoices(){
   }
 }
 
+async function _waitJobDone(jobId, timeoutMs){
+  timeoutMs = timeoutMs || (20*60*1000);
+  var t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs){
+    try{
+      var r = await fetch('/api/history?limit=80');
+      var j = await r.json().catch(function(){ return null; });
+      if (j && j.ok && Array.isArray(j.jobs)){
+        for (var i=0;i<j.jobs.length;i++){
+          var jb = j.jobs[i] || {};
+          if (String(jb.id||'') === String(jobId||'')){
+            var st = String(jb.state||'');
+            if (st === 'completed' || st === 'failed') return st;
+          }
+        }
+      }
+    }catch(_e){}
+    try{ await new Promise(function(res){ setTimeout(res, 2000); }); }catch(_e){}
+  }
+  return 'timeout';
+}
+
 async function queueSweep(){
   var out = document.getElementById('sweepOut');
   try{ if(out) out.textContent = ''; }catch(_e){}
@@ -5749,9 +5771,10 @@ async function queueSweep(){
     if (!text){ if(out) out.innerHTML = "<div class='err'>Enter text</div>"; return; }
 
     var engineSel = String((document.getElementById('sweepEngine')||{}).value||'styletts2').trim();
+    var sequential = (engineSel === 'tortoise');
 
     var styles = ['neutral','calm','urgent','dramatic','whisper','shout'];
-    if(out) out.textContent = 'Queuing ' + styles.length + ' jobs…';
+    if(out) out.textContent = (sequential ? 'Queuing (sequential)…' : 'Queuing…');
 
     for (var i=0;i<styles.length;i++){
       var d = styles[i];
@@ -5766,16 +5789,29 @@ async function queueSweep(){
       };
       var rr = await fetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
       var jj = await rr.json().catch(function(){ return {ok:false,error:'bad_json'}; });
-      if (!jj || !jj.ok){
+      if (!jj || !jj.ok || !jj.job_id){
         if(out) out.innerHTML = "<div class='err'>Failed on " + esc(String(d)) + ": " + esc(String((jj&&jj.error)||'failed')) + "</div>";
         return;
       }
-      try{ if(out) out.textContent = 'Queued ' + String(i+1) + ' / ' + String(styles.length) + '…'; }catch(_e){}
-      // tiny pause so Jobs stream updates cleanly
-      try{ await new Promise(function(res){ setTimeout(res, 150); }); }catch(_e){}
+
+      if (sequential){
+        try{ if(out) out.textContent = 'Running ' + String(d) + '… (' + String(i+1) + '/' + String(styles.length) + ')'; }catch(_e){}
+        var st = await _waitJobDone(String(jj.job_id||''), 30*60*1000);
+        if (st === 'failed'){
+          if(out) out.innerHTML = "<div class='err'>Job failed: " + esc(String(d)) + "</div>";
+          return;
+        }
+        if (st === 'timeout'){
+          if(out) out.innerHTML = "<div class='err'>Timed out waiting for " + esc(String(d)) + "</div>";
+          return;
+        }
+      }else{
+        try{ if(out) out.textContent = 'Queued ' + String(i+1) + ' / ' + String(styles.length) + '…'; }catch(_e){}
+        try{ await new Promise(function(res){ setTimeout(res, 150); }); }catch(_e){}
+      }
     }
 
-    if(out) out.textContent = 'Queued. Opening Jobs…';
+    if(out) out.textContent = (sequential ? 'Done. Opening Jobs…' : 'Queued. Opening Jobs…');
     window.location.href = '/#tab-history';
   }catch(e){
     if(out) out.innerHTML = "<div class='err'>" + esc(String(e)) + "</div>";
