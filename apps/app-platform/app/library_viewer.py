@@ -613,7 +613,7 @@ function loadAudio(){{
                 "<pre class='term' style='margin-top:8px;max-height:220px;overflow:auto;-webkit-overflow-scrolling:touch;white-space:pre-wrap'>"+escapeHtml(prev)+"</pre>"+
               "</details>"
             ):"")+
-            "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap'>"+
+            "<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end'>"+
               "<button type='button' class='secondary' onclick='playAudioByIndex("+i+")'>Play</button>"+
             "</div>"+
           "</div>";
