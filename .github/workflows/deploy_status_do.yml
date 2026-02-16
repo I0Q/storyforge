@@ -39,32 +39,7 @@ jobs:
             -H "x-sf-deploy-token: $SF_DEPLOY_TOKEN" \
             -d "$payload"
 
-      - name: Trigger DigitalOcean App Platform deployment
-        id: do_trigger
-        env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DIGITALOCEAN_TOKEN:-}" ]; then
-            echo "Missing secrets.DIGITALOCEAN_TOKEN" >&2
-            exit 1
-          fi
-
-          api="https://api.digitalocean.com/v2/apps/$DO_APP_ID/deployments"
-          auth=(-H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H "Content-Type: application/json")
-
-          echo "Triggering deployment via DO API…"
-          resp=$(curl -fsS -X POST "${auth[@]}" "$api" -d '{}')
-          dep_id=$(echo "$resp" | jq -r '.deployment.id // .deployment.deployment_id // .id // empty')
-          if [ -z "$dep_id" ]; then
-            echo "Could not parse deployment id from response" >&2
-            echo "$resp" >&2
-            exit 2
-          fi
-          echo "deployment_id=$dep_id" >> "$GITHUB_OUTPUT"
-          echo "Triggered deployment id: $dep_id"
-
-      - name: Wait for DigitalOcean App Platform deployment to finish
+      - name: Wait for DigitalOcean App Platform deployment for this commit to finish
         id: wait_do
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
@@ -77,15 +52,23 @@ jobs:
 
           api="https://api.digitalocean.com/v2/apps/$DO_APP_ID/deployments"
           auth=(-H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H "Content-Type: application/json")
-          dep_id="${{ steps.do_trigger.outputs.deployment_id }}"
+          sha="$GITHUB_SHA"
 
-          echo "Polling DO deployment $dep_id…"
-          phase=""
+          echo "Polling DO deployments for commit ${sha:0:7}…"
           for i in $(seq 1 360); do
             j=$(curl -fsS "${auth[@]}" "$api?per_page=20")
+
+            # Prefer the deployment whose cause mentions this commit SHA (DO typically includes it)
+            dep_id=$(echo "$j" | jq -r --arg s "${sha:0:7}" '.deployments[] | select((.cause // "") | contains($s)) | .id' | head -n 1)
+            if [ -z "$dep_id" ]; then
+              dep_id=$(echo "$j" | jq -r '.deployments[0].id // empty')
+            fi
+
             phase=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.phase // .status // .progress.phase // "")')
             created=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.created_at // "")')
-            echo "[$i] phase=$phase created_at=$created"
+            cause=$(echo "$j" | jq -r --arg id "$dep_id" '.deployments[] | select(.id==$id) | (.cause // "")')
+
+            echo "[$i] id=$dep_id phase=$phase created_at=$created cause=$cause"
 
             case "$phase" in
               ACTIVE|SUCCEEDED|SUCCESS|COMPLETED)
@@ -93,10 +76,13 @@ jobs:
                 echo "result=success" >> "$GITHUB_OUTPUT"
                 exit 0
                 ;;
-              ERROR|FAILED|CANCELED|CANCELLED)
+              ERROR|FAILED)
                 echo "Deployment failed: phase=$phase" >&2
                 echo "result=failure" >> "$GITHUB_OUTPUT"
                 exit 3
+                ;;
+              CANCELED|CANCELLED)
+                # If DO cancels a deployment due to superseding, keep polling for the next one.
                 ;;
               "")
                 ;;
