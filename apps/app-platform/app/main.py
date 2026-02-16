@@ -5806,6 +5806,45 @@ def api_ping():
     return r.json()
 
 
+@app.get('/api/audio/proxy')
+def api_audio_proxy(url: str, request: Request):
+    """Proxy an audio object from Spaces to authorized internal callers (e.g., Tinybox).
+
+    Rationale: Tinybox should not need direct public access to Spaces objects.
+    """
+    import hmac
+    import os
+
+    # Prefer a dedicated Tinybox token; optionally allow SF_JOB_TOKEN for internal workers.
+    tok = (os.environ.get('SF_TINYBOX_TOKEN') or '').strip()
+    jobtok = (os.environ.get('SF_JOB_TOKEN') or '').strip()
+
+    got = (request.headers.get('x-sf-tinybox-token') or '').strip()
+    if not got:
+        auth = (request.headers.get('authorization') or '').strip()
+        if auth.lower().startswith('bearer '):
+            got = auth[7:].strip()
+
+    ok = False
+    if tok and got and hmac.compare_digest(got, tok):
+        ok = True
+    if (not ok) and jobtok and got and hmac.compare_digest(got, jobtok):
+        ok = True
+
+    if not ok:
+        return JSONResponse({'ok': False, 'error': 'forbidden'}, status_code=403)
+
+    try:
+        from .spaces_upload import fetch_public_url_bytes
+
+        data, ct = fetch_public_url_bytes(url)
+        resp = Response(content=data, media_type=ct)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        return JSONResponse({'ok': False, 'error': f'proxy_failed: {type(e).__name__}: {str(e)[:160]}'}, status_code=400)
+
+
 @app.get('/api/metrics')
 def api_metrics():
     try:

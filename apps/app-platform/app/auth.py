@@ -155,8 +155,18 @@ def register_passphrase_auth(app: FastAPI) -> None:
             if dtok and got and hmac.compare_digest(got, dtok):
                 return await call_next(request)
 
-        # Allow worker APIs (jobs + SFML fetch + voice roster + settings) when token is provided.
-        if request.url.path.startswith('/api/jobs') or request.url.path.startswith('/api/production/sfml') or request.url.path.startswith('/api/voices') or request.url.path.startswith('/api/settings/providers'):
+        # Allow worker APIs (jobs + SFML fetch + voice roster + settings + internal audio proxy) when token is provided.
+        if request.url.path.startswith('/api/jobs') or request.url.path.startswith('/api/production/sfml') or request.url.path.startswith('/api/voices') or request.url.path.startswith('/api/settings/providers') or request.url.path.startswith('/api/audio/proxy'):
+            # 0) dedicated Tinybox token
+            tb = (os.environ.get('SF_TINYBOX_TOKEN') or '').strip()
+            gotb = (request.headers.get('x-sf-tinybox-token') or '').strip()
+            if not gotb:
+                auth = (request.headers.get('authorization') or '').strip()
+                if auth.lower().startswith('bearer '):
+                    gotb = auth[7:].strip()
+            if tb and gotb and hmac.compare_digest(gotb, tb):
+                return await call_next(request)
+
             # 1) dedicated job token
             jt = (os.environ.get('SF_JOB_TOKEN') or '').strip()
             gotj = (request.headers.get('x-sf-job-token') or '').strip()

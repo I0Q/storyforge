@@ -100,6 +100,41 @@ def upload_bytes(data: bytes, key_prefix: str, filename: str, content_type: str)
     return obj_key, f"{public_base.rstrip('/')}/{obj_key}"
 
 
+def fetch_public_url_bytes(url: str, max_bytes: int = 50_000_000) -> tuple[bytes, str]:
+    """Fetch an object from our Spaces bucket by its public URL.
+
+    This allows the app to keep Spaces objects private while still accepting the
+    “public-form” URL as an identifier.
+
+    Security: only URLs under SPACES_PUBLIC_BASE (or the inferred base) are allowed.
+    """
+    if not spaces_enabled():
+        raise RuntimeError("spaces_not_configured")
+
+    key = _key_from_public_url(url)
+    if not key:
+        raise ValueError("url_not_in_spaces")
+
+    bucket = _env("SPACES_BUCKET")
+    c = _client()
+    obj = c.get_object(Bucket=bucket, Key=key)
+    # ContentLength can be missing depending on client; be defensive.
+    try:
+        n = int(obj.get('ContentLength') or 0)
+    except Exception:
+        n = 0
+    if n and max_bytes and n > max_bytes:
+        raise ValueError("too_large")
+
+    body = obj.get('Body')
+    data = body.read() if body else b''
+    if max_bytes and len(data) > max_bytes:
+        raise ValueError("too_large")
+
+    ct = str(obj.get('ContentType') or 'application/octet-stream')
+    return data, ct
+
+
 def upload_bytes_dedup(data: bytes, obj_key: str, content_type: str) -> Tuple[str, str, bool]:
     """Upload bytes to a fixed key if missing.
 
