@@ -4206,8 +4206,13 @@ function renderTraits(){
   }catch(e){}
 }
 
-try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderTraits(); }catch(_e){} }); }catch(e){}
+try{ document.addEventListener('DOMContentLoaded', function(){
+  try{ renderTraits(); }catch(_e){}
+  // Mark JS as running for the debug banner.
+  try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(_e){}
+}); }catch(e){}
 try{ renderTraits(); }catch(e){}
+try{ if (typeof __sfSetDebugInfo === 'function') __sfSetDebugInfo('ok'); }catch(_e){}
 
 function setEditColorHex(hex){
   try{ document.getElementById('color_hex').value = String(hex||''); }catch(e){}
@@ -4255,13 +4260,13 @@ async function analyzeVoice(){
     for (var i=0;i<btns.length;i++){ if ((btns[i].textContent||'').trim()==='Analyze voice'){ btns[i].disabled=true; } }
   }catch(e){}
   try{
-    var r = await fetch('/api/voices/analyze', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({voice_id:'__VID_RAW__'})});
-    var j = await r.json();
+    // New flow: analysis runs async as a Job.
+    var url = '/api/voices/' + encodeURIComponent('__VID_RAW__') + '/analyze_metadata';
+    var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}});
+    var j = await r.json().catch(function(){ return {ok:false,error:'bad_json'}; });
     if (j && j.ok){
-      var txt = JSON.stringify(j.traits, null, 2);
-      try{ document.getElementById('voice_traits_json').value = txt; }catch(_e){}
-      try{ document.getElementById('traitsBox').textContent = txt; }catch(_e){}
-      try{ document.getElementById('traits_raw').textContent = txt; }catch(_e){}
+      // Jump to Jobs/History so you can watch it.
+      window.location.href = '/#tab-history';
     }else{
       alert((j && j.error) ? j.error : 'Analyze failed');
     }
