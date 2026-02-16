@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -476,9 +477,17 @@ def analyze_voice_metadata(
 
         # Age: prefer dedicated regressor endpoint (Tinybox) when available.
         try:
+            audio_b64 = None
+            try:
+                from .spaces_upload import fetch_public_url_bytes
+                bb, _ct = fetch_public_url_bytes(sample_url)
+                audio_b64 = base64.b64encode(bb).decode('ascii')
+            except Exception:
+                audio_b64 = None
+
             ar = requests.post(
                 gateway_base + '/v1/audio/age',
-                json={'url': sample_url},
+                json=({'audio_b64': audio_b64} if audio_b64 else {'url': sample_url}),
                 headers=headers,
                 timeout=120,
             )
@@ -544,9 +553,17 @@ def analyze_voice_metadata(
         # 2) classifier via gateway
         if out_traits["gender"] in ("", "unknown"):
             try:
+                audio_b64 = None
+                try:
+                    from .spaces_upload import fetch_public_url_bytes
+                    bb, _ct = fetch_public_url_bytes(sample_url)
+                    audio_b64 = base64.b64encode(bb).decode('ascii')
+                except Exception:
+                    audio_b64 = None
+
                 gr = requests.post(
                     gateway_base + '/v1/audio/gender',
-                    json={'url': sample_url},
+                    json=({'audio_b64': audio_b64} if audio_b64 else {'url': sample_url}),
                     headers=headers,
                     timeout=120,
                 )
