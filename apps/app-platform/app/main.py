@@ -254,8 +254,8 @@ INDEX_BASE_CSS = base_css("""\
       padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
     }
     .sfmlFull .sfmlFsBtn{position:fixed;
-      right:calc(12px + env(safe-area-inset-right, 0px));
-      top:calc(10px + env(safe-area-inset-top, 0px));
+      right:calc(10px + env(safe-area-inset-right, 0px));
+      top:calc(6px + env(safe-area-inset-top, 0px));
       z-index:99993;
     }
 
