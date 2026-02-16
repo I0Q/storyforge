@@ -5621,6 +5621,23 @@ def base_template_page(response: Response):
   __DEBUG_BANNER_HTML__
 
   <div class='card'>
+    <div style='font-weight:950;margin-bottom:6px;'>StyleTTS2 delivery sweep (temporary)</div>
+    <div class='muted'>Type a single line, pick a StyleTTS2 voice, and generate the same line with each delivery style. It will queue multiple jobs and send you to Jobs.</div>
+
+    <div class='muted' style='margin-top:10px'>Voice</div>
+    <select id='sweepVoice' style='margin-top:6px'></select>
+
+    <div class='muted' style='margin-top:10px'>Text</div>
+    <textarea id='sweepText' placeholder='Type a single line to compare deliveries…' style='margin-top:6px'></textarea>
+
+    <div class='row' style='margin-top:10px;justify-content:flex-end'>
+      <button type='button' class='secondary' onclick='queueSweep()'>Generate deliveries</button>
+    </div>
+
+    <div id='sweepOut' class='muted' style='margin-top:10px'></div>
+  </div>
+
+  <div class='card'>
     <div style='font-weight:950;margin-bottom:6px;'>Sample middle</div>
     <div class='muted'>Tap Play to trigger the shared floating audio player.</div>
 
@@ -5662,6 +5679,86 @@ function playUrl(){
     window.open(u, '_blank');
   }catch(e){}
 }
+
+async function loadSweepVoices(){
+  try{
+    var sel = document.getElementById('sweepVoice');
+    if (!sel) return;
+    sel.innerHTML = "<option value=''>Loading…</option>";
+    var r = await fetch('/api/voices');
+    var j = await r.json();
+    var vs = (j && j.ok && Array.isArray(j.voices)) ? j.voices : [];
+    var opts = [];
+    for (var i=0;i<vs.length;i++){
+      var v = vs[i] || {};
+      var eng = String(v.engine||'').trim();
+      if (eng !== 'styletts2') continue;
+      var vid = String(v.id||'').trim();
+      var vref = String(v.voice_ref||'').trim();
+      if (!vid || !vref) continue;
+      var name = String(v.display_name||vid).trim();
+      opts.push({id: vid, name: name, ref: vref});
+    }
+    opts.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+    sel.innerHTML = '';
+    if (!opts.length){
+      sel.innerHTML = "<option value=''>No StyleTTS2 voices found</option>";
+      return;
+    }
+    for (var k=0;k<opts.length;k++){
+      var o = document.createElement('option');
+      o.value = opts[k].ref;
+      o.textContent = opts[k].name;
+      sel.appendChild(o);
+    }
+  }catch(e){
+    try{ var sel2=document.getElementById('sweepVoice'); if(sel2) sel2.innerHTML = "<option value=''>Failed to load voices</option>"; }catch(_e){}
+  }
+}
+
+async function queueSweep(){
+  var out = document.getElementById('sweepOut');
+  try{ if(out) out.textContent = ''; }catch(_e){}
+  try{
+    var vref = String((document.getElementById('sweepVoice')||{}).value||'').trim();
+    var text = String((document.getElementById('sweepText')||{}).value||'').trim();
+    if (!vref){ if(out) out.innerHTML = "<div class='err'>Pick a voice</div>"; return; }
+    if (!text){ if(out) out.innerHTML = "<div class='err'>Enter text</div>"; return; }
+
+    var styles = ['neutral','calm','urgent','dramatic','whisper','shout'];
+    if(out) out.textContent = 'Queuing ' + styles.length + ' jobs…';
+
+    for (var i=0;i<styles.length;i++){
+      var d = styles[i];
+      var payload = {
+        engine: 'styletts2',
+        voice: vref,
+        text: text,
+        upload: true,
+        delivery: d,
+        display_name: 'Delivery test • ' + d,
+        roster_id: '',
+      };
+      var rr = await fetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      var jj = await rr.json().catch(function(){ return {ok:false,error:'bad_json'}; });
+      if (!jj || !jj.ok){
+        if(out) out.innerHTML = "<div class='err'>Failed on " + esc(String(d)) + ": " + esc(String((jj&&jj.error)||'failed')) + "</div>";
+        return;
+      }
+      try{ if(out) out.textContent = 'Queued ' + String(i+1) + ' / ' + String(styles.length) + '…'; }catch(_e){}
+      // tiny pause so Jobs stream updates cleanly
+      try{ await new Promise(function(res){ setTimeout(res, 150); }); }catch(_e){}
+    }
+
+    if(out) out.textContent = 'Queued. Opening Jobs…';
+    window.location.href = '/#tab-history';
+  }catch(e){
+    if(out) out.innerHTML = "<div class='err'>" + esc(String(e)) + "</div>";
+  }
+}
+
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ loadSweepVoices(); }catch(_e){}; }); }catch(e){}
+try{ loadSweepVoices(); }catch(_e){}
 </script>
 """
 
@@ -9278,6 +9375,7 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
             'display_name': str((payload or {}).get('display_name') or '').strip() or 'Voice',
             'roster_id': str((payload or {}).get('roster_id') or '').strip() or '',
             'color_hex': str((payload or {}).get('color_hex') or '').strip(),
+            'delivery': str((payload or {}).get('delivery') or '').strip().lower(),
             'sample_text': text,
             # passthrough for roster metadata
             'tortoise_voice': str((payload or {}).get('tortoise_voice') or '').strip(),
@@ -9375,6 +9473,12 @@ def api_tts_job(payload: dict[str, Any] = Body(default={})):  # noqa: B008
 
                 def do_one(i: int, chunk: str, gpu: int | None):
                     payload2 = {'engine': engine, 'voice': voice_fixed, 'text': chunk, 'upload': True, 'gpu': gpu, 'threads': threads, 'job_id': job_id}
+                    try:
+                        dtag = str((payload or {}).get('delivery') or '').strip().lower()
+                        if dtag:
+                            payload2['delivery'] = dtag
+                    except Exception:
+                        pass
                     try:
                         if engine == 'styletts2':
                             a = meta.get('styletts2_alpha')
