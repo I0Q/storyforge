@@ -3218,6 +3218,33 @@ function loadVoices(){
         var g = String(vt.gender||'unknown');
         if (g==='male' || g==='female') chips += chip(String(g), g);
 
+        // other traits as a single muted line (not chips)
+        try{
+          function cleanTok(s){
+            s = String(s||'').trim();
+            if(!s) return '';
+            if(s==='unknown' || s==='any') return '';
+            return s;
+          }
+          var parts=[];
+          var a = cleanTok(vt.age);
+          if(a) parts.push(a);
+          if (Array.isArray(vt.tone) && vt.tone.length){
+            for (var i=0;i<Math.min(3, vt.tone.length);i++){
+              var t = cleanTok(vt.tone[i]);
+              if (t) parts.push(t);
+            }
+          }
+          var pitch = cleanTok(vt.pitch);
+          if (pitch) parts.push('pitch ' + pitch);
+          var eng = '';
+          try{ eng = String(v.engine||'').trim(); }catch(_e){ eng=''; }
+          if (eng) parts.push('engine ' + eng);
+          if (parts.length){
+            chips += "<div class='muted' style='font-size:12px;margin-top:6px'>" + escapeHtml(parts.join(' • ')) + "</div>";
+          }
+        }catch(_e){}
+
         traitsHtml = chips ? ("<div class='chips' style='margin-top:8px'>" + chips + "</div>") : '';
       }catch(e){ traitsHtml=''; }
       var en = (v.enabled!==false);
