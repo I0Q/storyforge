@@ -590,6 +590,17 @@ VOICE_NEW_EXTRA_CSS = base_css("""\
 
 """)
 
+# Shared component bundle CSS: monitor (dock + sheet + process box)
+# Standalone pages must include this whenever they include MONITOR_HTML/MONITOR_JS.
+MONITOR_COMPONENT_CSS = base_css("""\
+
+    /* Monitor: normalize font + process scroll behavior across templates */
+    pre{background:#070b16;color:#d7e1ff;padding:12px;border-radius:12px;overflow:auto;border:1px solid var(--line)}
+    .term{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.25;white-space:pre;}
+    #monProc{white-space:pre;overflow-x:auto;}
+
+""")
+
 MONITOR_HTML = """
   <div id='monitorDock' class='dock' onclick='openMonitor()'>
     <div class='dockInner'>
@@ -3962,7 +3973,7 @@ def voices_edit_page(voice_id: str, response: Response):
     enabled_checked = 'checked' if bool(v.get('enabled', True)) else ''
     vtraits_json = str(v.get('voice_traits_json') or '').strip()
 
-    style_css = VOICES_BASE_CSS + VOICE_EDIT_EXTRA_CSS
+    style_css = VOICES_BASE_CSS + VOICE_EDIT_EXTRA_CSS + MONITOR_COMPONENT_CSS
 
     body_top = (
         DEBUG_BANNER_BOOT_JS
@@ -4362,7 +4373,7 @@ def voices_new_page(response: Response):
     response.headers['Cache-Control'] = 'no-store'
     build = APP_BUILD
 
-    style_css = VOICES_BASE_CSS + VOICE_NEW_EXTRA_CSS
+    style_css = VOICES_BASE_CSS + VOICE_NEW_EXTRA_CSS + MONITOR_COMPONENT_CSS
     body_top = (
         DEBUG_BANNER_BOOT_JS
         + "\n" + USER_MENU_JS
