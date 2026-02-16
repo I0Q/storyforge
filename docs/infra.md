@@ -54,15 +54,13 @@ sequenceDiagram
   autonumber
   participant U as User (UI)
   participant SF as StoryForge Cloud (App Platform)
+  participant SP as Spaces (S3-compatible)
   participant GW as Gateway Droplet (Tailscale bridge)
   participant TB as Tinybox Compute Node
-  participant SP as Spaces (S3-compatible)
 
   U->>SF: POST /api/voices/{voice_id}/analyze_metadata
-  SF->>GW: POST (gateway route) /voice_meta/analyze { sample_url, voice_id, ... }
-  Note over GW,SP: Preferred: GW does NOT talk to Spaces.
   SF->>SP: GET sample object (Cloud has Spaces creds)
-  SF-->>GW: return bytes (or a gateway/Tailscale URL)
+  SF->>GW: POST (gateway route) /voice_meta/analyze { sample_url, voice_id, bytes? }
   GW->>TB: POST /v1/audio/gender (bytes or local file path)
   GW->>TB: POST /v1/audio/age (bytes or local file path)
   GW->>SF: POST /api/jobs/{id}/progress (or complete)
@@ -70,9 +68,10 @@ sequenceDiagram
 ```
 
 Notes:
-- **Important**: the component that fetches the audio bytes should be the one that has the credentials (ideally **Gateway**).
+- Cloud fetches the sample audio from Spaces (Cloud has Spaces creds).
+- Gateway is for Cloud ↔ Tinybox over Tailscale.
 - Tinybox should receive either:
-  - a **private, gateway-served URL** reachable over Tailscale, or
+  - a **gateway-served URL** reachable over Tailscale, or
   - the **audio bytes** streamed/uploaded in the request.
 
 ### 2.2 Produce Audio (render story)
@@ -82,14 +81,13 @@ sequenceDiagram
   autonumber
   participant U as User
   participant SF as StoryForge Cloud
+  participant SP as Spaces
   participant GW as Gateway
   participant TB as Tinybox Compute Node
-  participant SP as Spaces
 
   U->>SF: POST /api/jobs/create kind=produce_audio
   SF->>GW: POST /jobs/dispatch { job_id, sfml_url, settings }
   GW->>TB: POST /v1/produce_audio (or /v1/render) (job payload)
-  Note over TB,SP: Preferred: TB does NOT talk to Spaces.
   TB-->>GW: returns local output file path OR bytes
   SF->>SP: upload output audio (Cloud uploads directly)
   GW->>SF: POST /api/jobs/{id}/complete { output_url }
@@ -103,9 +101,9 @@ sequenceDiagram
   autonumber
   participant U as User
   participant SF as StoryForge Cloud
+  participant SP as Spaces
   participant GW as Gateway
   participant TB as Tinybox Compute Node
-  participant SP as Spaces
 
   U->>SF: POST /api/tts (engine, voice, text, params)
   SF->>GW: POST /tts { engine, voice_ref/url, text, params }
