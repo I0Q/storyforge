@@ -7777,7 +7777,20 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             i = 0
             while i < len(raw_lines) and is_ignorable(raw_lines[i]):
                 i += 1
-            if i >= len(raw_lines) or raw_lines[i].strip() != '# SFML v1':
+            if i >= len(raw_lines):
+                raise ValueError('bad_header')
+
+            # Tolerate missing header (common model mistake) and normalize.
+            first = raw_lines[i].strip()
+            if first == 'SFML v1':
+                raw_lines[i] = '# SFML v1'
+                first = '# SFML v1'
+            if first == 'cast:':
+                raw_lines.insert(i, '# SFML v1')
+                raw_lines.insert(i + 1, '')
+                first = '# SFML v1'
+
+            if first != '# SFML v1':
                 raise ValueError('bad_header')
             i += 1
 
