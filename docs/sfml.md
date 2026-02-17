@@ -1,6 +1,6 @@
 # SFML v1 — StoryForge Markup Language
 
-SFML v1 is a plain-text, code-like script format designed to be:
+SFML v1 is a plain-text, script format for **storytelling audio production** designed to be:
 
 - **Self-contained**: includes casting at the top
 - **Human readable**: succinct blocks with indentation
@@ -29,8 +29,10 @@ cast:
 
 ```text
 scene scene-1 "Title":
-  [CharacterName] line...
-  [Narrator] line...
+  Narrator:
+    - line...
+  CharacterName:
+    - line...
 ```
 
 ## 1) Casting map
@@ -44,7 +46,7 @@ cast:
 
 ### Rules
 - Indentation is **two spaces** for mapping lines.
-- `Name` must match exactly the speaker tag used later in `[Name] ...` or `Name:` blocks.
+- `Name` must match exactly the speaker block name used later in `Name:` blocks.
 - `voice_id` must be a valid StoryForge roster id (`sf_voices.id`).
 - Must include at least:
   - `Narrator: <voice_id>`
@@ -54,8 +56,8 @@ cast:
 ### Syntax
 ```text
 scene <scene_id> "<title>":
-  [Name] text...
-  [Name] text...
+  Name:
+    - text...
 ```
 
 ### Rules
@@ -63,35 +65,21 @@ scene <scene_id> "<title>":
 - `"<title>"` is recommended but optional (still keep the trailing `:`).
 - Scene body lines are indented by **two spaces**.
 
-## 3) Speaker lines
+## 3) Speaker blocks (recommended)
 
-### Syntax (single line)
-```text
-  [Name] text...
-```
+To keep rendering simple and avoid choppy joins, SFML v1 uses **speaker blocks**.
 
-### Optional delivery tag (inline)
-```text
-  [Name]{delivery=calm} text...
-```
-
-Allowed values:
-- neutral
-- calm
-- urgent
-- dramatic
-- shout
-
-Notes:
-- Delivery is **optional**.
-- Whisper is intentionally not supported right now.
-
-### Syntax (speaker block; preferred for consecutive lines)
+### Syntax
 ```text
   Name:
     - line 1...
     - line 2...
-    - line 3...
+```
+
+A block can contain **one** line (that’s OK):
+```text
+  Name:
+    - one line is fine
 ```
 
 ### Optional delivery tag on bullets
@@ -101,9 +89,15 @@ Notes:
     - {delivery=urgent} line 2...
 ```
 
+Allowed delivery values:
+- neutral
+- calm
+- urgent
+- dramatic
+- shout
+
 ### Rules
-- Speaker tag is always `[Name]` for single lines.
-- For a **speaker block**, the `Name:` line is indented by **two spaces**, and the bullet lines are indented by **four spaces**.
+- The `Name:` line is indented by **two spaces**, and bullet lines are indented by **four spaces**.
 - `Name` must exist in the casting map.
 - A speaker block is treated as **one audio segment** (the lines are read in one go), to avoid audible joins.
 
@@ -183,7 +177,6 @@ PAUSE syntax is decimal seconds (examples: 0.15, 0.40, 1.20).
 Typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.
 
 4) Delivery tags (characters only)
-Single line: [Name]{delivery=dramatic} text
 Bullet: - {delivery=urgent} text
 Allowed: neutral|calm|urgent|dramatic|shout
 Avoid: whisper
