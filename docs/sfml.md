@@ -12,16 +12,46 @@ SFML supports a small set of **directives** (lines that begin with `@`) and **pa
 
 ---
 
-## LLM generation prompt (actual)
-This is the **exact prompt shape** sent to the LLM by `/api/production/sfml_generate`.
+## LLM context pack (for SFML generation)
+This section is designed to be **complementary**:
+- The **exact prompt** starts with a short instruction header.
+- Then we include a compact **SFML_DOC_FOR_LLM** block.
+- Then we append a **JSON payload** (story + casting + voice profiles).
 
-### 1) System/user message prefix
+### A) Prompt header (verbatim)
 ```text
-Return ONLY SFML plain text.
+Return ONLY SFML plain text. No markdown, no fences.
+Use SFML v1 (cast: + scene blocks).
+Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.
+Add delivery tags ONLY for non-narrator character dialogue.
+Coverage: include the full story; do not summarize.
 ```
 
-### 2) JSON payload appended to the message
-The API then appends a JSON object (via `json.dumps(...)`). The **keys and most string values below are included verbatim**; the story/casting/voice profiles are filled in dynamically.
+### B) Documentation block included in the prompt (verbatim)
+```text
+SFML_DOC_FOR_LLM:
+1) Casting
+cast:
+  Narrator: <voice_id>
+  Name: <voice_id>
+
+2) Scenes
+scene scene-1 "Title":
+  Narrator:
+    - line...
+  Name:
+    - {delivery=urgent} line...
+  PAUSE: 0.25
+
+3) Delivery tags (characters only)
+Single line: [Name]{delivery=dramatic} text
+Bullet: - {delivery=urgent} text
+Allowed: neutral|calm|urgent|dramatic|shout
+Avoid: whisper
+```
+
+### C) JSON payload appended to the prompt
+The API appends a JSON object (via `json.dumps(...)`). The story/casting/voice profiles are filled in dynamically.
 
 ```json
 {

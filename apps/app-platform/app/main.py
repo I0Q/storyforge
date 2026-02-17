@@ -7762,68 +7762,56 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
             'voice_profiles': voice_profiles,
-            'sfml_spec': sfml_spec,
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
-            'rules': [
-                'Output MUST be plain SFML text only. No markdown, no fences.',
-                'FORMAT: Use SFML v1 (succinct blocks + indentation). Do NOT use chevrons like <<CAST>> or <<SCENE>>.',
-                'CASTING: At the top, emit a casting block exactly like:\ncast:\n  Name: voice_id',
-                'CASTING: One mapping per character. Names must match the speaker tags used later.',
-                'CASTING: Always include Narrator.',
-                'DIRECTIVES (optional): You may include directives at top-level: @tortoise_preset, @tortoise_candidates, @seed, @tortoise_chunk_chars, @tortoise_chunk_pause_ms',
-                'PAUSES (optional): In scene bodies, you may include: PAUSE: 0.25 (indented by two spaces). Use pauses to slow rushed narration.',
-                'SCENES: Emit 1..max_scenes scene blocks. Each scene header is: scene <id> "<title>":',
-                'SCENES: If max_scenes=1, output exactly ONE scene block (scene-1) but still cover the whole story.',
-                'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
-                'BODY: Inside a scene block, content is indented by two spaces.',
-                'BODY: You can emit either single speaker lines: [Name] text',
-                'DELIVERY: You MUST add delivery tags for character dialogue lines (non-narrator).',
-                'DELIVERY: Narrator lines should usually omit delivery tags (default narration is calm). If you do tag narrator, only use neutral or calm.',
-                'DELIVERY: Syntax for single lines: [Name]{delivery=calm} text',
-                'DELIVERY: Syntax for speaker block bullets: - {delivery=urgent} text',
-                'DELIVERY: Allowed values: neutral|calm|urgent|dramatic|shout. (Avoid whisper for now.)',
-                'DELIVERY: Use voice_profiles[voice_id].delivery_profile to guide delivery: neutral voices -> neutral/calm; expressive voices may use urgent/dramatic/shout when the text warrants it.',
-                'BODY: Or speaker blocks (preferred for consecutive lines by same speaker): Name: then 4-space indented bullets "- ..."',
-                'BODY: STRONGLY prefer speaker blocks; do not emit lots of single [Name] lines if you can group them.',
-                'BODY: If a speaker has 2+ consecutive lines, you MUST use a speaker block for that run.',
-                'BODY: Narrator paragraphs should almost always be a Narrator: block with bullets.',
-                'BODY: Speaker blocks MUST be treated as one segment; use them to avoid splitting delivery.',
-                'BODY: Every [Name] and every Name: in a speaker block must exist in cast: mappings.',
-                'Do not invent voice ids; only use voice ids from casting_map values.',
-                'For Tortoise delivery, keep punctuation; do not strip commas/periods.',
-                'Keep each bullet line to a single line; split long paragraphs into multiple bullets within the speaker block.',
-                'COVERAGE: Include the full story content (do not stop early; do not summarize).',
-                'COVERAGE: Keep emitting speaker lines until the story reaches a clear ending.',
-                'Do not output JSON.',
-            ],
-            'example': (
-                '# SFML v1\n'
-                '@tortoise_preset: standard\n'
-                '@tortoise_candidates: 2\n'
-                '@tortoise_chunk_chars: 450\n'
-                '@tortoise_chunk_pause_ms: 120\n'
-                '\n'
-                'cast:\n'
-                '  Narrator: indigo-dawn\n'
-                '  Maris: lunar-violet\n'
-                '\n'
-                'scene scene-1 "Intro":\n'
-                '  Narrator:\n'
-                '    - The lighthouse stood silent on the cliff.\n'
-                '    - The sea breathed below, slow and steady.\n'
-                '  PAUSE: 0.25\n'
-                '  Maris:\n'
-                '    - {delivery=urgent} I can hear the sea breathing below.\n'
-            ),
         }
+
+        # Simplified prompt: short instructions up top + compact spec below + JSON payload last.
+        instructions = (
+            'Return ONLY SFML plain text. No markdown, no fences.\n'
+            'Use SFML v1 (cast: + scene blocks).\n'
+            'Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.\n'
+            'Add delivery tags ONLY for non-narrator character dialogue.\n'
+            'Coverage: include the full story; do not summarize.\n'
+        )
+
+        llm_doc = (
+            'SFML_DOC_FOR_LLM:\n'
+            '1) Casting\n'
+            'cast:\n'
+            '  Narrator: <voice_id>\n'
+            '  Name: <voice_id>\n'
+            '\n'
+            '2) Scenes\n'
+            'scene scene-1 "Title":\n'
+            '  Narrator:\n'
+            '    - line...\n'
+            '  Name:\n'
+            '    - {delivery=urgent} line...\n'
+            '  PAUSE: 0.25\n'
+            '\n'
+            '3) Delivery tags (characters only)\n'
+            'Single line: [Name]{delivery=dramatic} text\n'
+            'Bullet: - {delivery=urgent} text\n'
+            'Allowed: neutral|calm|urgent|dramatic|shout\n'
+            'Avoid: whisper\n'
+        )
 
         req = {
             'model': 'google/gemma-2-9b-it',
             'messages': [
-                {'role': 'user', 'content': 'Return ONLY SFML plain text.\n\n' + json.dumps(prompt, separators=(',', ':'))},
+                {
+                    'role': 'user',
+                    'content': (
+                        instructions
+                        + '\n'
+                        + llm_doc
+                        + '\nJSON_PAYLOAD:\n'
+                        + json.dumps(prompt, separators=(',', ':'))
+                    ),
+                },
             ],
             'temperature': 0.3,
-            'max_tokens': 2200,
+            'max_tokens': 2400,
         }
 
         r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
