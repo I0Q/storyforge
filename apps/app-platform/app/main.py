@@ -7883,9 +7883,14 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 if m_pause:
                     if not allow_pauses:
                         raise ValueError('pause_not_allowed')
-                    flush_block()
-                    out.append('  PAUSE: ' + m_pause.group(1))
-                    out.append('')
+                    secs = m_pause.group(1)
+                    # If we're currently inside a speaker block, treat PAUSE as speaker-level.
+                    if cur_speaker is not None and len(cur_block_lines) > 0:
+                        cur_block_lines.append('    PAUSE: ' + secs)
+                    else:
+                        flush_block()
+                        out.append('  PAUSE: ' + secs)
+                        out.append('')
                     i += 1
                     continue
 
@@ -7948,7 +7953,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 if scene_count > 3:
                     fails.append(f'scene.too_many:{scene_count}')
 
-                pause_count = sum(1 for ln in lines if ln.startswith('  PAUSE:'))
+                pause_count = sum(1 for ln in lines if ln.startswith('  PAUSE:') or ln.startswith('    PAUSE:'))
                 if pause_count < 3:
                     fails.append(f'pause.too_few:{pause_count}')
 
@@ -8019,7 +8024,7 @@ STRUCTURE RULES (HARD)
 - Bullets: four spaces + "- " + text
 - Delivery tags are OPTIONAL and only allowed on bullets, like:    - {delivery=urgent} text
   Allowed delivery: neutral|calm|urgent|dramatic|shout
-- PAUSE is OPTIONAL and scene-level, indented two spaces:   PAUSE: 0.25
+- PAUSE is OPTIONAL and can be scene-level (2 spaces: "  PAUSE: 0.25") or speaker-level (4 spaces: "    PAUSE: 0.25").
 
 TEXT FIDELITY (HARD)
 - Do NOT paraphrase. Use the story text as-is.
