@@ -7740,12 +7740,29 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         except Exception:
             voice_profiles = {}
 
+        # Provide the SFML spec to the model (single-source-of-truth: docs/sfml.md).
+        sfml_spec = ''
+        try:
+            spec_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs', 'sfml.md')
+            if not os.path.exists(spec_path):
+                # repo layout: storyforge/docs/sfml.md (two levels above app/)
+                spec_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'sfml.md')
+            if os.path.exists(spec_path):
+                with open(spec_path, 'r', encoding='utf-8') as f:
+                    sfml_spec = (f.read() or '').strip()
+        except Exception:
+            sfml_spec = ''
+        # Hard cap to avoid blowing the context window.
+        if sfml_spec and len(sfml_spec) > 6000:
+            sfml_spec = sfml_spec[:6000] + "\n\n[...truncated...]"
+
         prompt = {
             'format': 'SFML',
             'version': 0,
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
             'voice_profiles': voice_profiles,
+            'sfml_spec_md': sfml_spec,
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
