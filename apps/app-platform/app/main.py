@@ -7937,6 +7937,14 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     continue
 
                 # Bullet (tolerate common formatting mistakes and normalize)
+                # Normalize missing space after dash and skip empty bullets.
+                if ln.startswith('    -') and not ln.startswith('    - '):
+                    rest0 = ln[len('    -'):].lstrip()
+                    if not rest0:
+                        i += 1
+                        continue
+                    ln = '    - ' + rest0
+
                 if ln.startswith('    - '):
                     # If the model emits bullets without opening a speaker block, default to Narrator.
                     if cur_speaker is None:
