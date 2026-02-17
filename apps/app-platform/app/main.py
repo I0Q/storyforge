@@ -7877,7 +7877,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
                 # Common model mistake: bullet lines indented like scene-level items (2 spaces)
                 # Example: "  - text" (should be "    - text")
-                if ln.startswith('  - '):
+                if ln.startswith('  - ') or ln.startswith('  – ') or ln.startswith('  — '):
                     # If the model emits a bullet without opening a speaker block, default to Narrator.
                     if cur_speaker is None:
                         if 'Narrator' in casting_map:
@@ -7885,15 +7885,30 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                             cur_block_lines = []
                         else:
                             raise ValueError('bullet_outside_block')
-                    cur_block_lines.append('    ' + ln.strip())
+                    b = ln.strip()
+                    b = re.sub(r'^[–—]\s+', '- ', b)
+                    cur_block_lines.append('    ' + b)
                     i += 1
                     continue
 
                 # Speaker header (accept optional delivery tag on header; we ignore/strip it in v1)
                 m_sp = re.match(r'^  ([^-][^:{]*?)(?:\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?\s*:\s*$', ln)
                 if m_sp:
-                    name = m_sp.group(1)
+                    name = (m_sp.group(1) or '').strip()
                     if name not in casting_map:
+                        # If this "speaker" line is actually a mis-indented bullet (common model mistake), normalize as bullet.
+                        lss = (ln or '').lstrip()
+                        if lss.startswith('- ') or lss.startswith('– ') or lss.startswith('— '):
+                            if cur_speaker is None and 'Narrator' in casting_map:
+                                cur_speaker = 'Narrator'
+                                cur_block_lines = []
+                            if cur_speaker is None:
+                                raise ValueError('bullet_outside_block')
+                            b = lss
+                            b = re.sub(r'^[–—]\s+', '- ', b)
+                            cur_block_lines.append('    ' + b)
+                            i += 1
+                            continue
                         raise ValueError('unknown_speaker:' + name)
                     if cur_speaker is None:
                         cur_speaker = name
