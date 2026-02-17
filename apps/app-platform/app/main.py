@@ -7750,9 +7750,9 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             "- Prefer speaker blocks for consecutive lines (keeps audio smooth):\n"
             "  Name:\n    - line 1\n    - line 2\n"
             "- Optional pauses (scene-level, indented 2 spaces):\n  PAUSE: 0.25\n"
-            "- Optional delivery tags:\n"
-            "  [Name]{delivery=calm} text\n"
-            "  - {delivery=urgent} text\n"
+            "- Optional delivery tags (use ONLY for character dialogue for now):\n"
+            "  [Name]{delivery=urgent} text\n"
+            "  - {delivery=dramatic} text\n"
             "  Allowed delivery: neutral|calm|urgent|dramatic|shout\n"
         )
 
@@ -7778,7 +7778,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'BODY: Inside a scene block, content is indented by two spaces.',
                 'BODY: You can emit either single speaker lines: [Name] text',
                 'DELIVERY: You MUST add delivery tags for character dialogue lines (non-narrator).',
-                'DELIVERY: Narrator lines should use neutral/calm only (default calm).',
+                'DELIVERY: Narrator lines should usually omit delivery tags (default narration is calm). If you do tag narrator, only use neutral or calm.',
                 'DELIVERY: Syntax for single lines: [Name]{delivery=calm} text',
                 'DELIVERY: Syntax for speaker block bullets: - {delivery=urgent} text',
                 'DELIVERY: Allowed values: neutral|calm|urgent|dramatic|shout. (Avoid whisper for now.)',
@@ -7809,7 +7809,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 '\n'
                 'scene scene-1 "Intro":\n'
                 '  Narrator:\n'
-                '    - {delivery=calm} The lighthouse stood silent on the cliff.\n'
+                '    - The lighthouse stood silent on the cliff.\n'
                 '    - The sea breathed below, slow and steady.\n'
                 '  PAUSE: 0.25\n'
                 '  Maris:\n'
