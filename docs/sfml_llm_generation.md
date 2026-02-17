@@ -16,7 +16,7 @@ Coverage: include the full story; do not summarize.
 ```
 
 ### B) SFML_DOC_FOR_LLM block included in the prompt (verbatim)
-This is a compact excerpt of the **SPEC** section above, formatted for the LLM context window.
+See the authoritative SFML spec: `docs/sfml.md`
 ```text
 SFML_DOC_FOR_LLM:
 1) Casting
@@ -58,8 +58,7 @@ The API appends runtime inputs as JSON (via `json.dumps(...)`):
   "casting_map": {
     "Narrator": "<voice_id>",
     "<CharacterName>": "<voice_id>"
-  },
-  "scene_policy": {"max_scenes": 1, "default_scenes": 1}
+  }
 }
 ```
 

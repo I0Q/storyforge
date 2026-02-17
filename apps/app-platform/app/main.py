@@ -7734,7 +7734,6 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'version': 0,
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
-            'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
         }
 
         # Simplified prompt: short instructions up top + compact spec below + JSON payload last.
