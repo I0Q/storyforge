@@ -7748,6 +7748,21 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'Coverage: include the full story; do not summarize.\n'
         )
 
+        # Feed the SFML spec after the header (kept short to avoid prompt bloat).
+        sfml_spec_text = ''
+        try:
+            spec_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'sfml.md')
+            if os.path.exists(spec_path):
+                spec_full = (open(spec_path, 'r', encoding='utf-8').read() or '').strip()
+                # Keep only the strict spec portion (exclude comments/example) and cap length.
+                i_comments = spec_full.find('\n## Comments\n')
+                spec_strict = spec_full[:i_comments].strip() if i_comments != -1 else spec_full
+                if len(spec_strict) > 2600:
+                    spec_strict = spec_strict[:2600] + '\n\n[...truncated...]'
+                sfml_spec_text = spec_strict
+        except Exception:
+            sfml_spec_text = ''
+
         req = {
             'model': 'google/gemma-2-9b-it',
             'messages': [
@@ -7755,13 +7770,15 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     'role': 'user',
                     'content': (
                         instructions
-                        + '\nJSON_PAYLOAD:\n'
+                        + '\nSFML_SPEC:\n'
+                        + (sfml_spec_text or '')
+                        + '\n\nJSON_PAYLOAD:\n'
                         + json.dumps(prompt, separators=(',', ':'))
                     ),
                 },
             ],
             'temperature': 0.3,
-            'max_tokens': 2400,
+            'max_tokens': 2600,
         }
 
         r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)

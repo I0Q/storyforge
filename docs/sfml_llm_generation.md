@@ -5,6 +5,8 @@ It is intentionally **prompt-oriented**, not a strict language spec.
 
 ## LLM context pack (for `/api/production/sfml_generate`)
 
+Note: The generator now feeds `docs/sfml.md` (strict spec portion) into the LLM context after the header as `SFML_SPEC:`.
+
 ### A) Prompt header (verbatim)
 ```text
 Return ONLY SFML plain text. No markdown, no fences.
