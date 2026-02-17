@@ -7691,13 +7691,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 pass
 
         # Ensure narrator exists in map
-        if 'Narrator' in cmap and 'NARRATOR' not in cmap:
-            cmap['NARRATOR'] = cmap['Narrator']
-        if 'NARRATOR' not in cmap:
-            for k, v in list(cmap.items()):
-                if str(k).strip().lower() == 'narrator':
-                    cmap['NARRATOR'] = v
-                    break
+        if 'Narrator' not in cmap:
+            return {'ok': False, 'error': 'casting_missing_narrator'}
 
         # Scene policy: avoid over-splitting, but don't force everything into one tiny scene.
         story_chars = len(story_md or '')
@@ -7735,72 +7730,92 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
         }
-
         # SFML generation prompt (compiler-style, strict output contract).
-        instructions = (
-            'You are an SFML v1 compiler. Output ONLY the SFML file as plain text.\n\n'
-            'REQUIRED SHAPE\n\n'
-            '# SFML v1\n'
-            'cast:\n'
-            '  <Name>: <voice_id>\n'
-            '  ...\n\n'
-            'scene scene-1 "<Title>"\n'
-            '  <SpeakerA>:\n'
-            '    - Line\n'
-            '    - {delivery=calm} Line\n'
-            '  PAUSE: 0.40\n'
-            '  <SpeakerB>:\n'
-            '    - Line\n\n'
-            'MUST RULES\n'
-            '- First line: # SFML v1\n'
-            '- Second block begins with: cast:\n'
-            '- Cast includes EVERY entry from casting_map exactly (no renames, no new names).\n'
-            '- Every scene line: scene scene-<n> "<Title>" (title required).\n'
-            '- Speaker label: exactly two spaces + "<Name>:"\n'
-            '- Content line: exactly four spaces + "- " + text\n'
-            '- PAUSE line: exactly two spaces + "PAUSE: <decimal>"\n'
-            '- Delivery tag: only at start of a bullet:\n'
-            '  {delivery=neutral|calm|urgent|dramatic|shout}\n\n'
-            'TEXT FIDELITY\n'
-            '- Do not paraphrase. Do not change tense or perspective.\n'
-            '- Do not convert third-person narration into first-person.\n'
-            '- You may split long sentences into multiple bullets without changing words.\n\n'
-            'SPEAKER ASSIGNMENT (GENERAL, SAFE)\n'
-            'Use this order, strictly:\n'
-            '1) If the text is explicitly quoted dialogue, assign to the speaker indicated by nearby attribution\n'
-            '   (e.g., "X said", "said X", "X asked", dialogue preceded by "X:").\n'
-            '2) If a line is a standalone italic thought (*...*), assign it to the character whose thought it is\n'
-            '   ONLY if the surrounding text explicitly says or strongly implies it (e.g., "she thought", "he wondered", "X realized").\n'
-            '   Otherwise assign to Narrator.\n'
-            '3) Everything else (scene setting, actions, descriptions, unattributed thoughts) goes to Narrator.\n\n'
-            'Never invent speakers. Never guess a speaker for non-dialogue lines.\n\n'
-            'SPEAKER BLOCK HYGIENE\n'
-            '- Within a scene, do not create consecutive blocks for the same speaker. Merge them.\n'
-            '- Avoid one-line blocks when that same speaker continues. Combine nearby lines into one block.\n\n'
-            'SCENES\n'
-            '- Create a new scene only when there is a meaningful setting, time, or major beat shift.\n'
-            '- Avoid splitting into many short scenes.\n\n'
-            'PACING (PAUSE + DELIVERY EXPECTED)\n'
-            '- PAUSE and delivery are allowed and used to improve cadence.\n'
-            '- Include pauses throughout the story, not just at the end:\n'
-            '  • add a short pause (0.20–0.40) after scene openings, emotional beats, and key reveals\n'
-            '  • add a short pause (0.20–0.40) around dialogue turn changes when it improves rhythm\n'
-            '- Use delivery tags sparingly but include a few when tone is obvious (calm, urgent, dramatic).\n'
-            '- Minimums (unless the story is extremely short):\n'
-            '  • at least 3 PAUSE lines total\n'
-            '  • at least 2 delivery-tagged bullets total\n\n'
-            'INPUTS\n'
-            'You receive JSON:\n'
-            '- story.story_md\n'
-            '- casting_map (includes Narrator)\n\n'
-            'FINAL CHECK (SILENT)\n'
-            '- cast: exists and includes all casting_map entries\n'
-            '- speaker names exactly match casting_map keys\n'
-            '- all bullets start with "    - "\n'
-            '- scenes have quoted titles\n'
-            '- output contains only SFML\n\n'
-            'Now output the SFML file only.\n'
-        )
+        instructions = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text.
+
+FORMAT (EXAMPLE IS AUTHORITATIVE)
+
+# SFML v1
+cast:
+  Narrator: voice_001
+  Maris: voice_002
+  Ocean: voice_003
+
+scene scene-1 "Example Scene"
+  Narrator:
+    - Opening narration line.
+    PAUSE: 0.30
+    - Another narration line.
+
+  Ocean {delivery=calm}:
+    - Maris.
+    PAUSE: 0.20
+    - What troubles you?
+
+  Maris {delivery=uncertain}:
+    - I'm shining.
+    - I'm trying.
+    - {delivery=urgent} Why isn't the boat turning?
+
+STRUCTURE RULES
+- First line: # SFML v1
+- Second block must begin with: cast:
+- Cast must include EVERY entry from casting_map exactly.
+- Each scene must be: scene scene-<n> "<Title>"
+- Speaker label: exactly two spaces + "<Name>:"
+  OR exactly two spaces + "<Name> {delivery=...}:"
+- Bullet line: exactly four spaces + "- " + text
+- PAUSE line: exactly four spaces + "PAUSE: <decimal>"
+
+Allowed delivery values:
+neutral | calm | urgent | dramatic | shout
+
+TEXT FIDELITY
+- Do not paraphrase.
+- Do not change tense or grammatical perspective.
+- Do not convert third-person narration into first-person.
+- Only restructure into speaker blocks and insert pauses.
+
+SPEAKER ASSIGNMENT
+1) Explicit quoted dialogue → clearly indicated speaker.
+2) Italic standalone thoughts (*...*) → character only if explicitly framed as their thought.
+3) Everything else → Narrator.
+- Never invent speakers.
+- Never guess speakers for non-dialogue lines.
+
+BLOCK HYGIENE
+- Do not create consecutive blocks for the same speaker.
+- Merge adjacent lines into a single block.
+- Do not create unnecessary one-line blocks.
+
+SCENES
+- Create a new scene only at meaningful setting, time, or major beat shifts.
+- Avoid many short scenes.
+
+PACING AND DELIVERY
+- Use PAUSE throughout for audiobook cadence.
+- Include at least 3 PAUSE lines unless the story is extremely short.
+- Most non-narrator speaker blocks should include a delivery attribute.
+- Narrator delivery should be used sparingly.
+- Include at least 2 delivery uses for character dialogue when dialogue exists.
+
+INPUT
+You receive JSON:
+- story.story_md
+- casting_map (includes Narrator)
+
+FINAL CHECK (SILENT)
+- cast block exists and includes all casting_map entries
+- speaker names exactly match casting_map keys
+- delivery attribute appears before colon when used
+- all bullets begin with "    - "
+- all pauses begin with "    PAUSE: "
+- scenes have quoted titles
+- no consecutive duplicate speaker blocks
+- output contains only SFML
+
+Now output the SFML file only.
+'''
 
         req = {
             'model': 'google/gemma-2-9b-it',
