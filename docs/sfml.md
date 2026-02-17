@@ -126,23 +126,6 @@ Examples:
 - `<seconds>` is a decimal number of seconds (recommended range: `0.10`–`2.00`).
 - Inserts an explicit pause (silence) into the audio.
 
-## Minimal valid example
-
-```text
-# SFML v1
-cast:
-  Narrator: terracotta-glow
-  Maris: lunar-violet
-
-scene scene-1 "Intro":
-  Narrator:
-    - The lighthouse stood silent on the cliff.
-  Maris:
-    - {delivery=urgent} I can hear the sea breathing below.
-  PAUSE: 0.25
-```
-
-
 ## Comments
 
 SFML supports comments using `#` (hash).
@@ -152,7 +135,7 @@ Rules:
 - Comments are ignored by the parser/renderer.
 - Use comments to explain intent, pacing, and delivery choices.
 
-## Annotated full example (all common features)
+## Example
 
 ```text
 # SFML v1
@@ -203,15 +186,15 @@ It is intentionally **prompt-oriented**, not a strict language spec.
 ### A) Prompt header (verbatim)
 ```text
 Return ONLY SFML plain text. No markdown, no fences.
-Use SFML v1 (cast: + scene blocks).
+Use SFML v1 (cast: + scenes + speaker blocks).
 Think like: premium audiobook narrator + movie/TV drama (Prime) + game cutscene.
 Goal: keep the story flowing with good pacing (speaker blocks + varied pauses).
-Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.
 Use delivery tags ({delivery=...}) when helpful for narrator or characters.
 Coverage: include the full story; do not summarize.
 ```
 
-### B) Documentation block included in the prompt (verbatim)
+### B) SFML_DOC_FOR_LLM block included in the prompt (verbatim)
+This is a compact excerpt of the **SPEC** section above, formatted for the LLM context window.
 ```text
 SFML_DOC_FOR_LLM:
 1) Casting
