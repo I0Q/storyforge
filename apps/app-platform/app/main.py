@@ -1142,12 +1142,6 @@ def index(response: Response):
         <div style='font-weight:950;margin-bottom:6px;'>2) Casting</div>
         <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
       </div>
-      <div class='row' style='justify-content:flex-start;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px'>
-        <div class='muted' style='font-size:12px'>Casting engine</div>
-        <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='tortoise' checked/>tortoise</label>
-        <label class='checkPill' style='padding:6px 10px;'><input type='radio' name='castEngine' value='styletts2'/>styletts2</label>
-      </div>
-
       <div id='prodBusy' class='updateBar hide' style='margin-top:10px'>
         <div class='muted' style='font-weight:950' id='prodBusyTitle'>Working…</div>
         <div class='updateTrack'><div class='updateProg'></div></div>
@@ -2690,43 +2684,11 @@ function removeProvider(id){
 }
 
 function prodGetCastEngine(){
-  var eng='';
-  try{
-    var r=document.querySelector("input[name='castEngine']:checked");
-    if (r && r.value) eng = String(r.value||'').trim();
-  }catch(_e){}
-  return eng || 'tortoise';
+  // Multi-engine casting: engine selection is automatic (voice_id -> voice engine).
+  return '';
 }
-
-function prodSetCastEngine(eng, persist){
-  eng = String(eng||'').trim();
-  if (eng!=='tortoise' && eng!=='styletts2') eng = 'tortoise';
-  try{
-    var rs=document.querySelectorAll("input[name='castEngine']");
-    for (var i=0;i<rs.length;i++){
-      var r=rs[i];
-      r.checked = (String(r.value||'')===eng);
-    }
-  }catch(_e){}
-  if (persist){
-    try{ localStorage.setItem('sf_cast_engine', eng); }catch(_e){}
-  }
-}
-
-function prodInitCastEngine(){
-  try{
-    // restore from localStorage on first render
-    var eng='';
-    try{ eng = String(localStorage.getItem('sf_cast_engine')||'').trim(); }catch(_e){}
-    if (eng) prodSetCastEngine(eng, false);
-
-    // persist on change
-    var rs=document.querySelectorAll("input[name='castEngine']");
-    for (var i=0;i<rs.length;i++){
-      rs[i].onchange = function(){ try{ prodSetCastEngine(prodGetCastEngine(), true); }catch(_e){} };
-    }
-  }catch(_e){}
-}
+function prodSetCastEngine(_eng, _persist){ /* no-op */ }
+function prodInitCastEngine(){ /* removed */ }
 
 function loadProduction(){
   try{
@@ -2750,7 +2712,6 @@ function loadProduction(){
       prodRenderAssignments();
 
       // init engine choice persistence
-      try{ prodInitCastEngine(); }catch(_e){}
 
       // Load saved casting for initial selection
       try{ prodLoadCasting(String(sel.value||'')); }catch(_e){}
@@ -2977,12 +2938,7 @@ function prodSuggestCasting(){
     prodSetBusy(true, 'Suggesting casting…', 'Asking the LLM to match voices to characters');
     if (out) out.textContent='';
 
-    var eng = 'tortoise';
-    try{
-      var r1=document.querySelector("input[name='castEngine']:checked");
-      if (r1 && r1.value) eng = String(r1.value||'').trim() || 'tortoise';
-    }catch(e){}
-    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId, engine: eng})})
+    fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'suggest_failed'); }
         prodSetBusy(false);
@@ -3013,7 +2969,7 @@ function prodSaveCasting(silent){
 
     prodSetBusy(true, 'Saving casting…', 'Autosaving your casting choices');
     if (out) out.textContent='';
-    var payload = { story_id: String(st.story_id), engine: prodGetCastEngine(), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
+    var payload = { story_id: String(st.story_id), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
 
     fetchJsonAuthed('/api/production/casting_save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
@@ -7503,8 +7459,9 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
         if not story_id:
             return {'ok': False, 'error': 'missing_story_id'}
 
-        engine = str((payload or {}).get('engine') or '').strip().lower() or 'tortoise'
-        if engine not in ('tortoise', 'styletts2', 'xtts'):
+        # Multi-engine casting: we do not require an engine selector.
+        engine = str((payload or {}).get('engine') or '').strip().lower()
+        if engine and engine not in ('tortoise', 'styletts2', 'xtts'):
             return {'ok': False, 'error': 'bad_engine'}
 
         conn = db_connect()
@@ -7753,11 +7710,42 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         else:
             max_scenes = 3
 
+        # Provide the model basic info about each voice_id (engine + delivery_profile).
+        voice_profiles = {}
+        try:
+            connp = db_connect()
+            try:
+                db_init(connp)
+                vs = list_voices_db(connp, limit=800)
+            finally:
+                connp.close()
+            for v in vs:
+                try:
+                    vid = str(v.get('id') or '').strip()
+                    if not vid:
+                        continue
+                    eng = str(v.get('engine') or '').strip().lower()
+                    vtj = str(v.get('voice_traits_json') or '').strip()
+                    dp = ''
+                    try:
+                        if vtj:
+                            dp = str((json.loads(vtj) or {}).get('voice_traits', {}).get('delivery_profile') or '').strip().lower()
+                    except Exception:
+                        dp = ''
+                    if not dp:
+                        dp = ('expressive' if eng == 'tortoise' else 'neutral')
+                    voice_profiles[vid] = {'engine': eng, 'delivery_profile': dp}
+                except Exception:
+                    pass
+        except Exception:
+            voice_profiles = {}
+
         prompt = {
             'format': 'SFML',
             'version': 0,
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
+            'voice_profiles': voice_profiles,
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
@@ -7772,6 +7760,10 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
                 'BODY: Inside a scene block, content is indented by two spaces.',
                 'BODY: You can emit either single speaker lines: [Name] text',
+                'DELIVERY (optional): For individual lines, you may add a delivery tag to influence rendering. Syntax for single lines: [Name]{delivery=calm} text',
+                'DELIVERY (optional): Syntax for speaker block bullets: - {delivery=urgent} text',
+                'DELIVERY (optional): Allowed values: neutral|calm|urgent|dramatic|shout. (Avoid whisper for now.)',
+                'DELIVERY (optional): Use voice_profiles[voice_id].delivery_profile to guide delivery: neutral voices should mostly use neutral/calm; expressive voices may use urgent/dramatic/shout sparingly.',
                 'BODY: Or speaker blocks (preferred for consecutive lines by same speaker): Name: then 4-space indented bullets "- ..."',
                 'BODY: Speaker blocks MUST be treated as one segment; use them to avoid splitting delivery.',
                 'BODY: Every [Name] and every Name: in a speaker block must exist in cast: mappings.',
@@ -7795,11 +7787,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 '\n'
                 'scene scene-1 "Intro":\n'
                 '  Narrator:\n'
-                '    - The lighthouse stood silent on the cliff.\n'
+                '    - {delivery=calm} The lighthouse stood silent on the cliff.\n'
                 '    - The sea breathed below, slow and steady.\n'
                 '  PAUSE: 0.25\n'
                 '  Maris:\n'
-                '    - I can hear the sea breathing below.\n'
+                '    - {delivery=urgent} I can hear the sea breathing below.\n'
             ),
         }
 
