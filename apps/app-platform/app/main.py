@@ -7917,8 +7917,6 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 PASS A (STRUCTURE ONLY)
 - Your ONLY job is to assign speakers and group lines into speaker blocks.
 - Output must be valid SFML v1.
-- STRICT: Do NOT output any PAUSE lines.
-- STRICT: Do NOT output any delivery tags (no {delivery=...} anywhere).
 
 FORMAT
 - First line: # SFML v1
