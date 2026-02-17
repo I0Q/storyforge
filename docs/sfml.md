@@ -75,12 +75,37 @@ scene <scene_id> "<title>":
   [Name] text...
 ```
 
+### Optional delivery tag
+You can attach an optional delivery tag to influence the TTS renderer:
+
+```text
+  [Name]{delivery=calm} text...
+```
+
+Allowed values:
+- neutral
+- calm
+- urgent
+- dramatic
+- shout
+
+Notes:
+- Delivery is **optional**; omit it for normal lines.
+- Whisper is intentionally not supported right now.
+
 ### Syntax (speaker block; preferred for consecutive lines)
 ```text
   Name:
     - line 1...
     - line 2...
     - line 3...
+```
+
+### Optional delivery tag on bullets
+```text
+  Name:
+    - {delivery=neutral} line 1...
+    - {delivery=urgent} line 2...
 ```
 
 ### Rules
@@ -126,6 +151,6 @@ cast:
   Maris: lunar-violet
 
 scene scene-1 "Intro":
-  [Narrator] The lighthouse stood silent on the cliff.
-  [Maris] I can hear the sea breathing below.
+  [Narrator]{delivery=calm} The lighthouse stood silent on the cliff.
+  [Maris]{delivery=urgent} I can hear the sea breathing below.
 ```
