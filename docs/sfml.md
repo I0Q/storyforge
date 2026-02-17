@@ -138,28 +138,20 @@ Rules:
 
 ```text
 # SFML v1
-# This is an annotated example showing the full shape of an SFML v1 script.
 
 # 1) Casting map (character -> voice id)
-# Production uses this to pick the correct voice when rendering.
 cast:
   Narrator: terracotta-glow
   Maris: lunar-violet
   Captain: iron-slate
 
 # 2) Scenes
-# A scene is a continuous segment in a specific time/place.
-# Start a new scene when the setting, time, or narrative beat clearly shifts.
 scene scene-1 "Arrival":
-  # Speaker blocks: one block per speaker run.
   Narrator:
     - The lighthouse stood silent on the cliff, and the sea breathed below.
 
-  # PAUSE controls pacing (decimal seconds). Vary it intentionally.
   PAUSE: 1.25
 
-  # Delivery tags influence intonation / prosody.
-  # Allowed delivery: neutral|calm|urgent|dramatic|shout
   Maris:
     - {delivery=calm} I can hear it… the water, like a sleeping animal.
   PAUSE: 0.20
@@ -172,7 +164,6 @@ scene scene-2 "The door":
   PAUSE: 0.60
   Maris:
     - {delivery=dramatic} That sound… it’s coming from inside.
-  # Use delivery tags when it improves performance; avoid over-tagging.
   Captain:
     - {delivery=shout} OPEN UP!
 ```
