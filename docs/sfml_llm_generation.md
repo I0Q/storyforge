@@ -5,7 +5,7 @@ It is intentionally **prompt-oriented**, not a strict language spec.
 
 ## LLM context pack (for `/api/production/sfml_generate`)
 
-Note: The generator now feeds `docs/sfml.md` (strict spec portion) into the LLM context after the header as `SFML_SPEC:`.
+Note: The generator now feeds only the compiler header + JSON payload (no separate SFML_SPEC block).
 
 ### A) Prompt header (verbatim)
 The runtime uses a compiler-style strict output contract. See `apps/app-platform/app/main.py` (`/api/production/sfml_generate`) for the exact header string.
