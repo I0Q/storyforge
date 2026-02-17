@@ -12,6 +12,32 @@ SFML supports a small set of **directives** (lines that begin with `@`) and **pa
 
 ---
 
+## LLM generation prompt (current behavior)
+When StoryForge generates SFML from a story (`/api/production/sfml_generate`), it prompts the LLM with additional constraints beyond the core grammar:
+
+- **Speaker blocks are strongly preferred**.
+  - If a speaker has 2+ consecutive lines, generation should use a `Name:` block with bullet lines.
+  - Narrator paragraphs should almost always be a `Narrator:` block with bullets.
+- **Delivery tags are for character dialogue only (for now)**.
+  - Non-narrator dialogue lines should include a delivery tag.
+  - Narrator lines should usually omit delivery tags (default narration is calm).
+  - Whisper is intentionally not supported.
+
+### Delivery tag syntax used by the generator
+- Single line:
+  - `[Name]{delivery=urgent} text...`
+- Speaker block bullets:
+  - `- {delivery=dramatic} text...`
+
+Allowed delivery values:
+- neutral
+- calm
+- urgent
+- dramatic
+- shout
+
+---
+
 ## Overview
 
 An SFML v1 file has:
