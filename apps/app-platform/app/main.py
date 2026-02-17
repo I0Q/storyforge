@@ -7785,8 +7785,17 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     continue
                 if ln.startswith('scene '):
                     break
+                # Cast line canonical form: "  Name: voice_id"
                 m = re.match(r'^  ([^:]+):\s*(.+?)\s*$', ln)
                 if not m:
+                    # Tolerate common separator mistakes (="  Name = voice_id", "  Name - voice_id", "  Name -> voice_id")
+                    m2 = re.match(r'^  ([^=\-]+?)\s*(?:=|->|-)\s*(.+?)\s*$', ln)
+                    if m2:
+                        name = m2.group(1)
+                        vid = m2.group(2)
+                        cast[name] = vid
+                        i += 1
+                        continue
                     raise ValueError(f'bad_cast_line:{i+1}')
                 name = m.group(1)
                 vid = m.group(2)
