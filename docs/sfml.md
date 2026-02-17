@@ -205,9 +205,6 @@ The API appends runtime inputs as JSON (via `json.dumps(...)`):
     "Narrator": "<voice_id>",
     "<CharacterName>": "<voice_id>"
   },
-  "voice_profiles": {
-    "<voice_id>": {"engine": "styletts2|tortoise|xtts", "delivery_profile": "neutral|expressive"}
-  },
   "scene_policy": {"max_scenes": 1, "default_scenes": 1}
 }
 ```

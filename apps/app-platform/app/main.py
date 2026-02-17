@@ -7710,35 +7710,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         else:
             max_scenes = 3
 
-        # Provide the model basic info about each voice_id (engine + delivery_profile).
-        voice_profiles = {}
-        try:
-            connp = db_connect()
-            try:
-                db_init(connp)
-                vs = list_voices_db(connp, limit=800)
-            finally:
-                connp.close()
-            for v in vs:
-                try:
-                    vid = str(v.get('id') or '').strip()
-                    if not vid:
-                        continue
-                    eng = str(v.get('engine') or '').strip().lower()
-                    vtj = str(v.get('voice_traits_json') or '').strip()
-                    dp = ''
-                    try:
-                        if vtj:
-                            dp = str((json.loads(vtj) or {}).get('voice_traits', {}).get('delivery_profile') or '').strip().lower()
-                    except Exception:
-                        dp = ''
-                    if not dp:
-                        dp = ('expressive' if eng == 'tortoise' else 'neutral')
-                    voice_profiles[vid] = {'engine': eng, 'delivery_profile': dp}
-                except Exception:
-                    pass
-        except Exception:
-            voice_profiles = {}
+        # NOTE: SFML generation is engine-agnostic.
+        # The LLM does not need to know anything about TTS engines or voice traits.
 
         # Keep the model on-rails with a *short* SFML spec excerpt.
         # Feeding full docs caused verbosity/regressions (it may imitate the docs instead of generating a script).
@@ -7761,7 +7734,6 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'version': 0,
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
-            'voice_profiles': voice_profiles,
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
         }
 
@@ -7771,14 +7743,17 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'Use SFML v1 (cast: + scene blocks).\n'
             'Think like: premium audiobook narrator + movie/TV drama (Prime) + game cutscene.\n'
             'Goal: keep the story flowing with good pacing (speaker blocks + varied pauses). You choose pause seconds.\n'
+            'Assign each sentence to the correct character.\n'
             'Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.\n'
             'Add delivery tags ONLY for non-narrator character dialogue.\n'
+            'Use ONLY the provided casting_map voice ids; do not invent ids.\n'
             'Coverage: include the full story; do not summarize.\n'
         )
 
         llm_doc = (
             'SFML_DOC_FOR_LLM:\n'
             '1) Casting\n'
+            'The casting map is provided; copy its voice ids exactly. Do not invent voice ids.\n'
             'cast:\n'
             '  Narrator: <voice_id>\n'
             '  Name: <voice_id>\n'
