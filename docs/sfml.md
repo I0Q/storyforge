@@ -10,7 +10,7 @@ SFML supports **pause** events to control pacing.
 
 ---
 
-# Section 1 — SPEC (strict format)
+# I - Specification
 This section defines the **strict SFML v1 format** (what the renderer/parser should accept).
 
 ## Overview
@@ -177,7 +177,7 @@ scene scene-2 "The door":
 
 ---
 
-# Section 2 — GENERATION (LLM prompt + context)
+# II - LLM Generation (prompt + context)
 This section documents how StoryForge asks an LLM to convert a text story into an SFML script.
 It is intentionally **prompt-oriented**, not a strict language spec.
 
