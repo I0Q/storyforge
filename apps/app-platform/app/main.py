@@ -7522,14 +7522,11 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
             chars = ([{'name': 'Narrator', 'role': 'narrator', 'description': ''}] + chars)
         chars.sort(key=lambda c: (0 if str((c or {}).get('role') or '').lower() == 'narrator' or str((c or {}).get('name') or '').strip().lower() == 'narrator' else 1, str((c or {}).get('name') or '')))
 
-        # Build compact voice roster summary (filter by engine)
+        # Build compact voice roster summary.
+        # NOTE: We intentionally do NOT filter by engine here; we support mixed-engine casting
+        # (e.g., StyleTTS2 narrators + Tortoise characters).
         vrows = []
         for v in voices:
-            try:
-                if engine and str(v.get('engine') or '').strip().lower() != engine:
-                    continue
-            except Exception:
-                pass
             vid = str(v.get('id') or '')
             if not vid:
                 continue
@@ -7546,6 +7543,7 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
                 'id': vid,
                 'name': dn,
                 'engine': eng,
+                'delivery_profile': str(traits.get('delivery_profile') or (('expressive' if str(eng).strip().lower()=='tortoise' else 'neutral'))),
                 'gender': str(traits.get('gender') or 'unknown'),
                 'age': str(traits.get('age') or 'unknown'),
                 'pitch': str(traits.get('pitch') or 'unknown'),
@@ -7568,9 +7566,11 @@ def api_production_suggest_casting(payload: dict[str, Any] = Body(default={})): 
                 'Return STRICT JSON only. No markdown.',
                 'Output shape: {"assignments": [{"character":"Name","voice_id":"id","reason":"short"}] }',
                 'Every character must have exactly one assignment.',
-                'Only choose voices from the provided roster (already filtered by engine).',
+                'Only choose voices from the provided roster.',
                 'Prefer matching gender/age/pitch/tone when known, otherwise pick a distinct voice.',
                 'Narrator must be included.',
+                'Casting guidance: narrator should strongly prefer roster voices with delivery_profile="neutral" (typically StyleTTS2).',
+                'Casting guidance: non-narrator characters should strongly prefer delivery_profile="expressive" (typically Tortoise).',
             ],
         }
 

@@ -473,6 +473,9 @@ def analyze_voice_metadata(
             "pitch": _norm(traits.get("pitch"), 16).lower() or "unknown",
             "accent": _norm(traits.get("accent"), 80),
             "tone": [],
+            # Delivery profile: used for casting guidance (narrator vs character).
+            # Engine-based default; can be refined later.
+            "delivery_profile": ("expressive" if str(engine or '').strip().lower() == 'tortoise' else "neutral"),
         }
 
         # Age: prefer dedicated regressor endpoint (Tinybox) when available.
