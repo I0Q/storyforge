@@ -8,14 +8,7 @@ It is intentionally **prompt-oriented**, not a strict language spec.
 Note: The generator now feeds `docs/sfml.md` (strict spec portion) into the LLM context after the header as `SFML_SPEC:`.
 
 ### A) Prompt header (verbatim)
-```text
-Return ONLY SFML plain text. No markdown, no fences.
-Use SFML v1 (cast: + scenes + speaker blocks).
-Think like: premium audiobook narrator + movie/TV drama (Prime) + game cutscene.
-Goal: identify and build character lines accurately, keep the story flowing with good pacing (speaker blocks + varied pauses).
-Use delivery tags ({delivery=...}) for narrator or characters when helpful to make the story rich and interesting.
-Coverage: include the full story; do not summarize.
-```
+The runtime uses a compiler-style strict output contract. See `apps/app-platform/app/main.py` (`/api/production/sfml_generate`) for the exact header string.
 
 ### B) SFML spec
 See the authoritative SFML spec: https://github.com/I0Q/storyforge/blob/main/docs/sfml.md
