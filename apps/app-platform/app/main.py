@@ -7678,17 +7678,28 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
         story_md = str(st.get('story_md') or '')
         title = str(st.get('title') or story_id)
-
         # Build a strict casting map (character -> voice_id) preserving human-facing names.
+        # Accept both shapes for casting.assignments:
+        #  - list[{character, voice_id}]
+        #  - dict{character: voice_id}
         cmap: dict[str, str] = {}
-        for a in assigns:
-            try:
-                ch = str((a or {}).get('character') or '').strip()
-                vid = str((a or {}).get('voice_id') or '').strip()
-                if ch and vid:
-                    cmap[ch] = vid
-            except Exception:
-                pass
+        assigns_val = (casting or {}).get('assignments') if isinstance(casting, dict) else None
+        if isinstance(assigns_val, dict):
+            for ch, vid in assigns_val.items():
+                chs = str(ch or '').strip()
+                vids = str(vid or '').strip()
+                if chs and vids:
+                    cmap[chs] = vids
+        else:
+            assigns = list(assigns_val or [])
+            for a in assigns:
+                try:
+                    ch = str((a or {}).get('character') or '').strip()
+                    vid = str((a or {}).get('voice_id') or '').strip()
+                    if ch and vid:
+                        cmap[ch] = vid
+                except Exception:
+                    pass
 
         # Ensure narrator exists in map
         if 'Narrator' not in cmap:
@@ -7867,14 +7878,13 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     i += 1
                     continue
 
-                # Scene-level pause
-                if ln.startswith('  PAUSE:'):
+                # Scene-level pause (spec: two-space indent). Tolerate common indent mistakes and normalize.
+                m_pause = re.match(r'^\s*PAUSE: (\d+\.\d+)\s*$', ln)
+                if m_pause:
                     if not allow_pauses:
                         raise ValueError('pause_not_allowed')
-                    if not re.match(r'^  PAUSE: \d+\.\d+$', ln):
-                        raise ValueError('bad_pause')
                     flush_block()
-                    out.append(ln)
+                    out.append('  PAUSE: ' + m_pause.group(1))
                     out.append('')
                     i += 1
                     continue
@@ -7987,12 +7997,13 @@ FORMAT (EXAMPLE IS AUTHORITATIVE)
 # SFML v1
 
 cast:
-  Narrator: voice_001
-  Maris: voice_002
+  Narrator: <voice_id>
+  Maris: <voice_id>
 
 scene scene-1 "Example Scene":
   Narrator:
     - Opening narration line.
+
 
   PAUSE: 0.30
 
@@ -8002,6 +8013,7 @@ scene scene-1 "Example Scene":
 STRUCTURE RULES (HARD)
 - First non-empty line must be: # SFML v1
 - Must include a cast: block with EVERY key from casting_map (exact keys, no extras).
+- For each cast entry, the voice_id value must be EXACTLY the value from casting_map for that key.
 - Scenes must be: scene scene-<n> "<Title>":  (title optional, but ':' is required)
 - Speaker headers: two spaces + Name:  (no delivery tags on headers)
 - Bullets: four spaces + "- " + text
