@@ -7740,21 +7740,21 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         except Exception:
             voice_profiles = {}
 
-        # Provide the SFML spec to the model (single-source-of-truth: docs/sfml.md).
-        sfml_spec = ''
-        try:
-            spec_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs', 'sfml.md')
-            if not os.path.exists(spec_path):
-                # repo layout: storyforge/docs/sfml.md (two levels above app/)
-                spec_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'sfml.md')
-            if os.path.exists(spec_path):
-                with open(spec_path, 'r', encoding='utf-8') as f:
-                    sfml_spec = (f.read() or '').strip()
-        except Exception:
-            sfml_spec = ''
-        # Hard cap to avoid blowing the context window.
-        if sfml_spec and len(sfml_spec) > 6000:
-            sfml_spec = sfml_spec[:6000] + "\n\n[...truncated...]"
+        # Keep the model on-rails with a *short* SFML spec excerpt.
+        # Feeding full docs caused verbosity/regressions (it may imitate the docs instead of generating a script).
+        sfml_spec = (
+            "SFML v1 quick spec:\n"
+            "- Output plain SFML text only (no markdown/fences).\n"
+            "- Top-level casting block:\ncast:\n  Name: voice_id\n"
+            "- Scenes:\nscene scene-1 \"Title\":\n  [Name] line...\n"
+            "- Prefer speaker blocks for consecutive lines (keeps audio smooth):\n"
+            "  Name:\n    - line 1\n    - line 2\n"
+            "- Optional pauses (scene-level, indented 2 spaces):\n  PAUSE: 0.25\n"
+            "- Optional delivery tags:\n"
+            "  [Name]{delivery=calm} text\n"
+            "  - {delivery=urgent} text\n"
+            "  Allowed delivery: neutral|calm|urgent|dramatic|shout\n"
+        )
 
         prompt = {
             'format': 'SFML',
@@ -7762,7 +7762,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
             'voice_profiles': voice_profiles,
-            'sfml_spec_md': sfml_spec,
+            'sfml_spec': sfml_spec,
             'scene_policy': {'max_scenes': int(max_scenes), 'default_scenes': (1 if max_scenes == 1 else 2)},
             'rules': [
                 'Output MUST be plain SFML text only. No markdown, no fences.',
@@ -7777,11 +7777,16 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'SCENES: Otherwise, output between 1 and max_scenes scenes; do not create scenes for minor mood shifts.',
                 'BODY: Inside a scene block, content is indented by two spaces.',
                 'BODY: You can emit either single speaker lines: [Name] text',
-                'DELIVERY (optional): For individual lines, you may add a delivery tag to influence rendering. Syntax for single lines: [Name]{delivery=calm} text',
-                'DELIVERY (optional): Syntax for speaker block bullets: - {delivery=urgent} text',
-                'DELIVERY (optional): Allowed values: neutral|calm|urgent|dramatic|shout. (Avoid whisper for now.)',
-                'DELIVERY (optional): Use voice_profiles[voice_id].delivery_profile to guide delivery: neutral voices should mostly use neutral/calm; expressive voices may use urgent/dramatic/shout sparingly.',
+                'DELIVERY: You MUST add delivery tags for character dialogue lines (non-narrator).',
+                'DELIVERY: Narrator lines should use neutral/calm only (default calm).',
+                'DELIVERY: Syntax for single lines: [Name]{delivery=calm} text',
+                'DELIVERY: Syntax for speaker block bullets: - {delivery=urgent} text',
+                'DELIVERY: Allowed values: neutral|calm|urgent|dramatic|shout. (Avoid whisper for now.)',
+                'DELIVERY: Use voice_profiles[voice_id].delivery_profile to guide delivery: neutral voices -> neutral/calm; expressive voices may use urgent/dramatic/shout when the text warrants it.',
                 'BODY: Or speaker blocks (preferred for consecutive lines by same speaker): Name: then 4-space indented bullets "- ..."',
+                'BODY: STRONGLY prefer speaker blocks; do not emit lots of single [Name] lines if you can group them.',
+                'BODY: If a speaker has 2+ consecutive lines, you MUST use a speaker block for that run.',
+                'BODY: Narrator paragraphs should almost always be a Narrator: block with bullets.',
                 'BODY: Speaker blocks MUST be treated as one segment; use them to avoid splitting delivery.',
                 'BODY: Every [Name] and every Name: in a speaker block must exist in cast: mappings.',
                 'Do not invent voice ids; only use voice ids from casting_map values.',
