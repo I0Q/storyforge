@@ -7863,7 +7863,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     raise ValueError('content_outside_scene')
 
                 # Speaker header (no delivery tags on header)
-                m_sp = re.match(r'^  ([^:]+):\s*$', ln)
+                # Speaker header (accept optional delivery tag on header; we ignore/strip it in v1)
+                m_sp = re.match(r'^  ([^:{]+?)(?:\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?:\s*$', ln)
                 if m_sp:
                     name = m_sp.group(1)
                     if name not in casting_map:
@@ -7894,7 +7895,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     i += 1
                     continue
 
-                # Bullet
+                # Bullet (tolerate common formatting mistakes and normalize)
                 if ln.startswith('    - '):
                     if cur_speaker is None:
                         raise ValueError('bullet_outside_block')
@@ -7905,6 +7906,17 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     if rest.startswith('{delivery=') and not m_del:
                         raise ValueError('bad_delivery')
                     cur_block_lines.append(ln)
+                    i += 1
+                    continue
+
+                # Common model mistake: "    {delivery=urgent} - text" (delivery before dash)
+                m_b2 = re.match(r'^    \{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*-\s*(.+?)\s*$', ln)
+                if m_b2:
+                    if cur_speaker is None:
+                        raise ValueError('bullet_outside_block')
+                    if not allow_delivery:
+                        raise ValueError('delivery_not_allowed')
+                    cur_block_lines.append('    - {delivery=' + m_b2.group(1) + '} ' + m_b2.group(2))
                     i += 1
                     continue
 
@@ -8074,7 +8086,12 @@ Now output the SFML file only.
                 sfml_ok = ''
 
         if not sfml_ok:
-            return {'ok': False, 'error': 'sfml_generate_failed'}
+            # Surface last failure reasons to help debugging in UI.
+            try:
+                err = 'sfml_generate_failed:' + ';'.join(failures_last or [])
+            except Exception:
+                err = 'sfml_generate_failed'
+            return {'ok': False, 'error': err}
 
         txt = (sfml_ok or '').strip()
         if not txt:
