@@ -7878,8 +7878,13 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 # Common model mistake: bullet lines indented like scene-level items (2 spaces)
                 # Example: "  - text" (should be "    - text")
                 if ln.startswith('  - '):
+                    # If the model emits a bullet without opening a speaker block, default to Narrator.
                     if cur_speaker is None:
-                        raise ValueError('bullet_outside_block')
+                        if 'Narrator' in casting_map:
+                            cur_speaker = 'Narrator'
+                            cur_block_lines = []
+                        else:
+                            raise ValueError('bullet_outside_block')
                     cur_block_lines.append('    ' + ln.strip())
                     i += 1
                     continue
@@ -7918,8 +7923,13 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
                 # Bullet (tolerate common formatting mistakes and normalize)
                 if ln.startswith('    - '):
+                    # If the model emits bullets without opening a speaker block, default to Narrator.
                     if cur_speaker is None:
-                        raise ValueError('bullet_outside_block')
+                        if 'Narrator' in casting_map:
+                            cur_speaker = 'Narrator'
+                            cur_block_lines = []
+                        else:
+                            raise ValueError('bullet_outside_block')
                     rest = ln[len('    - '):]
                     m_del = re.match(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s+.+', rest)
                     if m_del and not allow_delivery:
