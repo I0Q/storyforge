@@ -122,7 +122,11 @@ Examples:
 ```
 
 ### Rules
-- Scene-level line (indented by two spaces).
+- `PAUSE:` lines can appear **anywhere inside a scene** (indented by two spaces):
+  - between speaker blocks
+  - before a speaker block
+  - after a speaker block
+  - at the start/end of a scene (to create space around a scene transition)
 - `<seconds>` is a decimal number of seconds (recommended range: `0.10`–`2.00`).
 - Inserts an explicit pause (silence) into the audio.
 
