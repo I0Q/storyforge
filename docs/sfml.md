@@ -110,12 +110,22 @@ Notes:
 ## 4) Pauses
 
 ### Syntax
+A pause line has a **tag** and a **duration** in **decimal seconds**:
+
 ```text
-  PAUSE: 0.25
+  PAUSE: <seconds>
+```
+
+Examples:
+```text
+  PAUSE: 0.15
+  PAUSE: 0.40
+  PAUSE: 1.20
 ```
 
 ### Rules
 - Scene-level line (indented by two spaces).
+- `<seconds>` is a decimal number of seconds (recommended range: `0.10`–`2.00`).
 - Inserts an explicit pause (silence) into the audio.
 
 ## Minimal valid example
@@ -167,8 +177,10 @@ scene scene-1 "Title":
     - {delivery=urgent} line...
   PAUSE: 0.25
 
-3) Pauses (vary them)
-Use PAUSE lines to control pacing. Typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.
+3) Pauses (variable seconds)
+Use PAUSE lines to control pacing, and choose the duration intentionally.
+PAUSE syntax is decimal seconds (examples: 0.15, 0.40, 1.20).
+Typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.
 
 4) Delivery tags (characters only)
 Single line: [Name]{delivery=dramatic} text
