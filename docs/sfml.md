@@ -8,7 +8,7 @@ SFML v1 is a plain-text, code-like script format designed to be:
 
 This is the **only supported format** in the StoryForge UI/editor right now.
 
-SFML supports a small set of **directives** (lines that begin with `@`) and **pause** events to control pacing.
+SFML supports **pause** events to control pacing.
 
 ---
 
@@ -24,6 +24,7 @@ Return ONLY SFML plain text. No markdown, no fences.
 Use SFML v1 (cast: + scene blocks).
 Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.
 Add delivery tags ONLY for non-narrator character dialogue.
+Think like: Prime Video drama + audiobook narrator + game cutscene. Prioritize flow, pacing, and clarity.
 Coverage: include the full story; do not summarize.
 ```
 
@@ -193,21 +194,7 @@ Notes:
 
 ---
 
-## 4) Directives (optional)
-
-### Syntax
-```text
-@key: value
-```
-
-### Supported (initial)
-- `@tortoise_preset: standard|fast|high_quality|ultra_fast`
-- `@tortoise_candidates: 1|2|3` (generate multiple candidates and pick best)
-- `@seed: 12345` (best-effort determinism)
-- `@tortoise_chunk_chars: 450` (soft cap for longform chunk merging)
-- `@tortoise_chunk_pause_ms: 120` (silence inserted between longform chunks)
-
-## 5) Pauses
+## 4) Pauses
 
 ### Syntax
 ```text
@@ -216,7 +203,15 @@ Notes:
 
 ### Rules
 - Scene-level line (indented by two spaces).
-- Insert an explicit pause (silence) into the audio.
+- Inserts an explicit pause (silence) into the audio.
+
+### Guidance (pacing)
+- Pauses are meant to mimic **audiobooks / movie / gaming narration pacing**.
+- Vary them; don’t spam them.
+  - Typical: `0.15–0.35` for commas / small beats
+  - Strong beat: `0.4–0.8` for reveals / scene shifts
+  - Rare: `1.0+` only for intentional dramatic silence
+- Use pauses to keep the story flowing: let important moments land; avoid breathless run-ons.
 
 ## Minimal valid example
 
