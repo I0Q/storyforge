@@ -7809,11 +7809,13 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 extra = [k for k in got_keys if k not in casting_map]
                 raise ValueError('cast_mismatch:' + ('missing=' + ','.join(missing) if missing else '') + (' extra=' + ','.join(extra) if extra else ''))
 
+            # IMPORTANT: The model is not authoritative for voice ids.
+            # We always re-emit the cast block using the server-side casting_map values.
             out: list[str] = []
             out.append('# SFML v1')
             out.append('cast:')
             for k in want_keys:
-                out.append(f"  {k}: {cast.get(k,'')}")
+                out.append(f"  {k}: {casting_map.get(k,'')}")
             out.append('')
 
             cur_speaker = None
