@@ -67,7 +67,10 @@ scene <scene_id> "<title>":
 
 ## 3) Speaker blocks
 
-To keep rendering simple and avoid choppy joins, SFML v1 uses **speaker blocks**.
+Scenes typically contain one or more **speaker blocks**.
+Each block belongs to a character (or Narrator) and contains one or more lines.
+
+Speaker blocks keep rendering simple and avoid choppy joins.
 
 ### Syntax
 ```text
