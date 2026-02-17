@@ -7748,35 +7748,6 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'Coverage: include the full story; do not summarize.\n'
         )
 
-        llm_doc = (
-            'SFML_DOC_FOR_LLM:\n'
-            '1) Casting\n'
-            'The casting map is provided; copy its voice ids exactly. Do not invent voice ids.\n'
-            'cast:\n'
-            '  Narrator: <voice_id>\n'
-            '  Name: <voice_id>\n'
-            '\n'
-            '2) Scenes\n'
-            'scene scene-1 "Title":\n'
-            '  Narrator:\n'
-            '    - line...\n'
-            '  Name:\n'
-            '    - {delivery=urgent} line...\n'
-            '  PAUSE: 0.15\n'
-            '  PAUSE: 0.40\n'
-            '\n'
-            '3) Pauses (variable seconds)\n'
-            'PAUSE syntax is decimal seconds: PAUSE: <seconds> (examples: 0.15, 0.40, 1.20).\n'
-            'Choose durations intentionally: typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.\n'
-            '\n'
-            '4) Delivery tags\n'
-            'Single line: [Name]{delivery=dramatic} text\n'
-            'Bullet: - {delivery=urgent} text\n'
-            'Allowed: neutral|calm|urgent|dramatic|shout\n'
-            'Use for narrator or characters when it improves delivery; avoid over-tagging.\n'
-            'Avoid: whisper\n'
-        )
-
         req = {
             'model': 'google/gemma-2-9b-it',
             'messages': [
@@ -7784,8 +7755,6 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     'role': 'user',
                     'content': (
                         instructions
-                        + '\n'
-                        + llm_doc
                         + '\nJSON_PAYLOAD:\n'
                         + json.dumps(prompt, separators=(',', ':'))
                     ),
