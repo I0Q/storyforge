@@ -65,7 +65,7 @@ scene <scene_id> "<title>":
 - `"<title>"` is recommended but optional (still keep the trailing `:`).
 - Scene body lines are indented by **two spaces**.
 
-## 3) Speaker blocks (recommended)
+## 3) Speaker blocks
 
 To keep rendering simple and avoid choppy joins, SFML v1 uses **speaker blocks**.
 
@@ -83,6 +83,7 @@ A block can contain **one** line (that’s OK):
 ```
 
 ### Optional delivery tag on bullets
+Delivery tags influence **intonation / prosody** (how a line is performed).
 ```text
   Name:
     - {delivery=neutral} line 1...
@@ -131,8 +132,10 @@ cast:
   Maris: lunar-violet
 
 scene scene-1 "Intro":
-  [Narrator] The lighthouse stood silent on the cliff.
-  [Maris]{delivery=urgent} I can hear the sea breathing below.
+  Narrator:
+    - The lighthouse stood silent on the cliff.
+  Maris:
+    - {delivery=urgent} I can hear the sea breathing below.
   PAUSE: 0.25
 ```
 
@@ -205,6 +208,5 @@ The API appends runtime inputs as JSON (via `json.dumps(...)`):
 
 ## Notes / intent
 
-- **Delivery tags are guidance**, not required by the SFML spec; the generator uses them to hint character delivery.
 - **Speaker blocks** are the main lever to improve audio continuity (fewer joins).
 - **Pauses** are the main lever to improve pacing (avoid breathless narration).
