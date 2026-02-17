@@ -151,7 +151,7 @@ Use SFML v1 (cast: + scene blocks).
 Think like: premium audiobook narrator + movie/TV drama (Prime) + game cutscene.
 Goal: keep the story flowing with good pacing (speaker blocks + varied pauses).
 Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.
-Add delivery tags ONLY for non-narrator character dialogue.
+Use delivery tags ({delivery=...}) when helpful for narrator or characters.
 Coverage: include the full story; do not summarize.
 ```
 
@@ -176,9 +176,10 @@ Use PAUSE lines to control pacing, and choose the duration intentionally.
 PAUSE syntax is decimal seconds (examples: 0.15, 0.40, 1.20).
 Typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.
 
-4) Delivery tags (characters only)
+4) Delivery tags
 Bullet: - {delivery=urgent} text
 Allowed: neutral|calm|urgent|dramatic|shout
+Use for narrator or characters when it improves delivery; avoid over-tagging.
 Avoid: whisper
 ```
 

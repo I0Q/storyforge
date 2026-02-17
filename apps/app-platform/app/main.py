@@ -7723,7 +7723,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             "- Prefer speaker blocks for consecutive lines (keeps audio smooth):\n"
             "  Name:\n    - line 1\n    - line 2\n"
             "- Optional pauses (scene-level, indented 2 spaces):\n  PAUSE: 0.25\n"
-            "- Optional delivery tags (use ONLY for character dialogue for now):\n"
+            "- Optional delivery tags (use when helpful for narrator or characters):\n"
             "  [Name]{delivery=urgent} text\n"
             "  - {delivery=dramatic} text\n"
             "  Allowed delivery: neutral|calm|urgent|dramatic|shout\n"
@@ -7745,7 +7745,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'Goal: keep the story flowing with good pacing (speaker blocks + varied pauses). You choose pause seconds.\n'
             'Assign each sentence to the correct character.\n'
             'Prefer speaker blocks (Name: + bullets) to avoid choppy audio joins.\n'
-            'Add delivery tags ONLY for non-narrator character dialogue.\n'
+            'Use delivery tags ({delivery=...}) when helpful for both narrator and characters.\n'
             'Use ONLY the provided casting_map voice ids; do not invent ids.\n'
             'Coverage: include the full story; do not summarize.\n'
         )
@@ -7771,10 +7771,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'PAUSE syntax is decimal seconds: PAUSE: <seconds> (examples: 0.15, 0.40, 1.20).\n'
             'Choose durations intentionally: typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.\n'
             '\n'
-            '4) Delivery tags (characters only)\n'
+            '4) Delivery tags\n'
             'Single line: [Name]{delivery=dramatic} text\n'
             'Bullet: - {delivery=urgent} text\n'
             'Allowed: neutral|calm|urgent|dramatic|shout\n'
+            'Use for narrator or characters when it improves delivery; avoid over-tagging.\n'
             'Avoid: whisper\n'
         )
 
