@@ -7751,22 +7751,36 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 return '\n'.join(out).strip()
             except Exception:
                 return (s or '').strip()
-
         def _v1_validate_and_coalesce(sfml_text: str, casting_map: dict[str, str], *, allow_pauses: bool, allow_delivery: bool) -> str:
             s = _normalize_ws(_strip_fences(sfml_text))
             if not s:
                 raise ValueError('empty_sfml')
-            lines = s.splitlines()
-            if not lines or lines[0].strip() != '# SFML v1':
+
+            raw_lines = [ln.rstrip('\n') for ln in s.splitlines()]
+
+            def is_ignorable(ln: str) -> bool:
+                ss = (ln or '').strip()
+                return (not ss) or ss.startswith('#')
+
+            # Header
+            i = 0
+            while i < len(raw_lines) and is_ignorable(raw_lines[i]):
+                i += 1
+            if i >= len(raw_lines) or raw_lines[i].strip() != '# SFML v1':
                 raise ValueError('bad_header')
-            if len(lines) < 2 or lines[1].strip() != 'cast:':
+            i += 1
+
+            # Cast
+            while i < len(raw_lines) and is_ignorable(raw_lines[i]):
+                i += 1
+            if i >= len(raw_lines) or raw_lines[i].strip() != 'cast:':
                 raise ValueError('missing_cast')
+            i += 1
 
             cast: dict[str, str] = {}
-            i = 2
-            while i < len(lines):
-                ln = lines[i]
-                if not ln.strip():
+            while i < len(raw_lines):
+                ln = raw_lines[i]
+                if is_ignorable(ln):
                     i += 1
                     continue
                 if ln.startswith('scene '):
@@ -7791,76 +7805,90 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
             out: list[str] = []
             out.append('# SFML v1')
+            out.append('')
             out.append('cast:')
             for k in want_keys:
                 out.append(f"  {k}: {casting_map.get(k,'')}")
             out.append('')
 
-            cur_speaker = None
-            cur_header = None
+            in_scene = False
+            cur_speaker: str | None = None
             cur_block_lines: list[str] = []
 
             def flush_block():
-                nonlocal cur_speaker, cur_header, cur_block_lines
+                nonlocal cur_speaker, cur_block_lines
                 if cur_speaker is None:
                     return
-                out.append(cur_header)
+                out.append(f"  {cur_speaker}:")
                 out.extend(cur_block_lines)
                 out.append('')
                 cur_speaker = None
-                cur_header = None
                 cur_block_lines = []
 
-            def ensure_scene_header(ln: str):
-                m = re.match(r'^scene\s+(scene-\d+)\s+"(.*)"\s*$', ln)
-                if not m:
-                    raise ValueError('bad_scene:' + ln)
+            def emit_scene_header(scene_id: str, title: str | None):
+                nonlocal in_scene
                 flush_block()
-                out.append(f'scene {m.group(1)} "{m.group(2)}"')
+                in_scene = True
+                if not title:
+                    out.append(f"scene {scene_id}:")
+                else:
+                    out.append(f"scene {scene_id} \"{title}\":")
 
-            while i < len(lines):
-                ln = lines[i]
-                if not ln.strip():
+            # Body
+            while i < len(raw_lines):
+                ln = raw_lines[i]
+                if is_ignorable(ln):
                     i += 1
                     continue
 
-                if ln.startswith('scene '):
-                    ensure_scene_header(ln)
+                # Scene header: title optional, ':' required
+                m_scene = re.match(r'^scene\s+(scene-\d+)\s*(?:\"([^\"]*)\")?\s*:\s*$', ln)
+                if m_scene:
+                    emit_scene_header(m_scene.group(1), m_scene.group(2) or '')
                     i += 1
                     continue
 
-                m = re.match(r'^  ([^:{]+?)(\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?:\s*$', ln)
-                if m:
-                    name = m.group(1)
+                if not in_scene:
+                    raise ValueError('content_outside_scene')
+
+                # Speaker header (no delivery tags on header)
+                m_sp = re.match(r'^  ([^:]+):\s*$', ln)
+                if m_sp:
+                    name = m_sp.group(1)
                     if name not in casting_map:
                         raise ValueError('unknown_speaker:' + name)
-                    if (m.group(2) is not None) and not allow_delivery:
-                        raise ValueError('delivery_not_allowed')
-                    hdr = ln
-                    if cur_speaker != name:
+                    if cur_speaker is None:
+                        cur_speaker = name
+                        cur_block_lines = []
+                    elif cur_speaker != name:
                         flush_block()
                         cur_speaker = name
-                        cur_header = hdr
                         cur_block_lines = []
                     i += 1
                     continue
 
-                if ln.startswith('    - '):
-                    if cur_speaker is None:
-                        raise ValueError('bullet_outside_block')
-                    if (not allow_delivery) and re.match(r'^    - \{delivery=', ln):
-                        raise ValueError('delivery_not_allowed')
-                    cur_block_lines.append(ln)
+                # Scene-level pause
+                if ln.startswith('  PAUSE:'):
+                    if not allow_pauses:
+                        raise ValueError('pause_not_allowed')
+                    if not re.match(r'^  PAUSE: \d+\.\d+$', ln):
+                        raise ValueError('bad_pause')
+                    flush_block()
+                    out.append(ln)
+                    out.append('')
                     i += 1
                     continue
 
-                if ln.startswith('    PAUSE:'):
-                    if not allow_pauses:
-                        raise ValueError('pause_not_allowed')
+                # Bullet
+                if ln.startswith('    - '):
                     if cur_speaker is None:
-                        raise ValueError('pause_outside_block')
-                    if not re.match(r'^    PAUSE: \d+\.\d+$', ln):
-                        raise ValueError('bad_pause')
+                        raise ValueError('bullet_outside_block')
+                    rest = ln[len('    - '):]
+                    m_del = re.match(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s+.+', rest)
+                    if m_del and not allow_delivery:
+                        raise ValueError('delivery_not_allowed')
+                    if rest.startswith('{delivery=') and not m_del:
+                        raise ValueError('bad_delivery')
                     cur_block_lines.append(ln)
                     i += 1
                     continue
@@ -7869,6 +7897,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
             flush_block()
             return '\n'.join(out).strip() + '\n'
+
+
 
         def _llm_sfml_call(instructions_text: str, prompt_payload: dict[str, object]) -> str:
             req = {
@@ -7908,14 +7938,14 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 if scene_count > 3:
                     fails.append(f'scene.too_many:{scene_count}')
 
-                pause_count = sum(1 for ln in lines if ln.startswith('    PAUSE:'))
+                pause_count = sum(1 for ln in lines if ln.startswith('  PAUSE:'))
                 if pause_count < 3:
                     fails.append(f'pause.too_few:{pause_count}')
 
                 cur = None
                 blocks = []
                 for ln in lines:
-                    m = re.match(r'^  ([^:{]+?)(\s+\{delivery=.*\})?:\s*$', ln)
+                    m = re.match(r'^  ([^:]+):\s*$', ln)
                     if m:
                         if cur:
                             blocks.append(cur)
@@ -7948,57 +7978,54 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             except Exception:
                 fails.append('quality.score_failed')
             return fails
+        instructions_main = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text (no markdown, no code fences, no commentary).
 
-        instructions_main = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text.
+SFML v1 SPEC (authoritative): https://github.com/I0Q/storyforge/blob/main/docs/sfml.md
 
 FORMAT (EXAMPLE IS AUTHORITATIVE)
 
 # SFML v1
+
 cast:
   Narrator: voice_001
   Maris: voice_002
 
-scene scene-1 "Example Scene"
+scene scene-1 "Example Scene":
   Narrator:
     - Opening narration line.
-    PAUSE: 0.30
-    - Another narration line.
+
+  PAUSE: 0.30
+
+  Maris:
+    - {delivery=calm} Another line.
 
 STRUCTURE RULES (HARD)
-- First line: # SFML v1
-- Second block must begin with: cast:
-- Cast must include EVERY entry from casting_map exactly (same keys; no extras; no renames).
-- Each scene must be: scene scene-<n> "<Title>"
-- Speaker header: exactly two spaces + <Name>: OR two spaces + <Name> {delivery=<value>}:
-- Bullet: exactly four spaces + "- " + text
-- PAUSE: exactly four spaces + "PAUSE: <decimal>"
-- Allowed delivery values: neutral|calm|urgent|dramatic|shout
+- First non-empty line must be: # SFML v1
+- Must include a cast: block with EVERY key from casting_map (exact keys, no extras).
+- Scenes must be: scene scene-<n> "<Title>":  (title optional, but ':' is required)
+- Speaker headers: two spaces + Name:  (no delivery tags on headers)
+- Bullets: four spaces + "- " + text
+- Delivery tags are OPTIONAL and only allowed on bullets, like:    - {delivery=urgent} text
+  Allowed delivery: neutral|calm|urgent|dramatic|shout
+- PAUSE is OPTIONAL and scene-level, indented two spaces:   PAUSE: 0.25
 
 TEXT FIDELITY (HARD)
-- Do not paraphrase.
-- Do not change tense or grammatical perspective.
-- Do not invent dialogue.
-- Only restructure + insert pauses/delivery.
+- Do NOT paraphrase. Use the story text as-is.
+- Do NOT invent dialogue, actions, or details.
+- Only restructure into scenes/speaker blocks/bullets and insert PAUSE lines and bullet delivery tags.
 
 SCENES (QUALITY)
-- Prefer 1-3 scenes.
-- Only start a new scene on meaningful setting/time/major beat shifts.
+- Prefer 1-3 scenes. Create a new scene only on meaningful setting/time/major beat shifts.
+- Avoid many short scenes.
 
-SPEAKER BLOCK PARAGRAPHING (QUALITY)
-- Avoid one-line Narrator blocks.
-- Avoid extremely long Narrator blocks.
-- Narrator blocks should usually be 2-8 bullets.
-- Break Narrator blocks on meaningful beat shifts.
-- Never create consecutive blocks for the same speaker; merge them.
-
-PACING + DELIVERY (QUALITY)
-- Include at least 3 PAUSE lines unless extremely short.
-- Use delivery sparingly, but include at least 2 delivery uses when dialogue exists.
+SPEAKER BLOCKS (QUALITY)
+- Avoid one-line Narrator blocks unless truly isolated.
+- Avoid extremely long Narrator blocks; break on meaningful beat shifts.
+- Never output consecutive blocks for the same speaker (merge them).
 
 FINAL CHECK (SILENT)
-- cast keys exactly match casting_map keys
-- speaker names exactly match casting_map keys
-- output contains only SFML
+- Speaker names must exactly match casting_map keys.
+- Output contains ONLY the SFML text.
 
 Now output the SFML file only.
 '''
