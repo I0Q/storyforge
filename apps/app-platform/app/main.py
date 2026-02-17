@@ -7730,123 +7730,267 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
         }
-        # SFML generation prompt (compiler-style, strict output contract).
-        instructions = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text.
+        # SFML generation is multi-pass:
+        #   Pass A: structure + speaker attribution (NO pauses/delivery)
+        #   Normalize/validate (deterministic)
+        #   Pass B: pacing (insert PAUSE + delivery) WITHOUT changing text
 
-FORMAT (EXAMPLE IS AUTHORITATIVE)
+        def _strip_fences(s: str) -> str:
+            try:
+                s = (s or '').strip()
+                s = re.sub(r'^```[a-zA-Z0-9_-]*\s*', '', s).strip()
+                s = re.sub(r'```\s*$', '', s).strip()
+                return s
+            except Exception:
+                return (s or '').strip()
 
-# SFML v1
-cast:
-  Narrator: voice_001
-  Maris: voice_002
-  Ocean: voice_003
+        def _normalize_ws(s: str) -> str:
+            try:
+                out = []
+                for ln in (s or '').splitlines():
+                    out.append((ln or '').replace('\t', '  ').rstrip())
+                return '\n'.join(out).strip()
+            except Exception:
+                return (s or '').strip()
 
-scene scene-1 "Example Scene"
-  Narrator:
-    - Opening narration line.
-    PAUSE: 0.30
-    - Another narration line.
+        def _v1_extract_bullets(sfml_text: str) -> list[str]:
+            out: list[str] = []
+            try:
+                for ln in (sfml_text or '').splitlines():
+                    if ln.startswith('    - '):
+                        t = ln[len('    - '):]
+                        t = re.sub(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*', '', t)
+                        out.append(t)
+            except Exception:
+                pass
+            return out
 
-  Ocean {delivery=calm}:
-    - Maris.
-    PAUSE: 0.20
-    - What troubles you?
+        def _v1_validate_and_coalesce(sfml_text: str, casting_map: dict[str, str], *, allow_pauses: bool, allow_delivery: bool) -> str:
+            # Validate minimal SFML v1 shape + coalesce consecutive same-speaker blocks.
+            s = _normalize_ws(_strip_fences(sfml_text))
+            if not s:
+                raise ValueError('empty_sfml')
+            lines = s.splitlines()
+            if not lines or lines[0].strip() != '# SFML v1':
+                raise ValueError('bad_header')
+            if len(lines) < 2 or lines[1].strip() != 'cast:':
+                raise ValueError('missing_cast')
 
-  Maris {delivery=uncertain}:
-    - I'm shining.
-    - I'm trying.
-    - {delivery=urgent} Why isn't the boat turning?
+            cast: dict[str, str] = {}
+            i = 2
+            while i < len(lines):
+                ln = lines[i]
+                if not ln.strip():
+                    i += 1
+                    continue
+                if ln.startswith('scene '):
+                    break
+                m = re.match(r'^  ([^:]+):\s*(.+?)\s*$', ln)
+                if not m:
+                    raise ValueError(f'bad_cast_line:{i+1}')
+                name = m.group(1)
+                vid = m.group(2)
+                cast[name] = vid
+                i += 1
 
-STRUCTURE RULES
+            want_keys = list(casting_map.keys())
+            got_keys = list(cast.keys())
+            if set(want_keys) != set(got_keys):
+                missing = [k for k in want_keys if k not in cast]
+                extra = [k for k in got_keys if k not in casting_map]
+                raise ValueError('cast_mismatch:' + ('missing=' + ','.join(missing) if missing else '') + (' extra=' + ','.join(extra) if extra else ''))
+
+            out: list[str] = []
+            out.append('# SFML v1')
+            out.append('cast:')
+            for k in want_keys:
+                out.append(f"  {k}: {cast.get(k,'')}")
+            out.append('')
+
+            cur_speaker = None
+            cur_header = None
+            cur_block_lines: list[str] = []
+
+            def flush_block():
+                nonlocal cur_speaker, cur_header, cur_block_lines
+                if cur_speaker is None:
+                    return
+                out.append(cur_header)
+                out.extend(cur_block_lines)
+                out.append('')
+                cur_speaker = None
+                cur_header = None
+                cur_block_lines = []
+
+            def ensure_scene_header(ln: str):
+                m = re.match(r'^scene\s+(scene-\d+)\s+"(.*)"\s*$', ln)
+                if not m:
+                    raise ValueError('bad_scene:' + ln)
+                flush_block()
+                out.append(f'scene {m.group(1)} "{m.group(2)}"')
+
+            while i < len(lines):
+                ln = lines[i]
+                if not ln.strip():
+                    i += 1
+                    continue
+
+                if ln.startswith('scene '):
+                    ensure_scene_header(ln)
+                    i += 1
+                    continue
+
+                m = re.match(r'^  ([^:{]+?)(\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?:\s*$', ln)
+                if m:
+                    name = m.group(1)
+                    if name not in casting_map:
+                        raise ValueError('unknown_speaker:' + name)
+                    if (m.group(2) is not None) and not allow_delivery:
+                        raise ValueError('delivery_not_allowed')
+
+                    hdr = ln
+                    if cur_speaker == name:
+                        pass
+                    else:
+                        flush_block()
+                        cur_speaker = name
+                        cur_header = hdr
+                        cur_block_lines = []
+                    i += 1
+                    continue
+
+                if ln.startswith('    - '):
+                    if cur_speaker is None:
+                        raise ValueError('bullet_outside_block')
+                    if (not allow_delivery) and re.match(r'^    - \{delivery=', ln):
+                        raise ValueError('delivery_not_allowed')
+                    cur_block_lines.append(ln)
+                    i += 1
+                    continue
+
+                if ln.startswith('    PAUSE:'):
+                    if not allow_pauses:
+                        raise ValueError('pause_not_allowed')
+                    if cur_speaker is None:
+                        raise ValueError('pause_outside_block')
+                    if not re.match(r'^    PAUSE: \d+\.\d+$', ln):
+                        raise ValueError('bad_pause')
+                    cur_block_lines.append(ln)
+                    i += 1
+                    continue
+
+                raise ValueError('unrecognized_line:' + ln)
+
+            flush_block()
+            return '\n'.join(out).strip() + '\n'
+
+        def _llm_sfml_call(instructions_text: str, prompt_payload: dict[str, object]) -> str:
+            req = {
+                'model': 'google/gemma-2-9b-it',
+                'messages': [
+                    {
+                        'role': 'user',
+                        'content': (
+                            instructions_text
+                            + '\nJSON_PAYLOAD:\n'
+                            + json.dumps(prompt_payload, separators=(',', ':'))
+                        ),
+                    },
+                ],
+                'temperature': 0.3,
+                'max_tokens': 2600,
+            }
+            r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
+            r.raise_for_status()
+            j = r.json()
+            txt0 = ''
+            try:
+                ch0 = (((j or {}).get('choices') or [])[0] or {})
+                msg = ch0.get('message') or {}
+                txt0 = str(msg.get('content') or ch0.get('text') or '')
+            except Exception:
+                txt0 = ''
+            return (txt0 or '').strip()
+
+        instructions_a = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text.
+
+PASS A (STRUCTURE ONLY)
+- Your ONLY job is to assign speakers and group lines into speaker blocks.
+- Output must be valid SFML v1.
+- STRICT: Do NOT output any PAUSE lines.
+- STRICT: Do NOT output any delivery tags (no {delivery=...} anywhere).
+
+FORMAT
 - First line: # SFML v1
 - Second block must begin with: cast:
 - Cast must include EVERY entry from casting_map exactly.
 - Each scene must be: scene scene-<n> "<Title>"
-- Speaker label: exactly two spaces + "<Name>:"
-  OR exactly two spaces + "<Name> {delivery=...}:"
-- Bullet line: exactly four spaces + "- " + text
-- PAUSE line: exactly four spaces + "PAUSE: <decimal>"
+- Speaker header: exactly two spaces + <Name>:
+- Bullet: exactly four spaces + "- " + text
 
-Allowed delivery values:
-neutral | calm | urgent | dramatic | shout
+BLOCK HYGIENE
+- Do NOT repeat speaker headers for each line.
+- Merge adjacent lines into a single block.
+- Avoid one-line blocks when content permits.
 
 TEXT FIDELITY
 - Do not paraphrase.
-- Do not change tense or grammatical perspective.
-- Do not convert third-person narration into first-person.
-- Only restructure into speaker blocks and insert pauses.
-
-SPEAKER ASSIGNMENT
-1) Explicit quoted dialogue → clearly indicated speaker.
-2) Italic standalone thoughts (*...*) → character only if explicitly framed as their thought.
-3) Everything else → Narrator.
-- Never invent speakers.
-- Never guess speakers for non-dialogue lines.
-
-BLOCK HYGIENE (IMPORTANT)
-- Do NOT repeat speaker headers for each line. Use ONE speaker block with multiple bullets.
-- Do not create consecutive blocks for the same speaker. If the same speaker continues, append bullets to the existing block.
-- Merge adjacent narration/dialogue into a single block even if you insert PAUSE lines (PAUSE can appear inside a block).
-- Avoid one-line blocks: aim for 2–6 bullets per block when content permits.
-- For Narrator especially: merge contiguous narration lines into fewer, longer blocks (do not emit Narrator: over and over).
-
-SCENES
-- Create a new scene only at meaningful setting, time, or major beat shifts.
-- Avoid many short scenes.
-
-PACING AND DELIVERY
-- Use PAUSE throughout for audiobook cadence.
-- Include at least 3 PAUSE lines unless the story is extremely short.
-- Most non-narrator speaker blocks should include a delivery attribute.
-- Narrator delivery should be used sparingly.
-- Include at least 2 delivery uses for character dialogue when dialogue exists.
+- Do not change tense or perspective.
+- Only restructure into speaker blocks.
 
 INPUT
 You receive JSON:
 - story.story_md
 - casting_map (includes Narrator)
 
-FINAL CHECK (SILENT)
-- cast block exists and includes all casting_map entries
-- speaker names exactly match casting_map keys
-- delivery attribute appears before colon when used
-- all bullets begin with "    - "
-- all pauses begin with "    PAUSE: "
-- scenes have quoted titles
-- no consecutive duplicate speaker blocks
-- output contains only SFML
+Now output the SFML file only.
+'''
+
+        instructions_b = r'''You are an SFML v1 pacing pass. Output ONLY the SFML file as plain text.
+
+PASS B (PACING ONLY)
+You will be given an existing SFML v1 file produced by PASS A.
+
+Allowed edits:
+- Insert "    PAUSE: <decimal>" lines inside speaker blocks.
+- Add delivery attributes either:
+  - at speaker header: "  Name {delivery=calm}:" or
+  - at bullet start: "    - {delivery=urgent} ..."
+
+STRICT PROHIBITIONS
+- Do NOT change any existing bullet text (characters must match).
+- Do NOT delete bullets.
+- Do NOT merge or split speaker blocks.
+- Do NOT change cast or scene headers.
+
+PACING + DELIVERY
+- Use PAUSE throughout for audiobook cadence (>= 3 pauses unless extremely short).
+- Use delivery sparingly, but include at least 2 delivery uses when dialogue exists.
+
+Allowed delivery values:
+neutral | calm | urgent | dramatic | shout
+
+INPUT
+You receive JSON plus an extra field:
+- sfml_in: the SFML from PASS A
 
 Now output the SFML file only.
 '''
 
-        req = {
-            'model': 'google/gemma-2-9b-it',
-            'messages': [
-                {
-                    'role': 'user',
-                    'content': (
-                        instructions
-                        + '\nJSON_PAYLOAD:\n'
-                        + json.dumps(prompt, separators=(',', ':'))
-                    ),
-                },
-            ],
-            'temperature': 0.3,
-            'max_tokens': 2600,
-        }
+        txt_a = _llm_sfml_call(instructions_a, prompt)
+        sfml_a = _v1_validate_and_coalesce(txt_a, cmap, allow_pauses=False, allow_delivery=False)
 
-        r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
-        r.raise_for_status()
-        j = r.json()
-        txt = ''
-        try:
-            ch0 = (((j or {}).get('choices') or [])[0] or {})
-            msg = ch0.get('message') or {}
-            txt = str(msg.get('content') or ch0.get('text') or '')
-        except Exception:
-            txt = ''
+        prompt_b = dict(prompt)
+        prompt_b['sfml_in'] = sfml_a
+        txt_b = _llm_sfml_call(instructions_b, prompt_b)
+        sfml_b = _v1_validate_and_coalesce(txt_b, cmap, allow_pauses=True, allow_delivery=True)
 
-        txt = (txt or '').strip()
+        a_bul = _v1_extract_bullets(sfml_a)
+        b_bul = _v1_extract_bullets(sfml_b)
+        if a_bul != b_bul:
+            sfml_b = sfml_a
+
+        txt = (sfml_b or '').strip()
         if not txt:
             return {'ok': False, 'error': 'empty_llm_output'}
 
