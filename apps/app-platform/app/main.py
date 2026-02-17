@@ -7890,7 +7890,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     continue
 
                 # Speaker header (accept optional delivery tag on header; we ignore/strip it in v1)
-                m_sp = re.match(r'^  ([^:{]+?)(?:\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?:\s*$', ln)
+                m_sp = re.match(r'^  ([^:{]+?)(?:\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?:\s*:\s*$', ln)
                 if m_sp:
                     name = m_sp.group(1)
                     if name not in casting_map:
