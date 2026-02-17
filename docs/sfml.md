@@ -13,6 +13,56 @@ SFML supports **pause** events to control pacing.
 # Section 1 — SPEC (strict format)
 This section defines the **strict SFML v1 format** (what the renderer/parser should accept).
 
+## Comments
+
+SFML supports comments using `#` (hash).
+
+Rules:
+- A line that starts with `#` (after optional whitespace) is a comment.
+- Comments are ignored by the parser/renderer.
+- Use comments to explain intent, pacing, and delivery choices.
+
+## Annotated full example (all common features)
+
+```text
+# SFML v1
+# This is an annotated example showing the full shape of an SFML script.
+
+# 1) Casting map (character -> voice id).
+# Production uses this to pick the correct voice when rendering.
+cast:
+  Narrator: terracotta-glow
+  Maris: lunar-violet
+  Captain: iron-slate
+
+# 2) Scenes
+scene scene-1 "Arrival":
+  # Speaker blocks: one block per speaker run.
+  Narrator:
+    - The lighthouse stood silent on the cliff, and the sea breathed below.
+    - PAUSE lines can be varied (decimal seconds) to control pacing.
+  PAUSE: 0.35
+  Maris:
+    - {delivery=calm} I can hear it… the water, like a sleeping animal.
+  PAUSE: 0.20
+  Captain:
+    - {delivery=urgent} Keep your voice down. We’re not alone out here.
+
+scene scene-2 "The door":
+  Narrator:
+    - {delivery=dramatic} The door did not creak. It *sang*—a thin metal note in the fog.
+  PAUSE: 0.60
+  Maris:
+    - {delivery=dramatic} That sound… it’s coming from inside.
+  # Use delivery tags to shape intonation/prosody. Avoid over-tagging.
+  Captain:
+    - {delivery=shout} OPEN UP!
+
+# Notes:
+# - Allowed delivery values: neutral|calm|urgent|dramatic|shout
+```
+
+
 ## Overview
 
 An SFML v1 file has:
@@ -183,7 +233,6 @@ Typical 0.15-0.35, strong beat 0.4-0.8, rare 1.0+.
 Bullet: - {delivery=urgent} text
 Allowed: neutral|calm|urgent|dramatic|shout
 Use for narrator or characters when it improves delivery; avoid over-tagging.
-Avoid: whisper
 ```
 
 ### C) JSON payload appended to the prompt
