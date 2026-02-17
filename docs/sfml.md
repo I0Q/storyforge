@@ -139,15 +139,14 @@ Rules:
 ```text
 # SFML v1
 
-# 1) Casting map (character -> voice id)
 cast:
   Narrator: terracotta-glow
   Maris: lunar-violet
   Captain: iron-slate
 
-# 2) Scenes
 scene scene-1 "Arrival":
   Narrator:
+    - Once upon a time…
     - The lighthouse stood silent on the cliff, and the sea breathed below.
 
   PAUSE: 1.25
