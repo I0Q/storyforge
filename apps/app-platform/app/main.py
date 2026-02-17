@@ -7975,17 +7975,101 @@ You receive JSON plus an extra field:
 Now output the SFML file only.
 '''
 
-        txt_a = _llm_sfml_call(instructions_a, prompt)
-        sfml_a = _v1_validate_and_coalesce(txt_a, cmap, allow_pauses=False, allow_delivery=False)
+        def _repair_sfml(kind: str, bad: str, err: str, prompt_payload: dict[str, object]) -> str:
+            # kind: 'A' for structure, 'B' for pacing
+            header = (
+                'PASS A (STRUCTURE ONLY): speaker attribution + grouping only.'
+                if kind == 'A'
+                else 'PASS B (PACING ONLY): insert PAUSE + delivery WITHOUT changing bullet text.'
+            )
 
+            if kind == 'A':
+                rules_extra = '''- Do NOT output any PAUSE lines.
+- Do NOT output any delivery tags.
+'''
+            else:
+                rules_extra = '''- Do NOT change any existing bullet text.
+- Do NOT delete bullets.
+- Do NOT merge/split speaker blocks.
+Allowed delivery: neutral|calm|urgent|dramatic|shout
+'''
+
+            base = f'''You are an SFML v1 compiler repairing an invalid output. Output ONLY the corrected SFML file as plain text.
+
+Context: This is a multi-pass generator.
+{header}
+
+FAILURES TO FIX (must fix all):
+{err}
+
+BROKEN_SFML:
+{bad}
+
+RULES (strict):
+- First line: # SFML v1
+- Second block must begin with: cast:
+- Cast must include EVERY entry from casting_map exactly (same keys).
+- Scenes: scene scene-<n> "<Title>"
+- Speaker header: two spaces + Name (optionally with {{delivery=...}} in PASS B only) + ':'
+- Bullets: four spaces + '- ' + text
+- PAUSE: four spaces + 'PAUSE: <decimal>' (PASS B only)
+{rules_extra}
+'''
+
+            return _llm_sfml_call(base, dict(prompt_payload))
+
+        # PASS A with repair loop
+        last_a = ''
+        sfml_a = ''
+        for attempt in range(3):
+            try:
+                last_a = _llm_sfml_call(instructions_a, prompt)
+                sfml_a = _v1_validate_and_coalesce(last_a, cmap, allow_pauses=False, allow_delivery=False)
+                break
+            except Exception as e:
+                # try repair using the broken output
+                try:
+                    last_a = _repair_sfml('A', last_a, str(e), prompt)
+                except Exception:
+                    pass
+        if not sfml_a:
+            return {'ok': False, 'error': 'sfml_pass_a_failed'}
+
+        # PASS B with repair loop
         prompt_b = dict(prompt)
         prompt_b['sfml_in'] = sfml_a
-        txt_b = _llm_sfml_call(instructions_b, prompt_b)
-        sfml_b = _v1_validate_and_coalesce(txt_b, cmap, allow_pauses=True, allow_delivery=True)
+        last_b = ''
+        sfml_b = ''
+        for attempt in range(3):
+            try:
+                last_b = _llm_sfml_call(instructions_b, prompt_b)
+                sfml_b = _v1_validate_and_coalesce(last_b, cmap, allow_pauses=True, allow_delivery=True)
+                break
+            except Exception as e:
+                try:
+                    last_b = _repair_sfml('B', last_b, str(e), prompt_b)
+                except Exception:
+                    pass
+        if not sfml_b:
+            sfml_b = sfml_a
 
-        a_bul = _v1_extract_bullets(sfml_a)
-        b_bul = _v1_extract_bullets(sfml_b)
-        if a_bul != b_bul:
+        # Fidelity check: PASS B must not change bullet text
+        try:
+            a_bul = _v1_extract_bullets(sfml_a)
+            b_bul = _v1_extract_bullets(sfml_b)
+            if a_bul != b_bul:
+                # Attempt one targeted repair: restore exact bullet texts from PASS A.
+                try:
+                    err = 'bullet_text_changed: PASS B must preserve bullet texts exactly from sfml_in'
+                    sfml_b2 = _repair_sfml('B', sfml_b, err, prompt_b)
+                    sfml_b2 = _v1_validate_and_coalesce(sfml_b2, cmap, allow_pauses=True, allow_delivery=True)
+                    if _v1_extract_bullets(sfml_b2) == a_bul:
+                        sfml_b = sfml_b2
+                    else:
+                        sfml_b = sfml_a
+                except Exception:
+                    sfml_b = sfml_a
+        except Exception:
             sfml_b = sfml_a
 
         txt = (sfml_b or '').strip()
