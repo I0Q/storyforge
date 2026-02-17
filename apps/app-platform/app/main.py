@@ -7783,10 +7783,12 @@ SPEAKER ASSIGNMENT
 - Never invent speakers.
 - Never guess speakers for non-dialogue lines.
 
-BLOCK HYGIENE
-- Do not create consecutive blocks for the same speaker.
-- Merge adjacent lines into a single block.
-- Do not create unnecessary one-line blocks.
+BLOCK HYGIENE (IMPORTANT)
+- Do NOT repeat speaker headers for each line. Use ONE speaker block with multiple bullets.
+- Do not create consecutive blocks for the same speaker. If the same speaker continues, append bullets to the existing block.
+- Merge adjacent narration/dialogue into a single block even if you insert PAUSE lines (PAUSE can appear inside a block).
+- Avoid one-line blocks: aim for 2–6 bullets per block when content permits.
+- For Narrator especially: merge contiguous narration lines into fewer, longer blocks (do not emit Narrator: over and over).
 
 SCENES
 - Create a new scene only at meaningful setting, time, or major beat shifts.
