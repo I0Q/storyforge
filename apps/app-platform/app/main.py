@@ -7730,10 +7730,9 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'story': {'id': story_id, 'title': title, 'story_md': story_md},
             'casting_map': cmap,
         }
-        # SFML generation is multi-pass:
-        #   Pass A: structure + speaker attribution (NO pauses/delivery)
-        #   Normalize/validate (deterministic)
-        #   Pass B: pacing (insert PAUSE + delivery) WITHOUT changing text
+        # SFML generation is single-phase with deterministic eval + repair loop.
+        # We generate a full SFML v1 script (including pauses/delivery), validate it, score quality,
+        # and iteratively repair until it passes or we hit a retry limit.
 
         def _strip_fences(s: str) -> str:
             try:
@@ -7753,20 +7752,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             except Exception:
                 return (s or '').strip()
 
-        def _v1_extract_bullets(sfml_text: str) -> list[str]:
-            out: list[str] = []
-            try:
-                for ln in (sfml_text or '').splitlines():
-                    if ln.startswith('    - '):
-                        t = ln[len('    - '):]
-                        t = re.sub(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*', '', t)
-                        out.append(t)
-            except Exception:
-                pass
-            return out
-
         def _v1_validate_and_coalesce(sfml_text: str, casting_map: dict[str, str], *, allow_pauses: bool, allow_delivery: bool) -> str:
-            # Validate minimal SFML v1 shape + coalesce consecutive same-speaker blocks.
             s = _normalize_ws(_strip_fences(sfml_text))
             if not s:
                 raise ValueError('empty_sfml')
@@ -7785,21 +7771,15 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     continue
                 if ln.startswith('scene '):
                     break
-                # Cast line canonical form: "  Name: voice_id"
                 m = re.match(r'^  ([^:]+):\s*(.+?)\s*$', ln)
                 if not m:
-                    # Tolerate common separator mistakes (="  Name = voice_id", "  Name - voice_id", "  Name -> voice_id")
                     m2 = re.match(r'^  ([^=\-]+?)\s*(?:=|->|-)\s*(.+?)\s*$', ln)
                     if m2:
-                        name = m2.group(1)
-                        vid = m2.group(2)
-                        cast[name] = vid
+                        cast[m2.group(1)] = m2.group(2)
                         i += 1
                         continue
                     raise ValueError(f'bad_cast_line:{i+1}')
-                name = m.group(1)
-                vid = m.group(2)
-                cast[name] = vid
+                cast[m.group(1)] = m.group(2)
                 i += 1
 
             want_keys = list(casting_map.keys())
@@ -7809,8 +7789,6 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 extra = [k for k in got_keys if k not in casting_map]
                 raise ValueError('cast_mismatch:' + ('missing=' + ','.join(missing) if missing else '') + (' extra=' + ','.join(extra) if extra else ''))
 
-            # IMPORTANT: The model is not authoritative for voice ids.
-            # We always re-emit the cast block using the server-side casting_map values.
             out: list[str] = []
             out.append('# SFML v1')
             out.append('cast:')
@@ -7858,11 +7836,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         raise ValueError('unknown_speaker:' + name)
                     if (m.group(2) is not None) and not allow_delivery:
                         raise ValueError('delivery_not_allowed')
-
                     hdr = ln
-                    if cur_speaker == name:
-                        pass
-                    else:
+                    if cur_speaker != name:
                         flush_block()
                         cur_speaker = name
                         cur_header = hdr
@@ -7909,7 +7884,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     },
                 ],
                 'temperature': 0.3,
-                'max_tokens': 2600,
+                'max_tokens': 3200,
             }
             r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
             r.raise_for_status()
@@ -7923,167 +7898,141 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 txt0 = ''
             return (txt0 or '').strip()
 
-        instructions_a = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text.
+        def _score_quality(sfml_text: str) -> list[str]:
+            fails: list[str] = []
+            try:
+                lines = (sfml_text or '').splitlines()
+                scene_count = sum(1 for ln in lines if ln.startswith('scene scene-'))
+                if scene_count <= 0:
+                    fails.append('scene.missing')
+                if scene_count > 3:
+                    fails.append(f'scene.too_many:{scene_count}')
 
-PASS A (STRUCTURE ONLY)
-- Your ONLY job is to assign speakers and group lines into speaker blocks.
-- Output must be valid SFML v1.
+                pause_count = sum(1 for ln in lines if ln.startswith('    PAUSE:'))
+                if pause_count < 3:
+                    fails.append(f'pause.too_few:{pause_count}')
 
-FORMAT
+                cur = None
+                blocks = []
+                for ln in lines:
+                    m = re.match(r'^  ([^:{]+?)(\s+\{delivery=.*\})?:\s*$', ln)
+                    if m:
+                        if cur:
+                            blocks.append(cur)
+                        cur = {'speaker': m.group(1), 'bullets': 0, 'chars': 0}
+                        continue
+                    if ln.startswith('    - '):
+                        if cur is not None:
+                            t = ln[len('    - '):]
+                            t = re.sub(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*', '', t)
+                            cur['bullets'] += 1
+                            cur['chars'] += len(t)
+                if cur:
+                    blocks.append(cur)
+
+                one_line = 0
+                too_long = 0
+                for b in blocks:
+                    if b.get('speaker') != 'Narrator':
+                        continue
+                    bl = int(b.get('bullets') or 0)
+                    ch = int(b.get('chars') or 0)
+                    if bl <= 1:
+                        one_line += 1
+                    if bl > 12 or ch > 900:
+                        too_long += 1
+                if one_line > 0:
+                    fails.append(f'narrator.too_many_one_line:{one_line}')
+                if too_long > 0:
+                    fails.append(f'narrator.too_long_blocks:{too_long}')
+            except Exception:
+                fails.append('quality.score_failed')
+            return fails
+
+        instructions_main = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text.
+
+FORMAT (EXAMPLE IS AUTHORITATIVE)
+
+# SFML v1
+cast:
+  Narrator: voice_001
+  Maris: voice_002
+
+scene scene-1 "Example Scene"
+  Narrator:
+    - Opening narration line.
+    PAUSE: 0.30
+    - Another narration line.
+
+STRUCTURE RULES (HARD)
 - First line: # SFML v1
 - Second block must begin with: cast:
-- Cast must include EVERY entry from casting_map exactly.
+- Cast must include EVERY entry from casting_map exactly (same keys; no extras; no renames).
 - Each scene must be: scene scene-<n> "<Title>"
-- Speaker header: exactly two spaces + <Name>:
+- Speaker header: exactly two spaces + <Name>: OR two spaces + <Name> {delivery=<value>}:
 - Bullet: exactly four spaces + "- " + text
+- PAUSE: exactly four spaces + "PAUSE: <decimal>"
+- Allowed delivery values: neutral|calm|urgent|dramatic|shout
 
-BLOCK HYGIENE
-- Do NOT repeat speaker headers for each line.
-- Merge adjacent lines into a single block.
-- Avoid one-line blocks when content permits.
-
-TEXT FIDELITY
+TEXT FIDELITY (HARD)
 - Do not paraphrase.
-- Do not change tense or perspective.
-- Only restructure into speaker blocks.
+- Do not change tense or grammatical perspective.
+- Do not invent dialogue.
+- Only restructure + insert pauses/delivery.
 
-INPUT
-You receive JSON:
-- story.story_md
-- casting_map (includes Narrator)
+SCENES (QUALITY)
+- Prefer 1-3 scenes.
+- Only start a new scene on meaningful setting/time/major beat shifts.
 
-Now output the SFML file only.
-'''
+SPEAKER BLOCK PARAGRAPHING (QUALITY)
+- Avoid one-line Narrator blocks.
+- Avoid extremely long Narrator blocks.
+- Narrator blocks should usually be 2-8 bullets.
+- Break Narrator blocks on meaningful beat shifts.
+- Never create consecutive blocks for the same speaker; merge them.
 
-        instructions_b = r'''You are an SFML v1 pacing pass. Output ONLY the SFML file as plain text.
-
-PASS B (PACING ONLY)
-You will be given an existing SFML v1 file produced by PASS A.
-
-Allowed edits:
-- Insert "    PAUSE: <decimal>" lines inside speaker blocks.
-- Add delivery attributes either:
-  - at speaker header: "  Name {delivery=calm}:" or
-  - at bullet start: "    - {delivery=urgent} ..."
-
-STRICT PROHIBITIONS
-- Do NOT change any existing bullet text (characters must match).
-- Do NOT delete bullets.
-- Do NOT merge or split speaker blocks.
-- Do NOT change cast or scene headers.
-
-PACING + DELIVERY
-- Use PAUSE throughout for audiobook cadence (>= 3 pauses unless extremely short).
+PACING + DELIVERY (QUALITY)
+- Include at least 3 PAUSE lines unless extremely short.
 - Use delivery sparingly, but include at least 2 delivery uses when dialogue exists.
 
-Allowed delivery values:
-neutral | calm | urgent | dramatic | shout
-
-INPUT
-You receive JSON plus an extra field:
-- sfml_in: the SFML from PASS A
+FINAL CHECK (SILENT)
+- cast keys exactly match casting_map keys
+- speaker names exactly match casting_map keys
+- output contains only SFML
 
 Now output the SFML file only.
 '''
 
-        def _repair_sfml(kind: str, bad: str, err: str, prompt_payload: dict[str, object]) -> str:
-            # kind: 'A' for structure, 'B' for pacing
-            header = (
-                'PASS A (STRUCTURE ONLY): speaker attribution + grouping only.'
-                if kind == 'A'
-                else 'PASS B (PACING ONLY): insert PAUSE + delivery WITHOUT changing bullet text.'
+        def _repair_prompt(failures: list[str], broken: str) -> str:
+            fs = '\n'.join('- ' + f for f in (failures or []))
+            return (
+                instructions_main
+                + "\nFAILURES TO FIX (must fix all):\n" + (fs or '- (none)') + "\n\n"
+                + "BROKEN_SFML (fix it, change as little as possible):\n" + (broken or '') + "\n"
             )
 
-            if kind == 'A':
-                rules_extra = '''- Do NOT output any PAUSE lines.
-- Do NOT output any delivery tags.
-'''
-            else:
-                rules_extra = '''- Do NOT change any existing bullet text.
-- Do NOT delete bullets.
-- Do NOT merge/split speaker blocks.
-Allowed delivery: neutral|calm|urgent|dramatic|shout
-'''
-
-            base = f'''You are an SFML v1 compiler repairing an invalid output. Output ONLY the corrected SFML file as plain text.
-
-Context: This is a multi-pass generator.
-{header}
-
-FAILURES TO FIX (must fix all):
-{err}
-
-BROKEN_SFML:
-{bad}
-
-RULES (strict):
-- First line: # SFML v1
-- Second block must begin with: cast:
-- Cast must include EVERY entry from casting_map exactly (same keys).
-- Scenes: scene scene-<n> "<Title>"
-- Speaker header: two spaces + Name (optionally with {{delivery=...}} in PASS B only) + ':'
-- Bullets: four spaces + '- ' + text
-- PAUSE: four spaces + 'PAUSE: <decimal>' (PASS B only)
-{rules_extra}
-'''
-
-            return _llm_sfml_call(base, dict(prompt_payload))
-
-        # PASS A with repair loop
-        last_a = ''
-        sfml_a = ''
-        for attempt in range(3):
+        txt_raw = ''
+        sfml_ok = ''
+        failures_last: list[str] = []
+        for attempt in range(5):
             try:
-                last_a = _llm_sfml_call(instructions_a, prompt)
-                sfml_a = _v1_validate_and_coalesce(last_a, cmap, allow_pauses=False, allow_delivery=False)
-                break
+                if attempt == 0:
+                    txt_raw = _llm_sfml_call(instructions_main, prompt)
+                else:
+                    txt_raw = _llm_sfml_call(_repair_prompt(failures_last, txt_raw), prompt)
+
+                sfml_ok = _v1_validate_and_coalesce(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
+                failures_last = _score_quality(sfml_ok)
+                if not failures_last:
+                    break
             except Exception as e:
-                # try repair using the broken output
-                try:
-                    last_a = _repair_sfml('A', last_a, str(e), prompt)
-                except Exception:
-                    pass
-        if not sfml_a:
-            return {'ok': False, 'error': 'sfml_pass_a_failed'}
+                failures_last = ['validator_error:' + str(e)]
+                sfml_ok = ''
 
-        # PASS B with repair loop
-        prompt_b = dict(prompt)
-        prompt_b['sfml_in'] = sfml_a
-        last_b = ''
-        sfml_b = ''
-        for attempt in range(3):
-            try:
-                last_b = _llm_sfml_call(instructions_b, prompt_b)
-                sfml_b = _v1_validate_and_coalesce(last_b, cmap, allow_pauses=True, allow_delivery=True)
-                break
-            except Exception as e:
-                try:
-                    last_b = _repair_sfml('B', last_b, str(e), prompt_b)
-                except Exception:
-                    pass
-        if not sfml_b:
-            sfml_b = sfml_a
+        if not sfml_ok:
+            return {'ok': False, 'error': 'sfml_generate_failed'}
 
-        # Fidelity check: PASS B must not change bullet text
-        try:
-            a_bul = _v1_extract_bullets(sfml_a)
-            b_bul = _v1_extract_bullets(sfml_b)
-            if a_bul != b_bul:
-                # Attempt one targeted repair: restore exact bullet texts from PASS A.
-                try:
-                    err = 'bullet_text_changed: PASS B must preserve bullet texts exactly from sfml_in'
-                    sfml_b2 = _repair_sfml('B', sfml_b, err, prompt_b)
-                    sfml_b2 = _v1_validate_and_coalesce(sfml_b2, cmap, allow_pauses=True, allow_delivery=True)
-                    if _v1_extract_bullets(sfml_b2) == a_bul:
-                        sfml_b = sfml_b2
-                    else:
-                        sfml_b = sfml_a
-                except Exception:
-                    sfml_b = sfml_a
-        except Exception:
-            sfml_b = sfml_a
-
-        txt = (sfml_b or '').strip()
+        txt = (sfml_ok or '').strip()
         if not txt:
             return {'ok': False, 'error': 'empty_llm_output'}
 
