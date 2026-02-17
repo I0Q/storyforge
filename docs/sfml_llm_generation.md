@@ -10,8 +10,8 @@ It is intentionally **prompt-oriented**, not a strict language spec.
 Return ONLY SFML plain text. No markdown, no fences.
 Use SFML v1 (cast: + scenes + speaker blocks).
 Think like: premium audiobook narrator + movie/TV drama (Prime) + game cutscene.
-Goal: keep the story flowing with good pacing (speaker blocks + varied pauses).
-Use delivery tags ({delivery=...}) when helpful for narrator or characters.
+Goal: identify and build character lines accurately, keep the story flowing with good pacing (speaker blocks + varied pauses).
+Use delivery tags ({delivery=...}) for narrator or characters when helpful to make the story rich and interesting.
 Coverage: include the full story; do not summarize.
 ```
 

@@ -7741,9 +7741,9 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             'Return ONLY SFML plain text. No markdown, no fences.\n'
             'Use SFML v1 (cast: + scenes + speaker blocks).\n'
             'Think like: premium audiobook narrator + movie/TV drama (Prime) + game cutscene.\n'
-            'Goal: keep the story flowing with good pacing (speaker blocks + varied pauses). You choose pause seconds.\n'
+            'Goal: identify and build character lines accurately, keep the story flowing with good pacing (speaker blocks + varied pauses).\n'
             'Assign each sentence to the correct character.\n'
-            'Use delivery tags ({delivery=...}) when helpful for both narrator and characters.\n'
+            'Use delivery tags ({delivery=...}) for narrator or characters when helpful to make the story rich and interesting.\n'
             'Use ONLY the provided casting_map voice ids; do not invent ids.\n'
             'Coverage: include the full story; do not summarize.\n'
         )
