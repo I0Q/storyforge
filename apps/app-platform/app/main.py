@@ -7875,7 +7875,15 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 if not in_scene:
                     raise ValueError('content_outside_scene')
 
-                # Speaker header (no delivery tags on header)
+                # Common model mistake: bullet lines indented like scene-level items (2 spaces)
+                # Example: "  - text" (should be "    - text")
+                if ln.startswith('  - '):
+                    if cur_speaker is None:
+                        raise ValueError('bullet_outside_block')
+                    cur_block_lines.append('    ' + ln.strip())
+                    i += 1
+                    continue
+
                 # Speaker header (accept optional delivery tag on header; we ignore/strip it in v1)
                 m_sp = re.match(r'^  ([^:{]+?)(?:\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?:\s*$', ln)
                 if m_sp:
