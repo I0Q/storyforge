@@ -16,7 +16,7 @@ Coverage: include the full story; do not summarize.
 ```
 
 ### B) SFML spec
-See the authoritative SFML spec: `docs/sfml.md`
+See the authoritative SFML spec: https://github.com/I0Q/storyforge/blob/main/docs/sfml.md
 
 ### C) JSON payload appended to the prompt
 The API appends runtime inputs as JSON (via `json.dumps(...)`):
