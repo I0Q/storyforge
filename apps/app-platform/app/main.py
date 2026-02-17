@@ -1886,7 +1886,7 @@ function renderJobs(jobs){
 
     // Variable fields by job type
     if (isSample){
-      rows += `<div class='k'>audio</div><div class='fadeLine'><div class='fadeText' title='${escAttr(job.mp3_url||"")}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+      rows += `<div class='k'>audio</div><div class='fadeLine'><div class='fadeText' title='${escAttr(job.mp3_url||"")}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${escAttr(job.mp3_url||'')}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
     } else if (isVoiceMeta){
       try{
         const vid2 = (meta && meta.voice_id) ? String(meta.voice_id) : '';
@@ -1899,13 +1899,13 @@ function renderJobs(jobs){
     } else {
       // Generic jobs: only show URLs when present
       if (job.mp3_url){
-        rows += `<div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${escAttr(job.mp3_url||"")}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${job.mp3_url}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+        rows += `<div class='k'>mp3</div><div class='fadeLine'><div class='fadeText' title='${escAttr(job.mp3_url||"")}'>${job.mp3_url||'-'}</div>${job.mp3_url?`<button class="copyBtn" data-copy="${escAttr(job.mp3_url||'')}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
       }
       if (job.sfml_url){
         const s = String(job.sfml_url||'');
         const isUrl = (s.startsWith('http://') || s.startsWith('https://'));
         const key = isUrl ? 'sfml' : 'runtime';
-        rows += `<div class='k'>${key}</div><div class='fadeLine'><div class='fadeText' title='${escAttr(s||"")}'>${s||'-'}</div>${s?`<button class="copyBtn" data-copy="${s}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
+        rows += `<div class='k'>${key}</div><div class='fadeLine'><div class='fadeText' title='${escAttr(s||"")}'>${s||'-'}</div>${s?`<button class="copyBtn" data-copy="${escAttr(s||'')}" onclick="copyFromAttr(this)" aria-label="Copy">${copyIconSvg()}</button>`:''}</div>`;
       }
     }
 
