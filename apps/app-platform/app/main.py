@@ -8235,12 +8235,13 @@ Now output the SFML file only.
             return {'ok': False, 'error': err}
 
         # If we still have quality failures after retries, fail hard so the UI doesn't "accept" bad SFML.
+        # Include the last best-effort SFML in the response for debugging/tuning.
         if failures_last:
             try:
                 err2 = 'sfml_quality_failed:' + ';'.join(failures_last or [])
             except Exception:
                 err2 = 'sfml_quality_failed'
-            return {'ok': False, 'error': err2}
+            return {'ok': False, 'error': err2, 'sfml': (sfml_ok or '').strip()}
 
         txt = (sfml_ok or '').strip()
         if not txt:
