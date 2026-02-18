@@ -3465,9 +3465,7 @@ function loadVoices(){
 
         var chips = '';
 
-        // gender chip only (male blue / female pink)
-        var g = String(vt.gender||'unknown');
-        if (g==='male' || g==='female') chips += chip(String(g), g);
+        // Gender chip is rendered inline with the name (avoid duplicate chips here).
 
         // other traits as a single muted line (not chips)
         try{
@@ -3509,20 +3507,20 @@ function loadVoices(){
       var sw = String(v.color_hex||'').trim() || '#64748b';
       var swHtml = "<span class='swatch' title='" + escAttr(nm) + "' style='background:" + escAttr(sw) + "'></span>";
 
-      // If we have a gender chip, move it inline BEFORE the name.
-      var nameLead = '';
+      // If we have a gender chip, render it inline AFTER the name (and only once).
+      var nameTail = '';
       try{
         var vtj2 = safeJson(v.voice_traits_json||'') || null;
         var vt2 = vtj2 ? (vtj2.voice_traits||{}) : {};
         var gg = String(vt2.gender||'unknown');
         if (gg==='male' || gg==='female'){
-          nameLead = "<span class='chip "+gg+"' style='margin:0;margin-right:10px'>"+escapeHtml(gg)+"</span>";
+          nameTail = "<span class='chip "+gg+"' style='margin:0;margin-left:10px'>"+escapeHtml(gg)+"</span>";
         }
-      }catch(_e){ nameLead=''; }
+      }catch(_e){ nameTail=''; }
 
       var card = "<div class='job'>"
         + "<div class='row' style='justify-content:space-between;'>"
-        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + nameLead + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div></div>"
+        + "<div class='row' style='gap:10px;align-items:center;flex-wrap:nowrap;min-width:0'>" + swHtml + "<div class='title' style='min-width:0'>" + escapeHtml(nm) + "</div>" + nameTail + "</div>"
         + "<div>" + pill + "</div>"
         + "</div>"
         + traitsHtml
