@@ -8224,6 +8224,9 @@ Now output the SFML file only.
                     break
             except Exception as e:
                 failures_last = ['validator_error:' + str(e)]
+                # Keep last raw text for debugging / repair attempts.
+                if not txt_raw:
+                    txt_raw = ''
                 sfml_ok = ''
 
         if not sfml_ok:
@@ -8232,7 +8235,11 @@ Now output the SFML file only.
                 err = 'sfml_generate_failed:' + ';'.join(failures_last or [])
             except Exception:
                 err = 'sfml_generate_failed'
-            return {'ok': False, 'error': err}
+            # Include a snippet of the raw model output to debug formatting issues (truncated).
+            raw_snip = (txt_raw or '').strip()
+            if len(raw_snip) > 2000:
+                raw_snip = raw_snip[:2000] + '\n...<truncated>'
+            return {'ok': False, 'error': err, 'raw': raw_snip}
 
         # If we still have quality failures after retries, fail hard so the UI doesn't "accept" bad SFML.
         # Include the last best-effort SFML in the response for debugging/tuning.
