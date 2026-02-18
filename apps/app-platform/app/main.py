@@ -7984,7 +7984,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
         def _llm_sfml_call(instructions_text: str, prompt_payload: dict[str, object], *, temperature: float = 0.3, max_tokens: int = 3400) -> str:
             req = {
-                'model': 'google/gemma-2-9b-it',
+                'model': 'openai-codex/gpt-5.2',
                 'messages': [
                     {
                         'role': 'user',
