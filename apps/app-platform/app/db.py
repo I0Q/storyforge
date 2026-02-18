@@ -172,6 +172,38 @@ CREATE TABLE IF NOT EXISTS sf_settings (
 """
     )
 
+    # Prompt iteration / learning artifacts (SFML)
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_prompt_versions (
+  id BIGSERIAL PRIMARY KEY,
+  key TEXT NOT NULL,
+  version BIGINT NOT NULL,
+  prompt_text TEXT NOT NULL DEFAULT '',
+  meta_json TEXT NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  UNIQUE(key, version)
+);
+"""
+    )
+
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS sf_sfml_gen_runs (
+  id BIGSERIAL PRIMARY KEY,
+  story_id TEXT NOT NULL,
+  prompt_version BIGINT NOT NULL DEFAULT 0,
+  prompt_extra TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  duration_ms BIGINT NOT NULL DEFAULT 0,
+  warnings_json TEXT NOT NULL DEFAULT '[]',
+  raw_snip TEXT NOT NULL DEFAULT '',
+  sfml_text TEXT NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL
+);
+"""
+    )
+
     # Production: per-story casting (character -> voice_id)
     cur.execute(
         """

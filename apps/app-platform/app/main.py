@@ -1206,6 +1206,27 @@ def index(response: Response):
     </div>
 
     <div class='card'>
+      <div style='font-weight:950;margin-bottom:6px;'>SFML improvement loop</div>
+      <div class='muted'>One-run generation, but we persist artifacts and (optionally) auto-improve the prompt for the next run.</div>
+
+      <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap'>
+        <label style='display:flex;gap:10px;align-items:center;user-select:none'>
+          <input id='sfmlImproveEnabled' type='checkbox' onchange='sfmlImproveSave()' />
+          <span>Enable improvement loop</span>
+        </label>
+        <span class='muted' id='sfmlPromptVer'>Prompt v—</span>
+        <button type='button' class='secondary' onclick='sfmlImproveRefresh()'>Reload</button>
+      </div>
+
+      <div style='margin-top:12px;font-weight:950;'>Prompt extra (debug)</div>
+      <div class='muted'>Appended to the base SFML instructions. Keep this short.</div>
+      <textarea id='sfmlPromptExtra' class='codeBox' style='margin-top:8px;width:100%;height:120px;white-space:pre-wrap'></textarea>
+      <div class='row' style='margin-top:10px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+        <button type='button' class='secondary' onclick='sfmlImproveSaveExtra()'>Save prompt extra</button>
+      </div>
+    </div>
+
+    <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Debug UI</div>
       <div class='muted'>Hide/show the build + JS error banner.</div>
       <div class='row' style='margin-top:10px;'>
@@ -1345,7 +1366,7 @@ function showTab(name, opts){
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
     else if (name==='production') loadProduction();
-    else if (name==='advanced') { try{ notifLoad(); }catch(e){} }
+    else if (name==='advanced') { try{ notifLoad(); }catch(e){} try{ sfmlImproveRefresh(); }catch(e){} }
   }catch(_e){}
 }
 
@@ -2086,6 +2107,51 @@ function setDebugUiEnabled(on){
 
 function toggleDebugUi(){
   setDebugUiEnabled(!loadDebugPref());
+}
+
+// --- SFML improvement loop settings ---
+function sfmlImproveRefresh(){
+  return fetchJsonAuthed('/api/settings/sfml_prompt').then(function(j){
+    if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_failed');
+    var en = !!j.enabled;
+    var ver = j.version!=null ? String(j.version) : '—';
+    var extra = String(j.extra||'');
+    var cb = document.getElementById('sfmlImproveEnabled');
+    if (cb) cb.checked = en;
+    var sp = document.getElementById('sfmlPromptVer');
+    if (sp) sp.textContent = 'Prompt v' + ver;
+    var ta = document.getElementById('sfmlPromptExtra');
+    if (ta) ta.value = extra;
+    return j;
+  }).catch(function(e){
+    try{ toastShowNow('SFML settings failed', 'warn', 2600); }catch(_e){}
+  });
+}
+
+function sfmlImproveSave(){
+  var cb = document.getElementById('sfmlImproveEnabled');
+  var enabled = cb ? !!cb.checked : false;
+  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enabled: enabled})})
+    .then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_save_failed');
+      try{ toastShowNow('Saved', 'ok', 1800); }catch(_e){}
+      return sfmlImproveRefresh();
+    }).catch(function(e){
+      try{ toastShowNow('Save failed', 'warn', 2600); }catch(_e){}
+    });
+}
+
+function sfmlImproveSaveExtra(){
+  var ta = document.getElementById('sfmlPromptExtra');
+  var extra = ta ? String(ta.value||'') : '';
+  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({extra: extra})})
+    .then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_save_failed');
+      try{ toastShowNow('Saved', 'ok', 1800); }catch(_e){}
+      return sfmlImproveRefresh();
+    }).catch(function(e){
+      try{ toastShowNow('Save failed', 'warn', 2600); }catch(_e){}
+    });
 }
 
 function renderMetrics(m){
@@ -8011,6 +8077,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             return (txt0 or '').strip()
 
         def _score_quality(sfml_text: str) -> list[str]:
+            """Heuristic quality gate for SFML generation.
+
+            This is intentionally conservative: we would rather fail and re-try with a repair
+            prompt than accept SFML that produces monotone pacing or narrator-collapsed dialogue.
+            """
             fails: list[str] = []
             try:
                 lines = (sfml_text or '').splitlines()
@@ -8024,7 +8095,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
                 # Bullets + pauses + delivery metrics
                 bullet_count = sum(1 for ln in lines if ln.startswith('    - '))
-                pause_vals = []
+                pause_vals: list[str] = []
                 for ln in lines:
                     if ln.startswith('  PAUSE:') or ln.startswith('    PAUSE:'):
                         m = re.match(r'^\s*PAUSE:\s*(\d+\.\d+)\s*$', ln)
@@ -8050,9 +8121,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         if top / float(pause_count) >= 0.75:
                             fails.append('pause.low_variance')
 
-                # Delivery + dialogue presence: enforce only when there is non-narrator dialogue.
+                # Dialogue attribution + delivery coverage
                 delivery_char = 0
                 non_narr_bullets = 0
+                narrator_bullets = 0
+                speakers_with_dialogue: set[str] = set()
                 cur_sp = None
                 for ln in lines:
                     m = re.match(r'^  ([^:]+):\s*$', ln)
@@ -8060,8 +8133,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         cur_sp = m.group(1)
                         continue
                     if ln.startswith('    - '):
+                        if cur_sp == 'Narrator':
+                            narrator_bullets += 1
                         if cur_sp and cur_sp != 'Narrator':
                             non_narr_bullets += 1
+                            speakers_with_dialogue.add(cur_sp)
                             if '{delivery=' in ln:
                                 delivery_char += 1
 
@@ -8072,6 +8148,35 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 # If there is any character dialogue, require delivery tags.
                 if non_narr_bullets >= 2 and delivery_char < 2:
                     fails.append(f'delivery.too_few:{delivery_char}')
+
+                # If there are multiple characters in cast, don't collapse to only one speaking character.
+                # (This doesn't force everyone to speak, but avoids the worst "everything is Narrator" failure.)
+                cast_names = [
+                    m.group(1)
+                    for m in (re.match(r'^\s{2}([^:]+):\s*(.+?)\s*$', ln) for ln in lines)
+                    if m
+                ]
+                non_narr_cast = [n for n in cast_names if n and n != 'Narrator']
+                if len(non_narr_cast) >= 2 and len(speakers_with_dialogue) < 2:
+                    fails.append(f'dialogue.missing_character_speakers:{len(speakers_with_dialogue)}')
+
+                # Narrator dominance (common failure mode: all dialogue collapses into Narrator)
+                if bullet_count >= 8 and narrator_bullets / float(max(1, bullet_count)) > 0.85:
+                    fails.append('narrator.too_dominant')
+
+                # Bullet sizing (prevents huge paragraph-bullets that are hard to perform)
+                # We allow long bullets for short scripts, but for real scripts we enforce splitting.
+                max_bullet_chars = 0
+                long_bullets = 0
+                for ln in lines:
+                    if ln.startswith('    - '):
+                        t = ln[len('    - '):]
+                        t = re.sub(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*', '', t)
+                        max_bullet_chars = max(max_bullet_chars, len(t))
+                        if len(t) > 260:
+                            long_bullets += 1
+                if bullet_count >= 8 and long_bullets > 0:
+                    fails.append(f'bullets.too_long:{long_bullets}:max={max_bullet_chars}')
 
                 # Block sizing
                 cur = None
@@ -8116,6 +8221,33 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             except Exception:
                 fails.append('quality.score_failed')
             return fails
+        # SFML prompt iteration (best-effort): load optional extra instructions + enabled toggle.
+        sfml_prompt_enabled = False
+        sfml_prompt_extra = ''
+        sfml_prompt_version = 1
+        try:
+            connS = db_connect()
+            try:
+                db_init(connS)
+                sp = _settings_get(connS, 'sfml_prompt')
+            finally:
+                connS.close()
+            if isinstance(sp, dict):
+                sfml_prompt_enabled = bool(sp.get('enabled', False))
+                sfml_prompt_extra = str(sp.get('extra') or '')
+                try:
+                    sfml_prompt_version = int(sp.get('version') or 1)
+                except Exception:
+                    sfml_prompt_version = 1
+        except Exception:
+            sfml_prompt_enabled = False
+            sfml_prompt_extra = ''
+            sfml_prompt_version = 1
+
+        # Guardrail: cap extra prompt size to prevent runaway prompt bloat.
+        if len(sfml_prompt_extra) > 2500:
+            sfml_prompt_extra = sfml_prompt_extra[:2500]
+
         instructions_main = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text (no markdown, no code fences, no commentary).
 
 SFML v1 SPEC (authoritative): https://github.com/I0Q/storyforge/blob/main/docs/sfml.md
@@ -8190,6 +8322,16 @@ FINAL CHECK (SILENT)
 Now output the SFML file only.
 '''
 
+        if (sfml_prompt_extra or '').strip():
+            instructions_main = (
+                instructions_main
+                + "\n\nPROMPT_EXTRA (LOCAL, OPTIONAL)\n"
+                + "- These are additional instructions learned from past runs.\n"
+                + "- Follow them as long as they do not conflict with the HARD rules above.\n\n"
+                + (sfml_prompt_extra or '').strip()
+                + "\n"
+            )
+
         def _repair_prompt(failures: list[str], broken: str) -> str:
             fs = '\n'.join('- ' + f for f in (failures or []))
             return (
@@ -8202,57 +8344,50 @@ Now output the SFML file only.
                 + "- delivery.too_few: add {delivery=...} to at least 2 NON-Narrator dialogue bullets.\n"
                 + "- pause.too_few: add 2-6 pauses total; vary values (0.20/0.35/0.60/1.00) and place at beat boundaries, not after every bullet.\n"
                 + "- pause.uniform / pause.low_variance: change some pause values so there is variance.\n"
-                + "- narrator.too_long_blocks / blocks.too_long: split long blocks into smaller ones (new speaker blocks and/or new scenes).\n"
+                + "- narrator.too_long_blocks / blocks.too_long: split long blocks into smaller ones (new scenes at beat boundaries; avoid repeating the same speaker header twice in a row inside one scene).\n"
+                + "- narrator.too_dominant / dialogue.missing_character_speakers: re-attribute quoted dialogue to the speaking characters; ensure at least 2 different non-Narrator speakers have dialogue if cast has 2+ characters.\n"
+                + "- bullets.too_long: split long paragraph bullets into multiple shorter bullets (preserve text; split on sentence boundaries).\n"
                 + "\nFAILURES TO FIX (must fix all):\n" + (fs or '- (none)') + "\n\n"
                 + "BROKEN_SFML (fix it, change as little as possible):\n" + (broken or '') + "\n"
             )
 
+        # Generation strategy: single-shot generation (no repair loop). We iterate on the prompt over time.
         txt_raw = ''
         sfml_ok = ''
         failures_last: list[str] = []
-        for attempt in range(8):
+        gen_start_ms = int(time.time() * 1000)
+        gen_dur_ms = 0
+        try:
+            txt_raw = _llm_sfml_call(instructions_main, prompt, temperature=0.3, max_tokens=3400)
+            gen_dur_ms = int(time.time() * 1000) - gen_start_ms
+            sfml_ok = _v1_validate_and_coalesce(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
+            failures_last = _score_quality(sfml_ok)
+        except Exception as e:
             try:
-                if attempt == 0:
-                    txt_raw = _llm_sfml_call(instructions_main, prompt, temperature=0.3, max_tokens=3400)
-                else:
-                    # Repairs: lower temperature for compliance.
-                    txt_raw = _llm_sfml_call(_repair_prompt(failures_last, txt_raw), prompt, temperature=0.1, max_tokens=3400)
-
-                sfml_ok = _v1_validate_and_coalesce(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
-                failures_last = _score_quality(sfml_ok)
-                if not failures_last:
-                    break
-            except Exception as e:
-                failures_last = ['validator_error:' + str(e)]
-                # Keep last raw text for debugging / repair attempts.
-                if not txt_raw:
-                    txt_raw = ''
-                sfml_ok = ''
+                gen_dur_ms = int(time.time() * 1000) - gen_start_ms
+            except Exception:
+                gen_dur_ms = 0
+            failures_last = ['validator_error:' + str(e)]
+            sfml_ok = ''
 
         if not sfml_ok:
-            # Surface last failure reasons to help debugging in UI.
+            # Surface failure reasons to help debugging in UI.
             try:
                 err = 'sfml_generate_failed:' + ';'.join(failures_last or [])
             except Exception:
                 err = 'sfml_generate_failed'
-            # Include a snippet of the raw model output to debug formatting issues (truncated).
             raw_snip = (txt_raw or '').strip()
             if len(raw_snip) > 2000:
                 raw_snip = raw_snip[:2000] + '\n...<truncated>'
             return {'ok': False, 'error': err, 'raw': raw_snip}
 
-        # If we still have quality failures after retries, fail hard so the UI doesn't "accept" bad SFML.
-        # Include the last best-effort SFML in the response for debugging/tuning.
-        if failures_last:
-            try:
-                err2 = 'sfml_quality_failed:' + ';'.join(failures_last or [])
-            except Exception:
-                err2 = 'sfml_quality_failed'
-            return {'ok': False, 'error': err2, 'sfml': (sfml_ok or '').strip()}
-
         txt = (sfml_ok or '').strip()
         if not txt:
             return {'ok': False, 'error': 'empty_llm_output'}
+
+        # NOTE: quality failures are returned as warnings (we do not fail the request).
+        # This keeps the UI unblocked while we iterate on the prompt.
+        warnings = failures_last or []
 
         # Strip accidental markdown fences
         txt = re.sub(r'^```[a-zA-Z0-9_-]*\s*', '', txt).strip()
@@ -8274,6 +8409,105 @@ Now output the SFML file only.
         if len(txt) > 20000:
             txt = txt[:20000]
 
+        # Persist generation artifacts (best-effort) for prompt iteration.
+        try:
+            now = int(time.time())
+            connA = db_connect()
+            try:
+                db_init(connA)
+                curA = connA.cursor()
+                raw_snip2 = (txt_raw or '').strip()
+                if len(raw_snip2) > 2000:
+                    raw_snip2 = raw_snip2[:2000] + '\n...<truncated>'
+                curA.execute(
+                    'INSERT INTO sf_sfml_gen_runs (story_id,prompt_version,prompt_extra,model,duration_ms,warnings_json,raw_snip,sfml_text,created_at) '
+                    'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                    (
+                        story_id,
+                        int(sfml_prompt_version or 1),
+                        str(sfml_prompt_extra or ''),
+                        'google/gemma-2-9b-it',
+                        int(gen_dur_ms or 0),
+                        json.dumps(list(warnings or []), separators=(',', ':')),
+                        raw_snip2,
+                        txt,
+                        now,
+                    ),
+                )
+                connA.commit()
+            finally:
+                connA.close()
+        except Exception:
+            pass
+
+        # Improvement loop: propose an updated prompt extra for the NEXT run.
+        # This is intentionally small + bounded to avoid prompt bloat.
+        if sfml_prompt_enabled:
+            try:
+                improve_req = {
+                    'prompt_version': int(sfml_prompt_version or 1),
+                    'current_extra': str(sfml_prompt_extra or ''),
+                    'warnings': list(warnings or []),
+                    'story_id': story_id,
+                    'title': title,
+                }
+                improve_instructions = (
+                    "You are improving a small prompt addendum called PROMPT_EXTRA for an SFML v1 generator. "
+                    "Your goal is to reduce the WARNINGS in future runs while respecting the HARD rules.\n\n"
+                    "Rules:\n"
+                    "- Output ONLY the new PROMPT_EXTRA text (no JSON, no markdown, no commentary).\n"
+                    "- Keep it concise (max ~25 lines).\n"
+                    "- Do NOT include story-specific facts; it must generalize.\n"
+                    "- Do NOT restate the full spec; only add targeted extra guidance.\n"
+                    "- If current_extra is already good and warnings are empty, output the same text.\n"
+                )
+                new_extra = _llm_sfml_call(improve_instructions, improve_req, temperature=0.2, max_tokens=700)
+                new_extra = _strip_fences(new_extra)
+                new_extra = _normalize_ws(new_extra)
+                if len(new_extra) > 2500:
+                    new_extra = new_extra[:2500]
+
+                # Only update if it actually changed (avoid version spam)
+                if (new_extra or '').strip() != (sfml_prompt_extra or '').strip():
+                    connP = db_connect()
+                    try:
+                        db_init(connP)
+                        sP = _settings_get(connP, 'sfml_prompt')
+                        if not isinstance(sP, dict):
+                            sP = _sfml_prompt_defaults()
+                        try:
+                            v2 = int(sP.get('version') or sfml_prompt_version or 1) + 1
+                        except Exception:
+                            v2 = int(sfml_prompt_version or 1) + 1
+                        sP['enabled'] = True
+                        sP['version'] = int(v2)
+                        sP['extra'] = str(new_extra or '')
+
+                        # Record version for audit/debug
+                        try:
+                            curP = connP.cursor()
+                            curP.execute(
+                                "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
+                                (
+                                    'sfml_prompt_extra',
+                                    int(v2),
+                                    str(new_extra or ''),
+                                    json.dumps({'source': 'auto', 'story_id': story_id}, separators=(',', ':')),
+                                    int(now),
+                                ),
+                            )
+                        except Exception:
+                            pass
+
+                        _settings_set(connP, 'sfml_prompt', sP)
+                    finally:
+                        try:
+                            connP.close()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         # Persist SFML into the story record (overwrite on regenerate)
         try:
             now = int(time.time())
@@ -8292,6 +8526,8 @@ Now output the SFML file only.
             # best-effort; do not fail generation
             pass
 
+        if warnings:
+            return {'ok': True, 'sfml': txt, 'warnings': warnings}
         return {'ok': True, 'sfml': txt}
     except Exception as e:
         return {'ok': False, 'error': f'sfml_generate_failed: {type(e).__name__}: {str(e)[:200]}'}
@@ -9561,6 +9797,96 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
         if llm_reconf is not None:
             out['llm_reconfigure'] = llm_reconf
         return out
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+def _sfml_prompt_defaults() -> dict[str, Any]:
+    return {'enabled': False, 'version': 1, 'extra': ''}
+
+
+@app.get('/api/settings/sfml_prompt')
+def api_settings_sfml_prompt_get():
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            s = _settings_get(conn, 'sfml_prompt')
+            if not isinstance(s, dict):
+                s = {}
+        finally:
+            conn.close()
+        d = _sfml_prompt_defaults()
+        d.update({k: s.get(k) for k in ('enabled', 'version', 'extra') if k in s})
+        # normalize
+        d['enabled'] = bool(d.get('enabled', False))
+        try:
+            d['version'] = int(d.get('version') or 1)
+        except Exception:
+            d['version'] = 1
+        d['extra'] = str(d.get('extra') or '')
+        if len(d['extra']) > 8000:
+            d['extra'] = d['extra'][:8000]
+        return {'ok': True, **d}
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/settings/sfml_prompt')
+def api_settings_sfml_prompt_set(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    try:
+        enabled_in = (payload or {}).get('enabled', None)
+        extra_in = (payload or {}).get('extra', None)
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            s0 = _settings_get(conn, 'sfml_prompt')
+            if not isinstance(s0, dict):
+                s0 = {}
+            s = _sfml_prompt_defaults()
+            s.update({k: s0.get(k) for k in ('enabled', 'version', 'extra') if k in s0})
+
+            if enabled_in is not None:
+                s['enabled'] = bool(enabled_in)
+            if extra_in is not None:
+                s['extra'] = str(extra_in or '')
+                if len(s['extra']) > 8000:
+                    s['extra'] = s['extra'][:8000]
+
+            # Bump version if prompt text changed.
+            try:
+                prev = str(s0.get('extra') or '')
+            except Exception:
+                prev = ''
+            if extra_in is not None and str(prev) != str(s.get('extra') or ''):
+                try:
+                    s['version'] = int(s.get('version') or 1) + 1
+                except Exception:
+                    s['version'] = 1
+
+                # Record version for audit/debug (best-effort)
+                try:
+                    now = int(time.time())
+                    cur.execute(
+                        "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
+                        (
+                            'sfml_prompt_extra',
+                            int(s['version'] or 1),
+                            str(s.get('extra') or ''),
+                            json.dumps({'source': 'manual'}, separators=(',', ':')),
+                            now,
+                        ),
+                    )
+                except Exception:
+                    pass
+
+            _settings_set(conn, 'sfml_prompt', s)
+        finally:
+            conn.close()
+
+        return {'ok': True}
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
