@@ -1222,7 +1222,7 @@ def index(response: Response):
       </div>
 
       <div style='margin-top:12px;font-weight:950;'>Nuance prompt</div>
-      <div class='muted'>This is the main iteration surface. It’s appended to the stable base SFML prompt. Keep it general (no story-specific facts).</div>
+      <div class='muted'>This is the main iteration surface. It's appended to the stable base SFML prompt. Keep it general (no story-specific facts).</div>
       <textarea id='sfmlPromptExtra' class='codeBox' style='margin-top:8px;width:100%;height:160px;white-space:pre-wrap'></textarea>
 
       <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between'>
@@ -3156,7 +3156,7 @@ function prodShowSfmlPromptDebug(){
     var box=document.getElementById('prodSfmlPromptDbg');
     if (!box) return;
 
-    prodSetSfmlBusy(true, 'Loading prompt…', 'Fetching the exact SFML LLM prompt + JSON payload');
+    prodSetSfmlBusy(true, 'Loading prompt...', 'Fetching the exact SFML LLM prompt + JSON payload');
 
     fetchJsonAuthed('/api/production/sfml_prompt_debug', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
       .then(function(j){
