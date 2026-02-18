@@ -3770,7 +3770,7 @@ function openStory(id){
     const nm = c.name || c.id || '';
     const ty = c.type || '';
     const desc = c.description || '';
-    return `- ${nm}${ty?` (${ty})`:''}${desc?`: ${desc}`:''}`;
+    return `- ${nm}${ty ? (' (' + ty + ')') : ''}${desc ? (': ' + desc) : ''}`;
   }).join('\\n') || '(none)';
 
   document.getElementById('libChars').textContent = chars;
