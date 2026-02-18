@@ -1159,7 +1159,32 @@ def index(response: Response):
           <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
           <button type='button' id='prodProduceBtn' class='prodGoBtn' disabled onclick='prodProduceAudio()'>Produce</button>
         </div>
+      
+
+      <div class='muted' style='margin-top:10px'>
+        Prompt is versioned and editable here. JSON payload is derived from the selected story + current casting.
       </div>
+
+      <div style='margin-top:12px;font-weight:950;'>SFML generator prompt (versioned)</div>
+      <textarea id='prodSfmlPromptText' class='codeBox' style='margin-top:8px;width:100%;height:220px;white-space:pre-wrap'></textarea>
+
+      <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center'>
+        <div class='muted'>Version: <span id='prodSfmlPromptVer'>-</span></div>
+        <div class='row' style='gap:10px;flex-wrap:wrap;justify-content:flex-end'>
+          <button type='button' class='secondary' onclick='prodSfmlPromptReload()'>Reload</button>
+          <button type='button' class='secondary' onclick='prodSfmlPromptSave()'>Save prompt</button>
+          <button type='button' class='secondary' onclick='prodSfmlPromptPreviewFullText()'>Preview full text sent</button>
+        </div>
+      </div>
+
+      <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;align-items:center'>
+        <div class='muted' style='font-weight:950;'>Rollback:</div>
+        <select id='prodSfmlPromptRollbackSel' style='flex:1;min-width:220px;'></select>
+        <button type='button' class='secondary' onclick='prodSfmlPromptRevert()'>Revert</button>
+      </div>
+
+      <div id='prodSfmlPromptPreview' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;overflow:auto;white-space:pre-wrap;'></div>
+</div>
 
       <div id='prodSfmlBusy' class='updateBar hide' style='margin-top:10px'>
         <div class='muted' style='font-weight:950' id='prodSfmlBusyTitle'>Working...</div>
@@ -1206,36 +1231,23 @@ def index(response: Response):
       </div>
     </div>
 
+    
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>SFML improvement loop</div>
-      <div class='muted'>One-run generation. We persist artifacts and (optionally) auto-improve the <b>Nuance prompt</b> for the next run.</div>
+      <div class='muted'>One-run generation. When enabled, we persist artifacts and may propose prompt improvements for the next run.</div>
 
-      <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap'>
-        <label style='display:flex;gap:10px;align-items:center;user-select:none'>
-          <input id='sfmlImproveEnabled' type='checkbox' onchange='sfmlImproveSave()' />
-          <span>Enable improvement loop</span>
+      <div class='row' style='margin-top:10px;gap:10px;align-items:center'>
+        <label class='row' style='gap:10px;align-items:center'>
+          <input id='sfmlImproveEnabled' type='checkbox' />
+          <span style='font-weight:800'>Enable improvement loop</span>
         </label>
-        <span class='muted' id='sfmlPromptVer'>Prompt v-</span>
-        <button type='button' class='secondary' onclick='sfmlImproveRefresh()'>Reload</button>
+        <button type='button' class='secondary' onclick='sfmlImproveReload()'>Reload</button>
+        <span id='sfmlPromptVer' class='muted'></span>
       </div>
 
-      <div style='margin-top:12px;font-weight:950;'>SFML generator prompt (versioned)</div>
-      <div class='muted'>This is the full prompt text we send to the SFML LLM (rules + example + heuristics). Keep it general (no story-specific facts).</div>
-      <textarea id='sfmlPromptExtra' class='codeBox' style='margin-top:8px;width:100%;height:160px;white-space:pre-wrap'></textarea>
-
-      <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between'>
-        <div class='row' style='gap:10px;align-items:center;flex-wrap:wrap'>
-          <span class='muted'>Rollback:</span>
-          <select id='sfmlPromptVersions' style='min-width:200px;'></select>
-          <button type='button' class='secondary' onclick='sfmlPromptRevertSelected()'>Revert</button>
-        </div>
-        <div class='row' style='gap:10px;align-items:center;flex-wrap:wrap'>
-          <button type='button' class='secondary' onclick='sfmlImproveSaveExtra()'>Save prompt</button>
-          <button type='button' class='secondary' onclick='sfmlPromptPreview()'>Preview full prompt</button>
-        </div>
+      <div class='row' style='margin-top:12px;gap:10px;flex-wrap:wrap;justify-content:flex-end'>
+        <button type='button' onclick='sfmlImproveSaveEnabled()'>Save</button>
       </div>
-
-      <div id='sfmlPromptPreviewBox' class='codeBox hide' style='margin-top:10px;max-height:none;height:34vh;overflow:auto;white-space:pre-wrap;'></div>
     </div>
 
     <div class='card'>
@@ -2156,6 +2168,13 @@ function sfmlImproveSave(){
     }).catch(function(e){
       try{ toastShowNow('Save failed', 'warn', 2600); }catch(_e){}
     });
+}
+
+function sfmlImproveSaveEnabled(){
+  var cb=document.getElementById('sfmlImproveEnabled');
+  var enabled=cb && cb.checked ? true : false;
+  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enabled: enabled})})
+    .then(function(r){ toast(r && r.ok ? 'Saved' : ('Error: '+(r&&r.error||''))); return sfmlImproveReload(); });
 }
 
 function sfmlImproveSaveExtra(){
@@ -3119,6 +3138,82 @@ function prodSaveCasting(silent){
   }catch(e){}
 }
 
+
+function prodSfmlPromptReload(){
+  return fetchJsonAuthed('/api/settings/sfml_prompt')
+    .then(function(j){
+      if(!(j&&j.ok)) { toast('Error: '+(j&&j.error||'')); return; }
+      var ta=document.getElementById('prodSfmlPromptText');
+      if(ta) ta.value=String(j.text||'');
+      var v=document.getElementById('prodSfmlPromptVer');
+      if(v) v.textContent=String(j.version||'-');
+      // versions
+      return fetchJsonAuthed('/api/settings/sfml_prompt_versions')
+        .then(function(vj){
+          var sel=document.getElementById('prodSfmlPromptRollbackSel');
+          if(sel){
+            sel.innerHTML='';
+            var vs=(vj&&vj.ok&&vj.versions)||[];
+            vs.forEach(function(it){
+              var opt=document.createElement('option');
+              opt.value=String(it.version);
+              var dt=it.created_at ? new Date((it.created_at||0)*1000) : null;
+              var label='v'+it.version;
+              if(it.source) label += ' - '+it.source;
+              if(dt) label += ' - '+dt.toLocaleString();
+              opt.textContent=label;
+              sel.appendChild(opt);
+            });
+          }
+        });
+    });
+}
+
+function prodSfmlPromptSave(){
+  var ta=document.getElementById('prodSfmlPromptText');
+  var txt=ta?String(ta.value||''):'';
+  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text: txt})})
+    .then(function(r){ toast(r && r.ok ? 'Saved' : ('Error: '+(r&&r.error||''))); return prodSfmlPromptReload(); });
+}
+
+function prodSfmlPromptRevert(){
+  var sel=document.getElementById('prodSfmlPromptRollbackSel');
+  var ver=sel?String(sel.value||'').trim():'';
+  if(!ver) return;
+  return fetchJsonAuthed('/api/settings/sfml_prompt_revert', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({version: ver})})
+    .then(function(r){ toast(r && r.ok ? ('Reverted (new version created)') : ('Error: '+(r&&r.error||''))); return prodSfmlPromptReload(); });
+}
+
+function prodSfmlPromptPreviewFullText(){
+  var storySel=document.getElementById('prodStorySel');
+  var storyId=storySel?String(storySel.value||'').trim():'';
+  if(!storyId){ toast('Pick a story first'); return; }
+  var box=document.getElementById('prodSfmlPromptPreview');
+  if(box){ box.classList.remove('hide'); box.textContent='Loading...'; }
+  // Use generation endpoint in debug_only mode (no LLM call): returns exact text + JSON payload.
+  return fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId, debug_only: true})})
+    .then(function(j){
+      if(!(j&&j.ok)) { if(box) box.textContent='Error: '+(j&&j.error||''); return; }
+      var parts=[];
+      if(j.model) parts.push('MODEL
+'+j.model+'
+');
+      if(j.prompt_version!=null) parts.push('PROMPT VERSION
+'+String(j.prompt_version)+'
+');
+      if(j.instructions) parts.push('INSTRUCTIONS
+'+String(j.instructions).trim()+'
+');
+      if(j.payload_pretty) parts.push('JSON PAYLOAD
+'+String(j.payload_pretty).trim()+'
+');
+      if(j.full_text_sent) parts.push('FULL TEXT SENT
+'+String(j.full_text_sent).trim()+'
+');
+      if(box) box.textContent=parts.join('
+');
+    });
+}
 function prodGenerateSfml(){
   try{
     var out=document.getElementById('prodOut');
