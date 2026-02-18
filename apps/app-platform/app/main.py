@@ -1156,6 +1156,7 @@ def index(response: Response):
       <div class='row' style='justify-content:space-between;gap:10px;align-items:baseline'>
         <div style='font-weight:950;margin-bottom:6px;'>3) SFML</div>
         <div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>
+          <button type='button' class='secondary' onclick='prodShowSfmlPromptDebug()'>Prompt debug</button>
           <button type='button' id='prodStep3Btn' disabled onclick='prodGenerateSfml()'>Generate SFML</button>
           <button type='button' id='prodProduceBtn' class='prodGoBtn' disabled onclick='prodProduceAudio()'>Produce</button>
         </div>
@@ -1169,6 +1170,8 @@ def index(response: Response):
 
       <div class='muted' style='margin-top:8px'>Edit inline (autosaves on pause/blur).</div>
       <div id='prodSfmlBox' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;'></div>
+
+      <div id='prodSfmlPromptDbg' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;overflow:auto;white-space:pre-wrap;'></div>
     </div>
 
   </div>
@@ -3127,6 +3130,9 @@ function prodGenerateSfml(){
     var sid = String(st.story_id||'').trim();
     if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
 
+    // hide prompt debug box when generating
+    try{ var dbg=document.getElementById('prodSfmlPromptDbg'); if(dbg){ dbg.classList.add('hide'); dbg.textContent=''; } }catch(_e){}
+
     prodSetSfmlBusy(true, 'Generating SFML…', 'Asking the LLM to produce a full script');
     if (out) out.textContent='';
     fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
@@ -3138,6 +3144,40 @@ function prodGenerateSfml(){
         prodRenderSfml(window.__SF_PROD.sfml);
       })
       .catch(function(e){ prodSetSfmlBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
+  }catch(e){}
+}
+
+function prodShowSfmlPromptDebug(){
+  try{
+    var out=document.getElementById('prodOut');
+    var st = window.__SF_PROD || {};
+    var sid = String(st.story_id||'').trim();
+    if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
+    var box=document.getElementById('prodSfmlPromptDbg');
+    if (!box) return;
+
+    prodSetSfmlBusy(true, 'Loading prompt…', 'Fetching the exact SFML LLM prompt + JSON payload');
+
+    fetchJsonAuthed('/api/production/sfml_prompt_debug', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
+      .then(function(j){
+        prodSetSfmlBusy(false);
+        if (!j || !j.ok){ throw new Error((j&&j.error)||'prompt_debug_failed'); }
+        var payloadPretty = '';
+        try{ payloadPretty = JSON.stringify(j.payload||{}, null, 2); }catch(_e){ payloadPretty = String(j.payload_pretty||''); }
+
+        var txt = '';
+        txt += 'MODEL\n' + String(j.model||'') + '\n\n';
+        txt += 'INSTRUCTIONS (fixed + nuance appended)\n' + String(j.instructions||'') + '\n\n';
+        txt += 'JSON PAYLOAD (formatted)\n' + payloadPretty + '\n';
+
+        box.textContent = txt;
+        box.classList.remove('hide');
+        try{ toastShowNow('Loaded prompt debug', 'ok', 1400); }catch(_e){}
+      })
+      .catch(function(e){
+        prodSetSfmlBusy(false);
+        if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>';
+      });
   }catch(e){}
 }
 
@@ -7772,6 +7812,117 @@ def api_production_casting_get(story_id: str):
         return {'ok': True, 'saved': True, 'assignments': assigns, 'engine': eng, 'roster': vrows}
     except Exception as e:
         return {'ok': False, 'error': f'casting_get_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+def _sfml_build_prompt_for_story(story_id: str) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
+    """Build the SFML LLM prompt payload + casting_map.
+
+    Returns: (story_row, casting_map, prompt_payload)
+    """
+    story_id = str(story_id or '').strip()
+    if not story_id:
+        raise ValueError('missing_story_id')
+
+    conn = db_connect()
+    try:
+        db_init(conn)
+        st = get_story_db(conn, story_id)
+        cur = conn.cursor()
+        cur.execute('SELECT casting FROM sf_castings WHERE story_id=%s', (story_id,))
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise ValueError('casting_not_saved')
+
+    casting = row[0] or {}
+    assigns = list((casting or {}).get('assignments') or [])
+    if not assigns:
+        raise ValueError('empty_casting')
+
+    story_md = str(st.get('story_md') or '')
+    title = str(st.get('title') or story_id)
+
+    # Build strict casting map
+    cmap: dict[str, str] = {}
+    assigns_val = (casting or {}).get('assignments') if isinstance(casting, dict) else None
+    if isinstance(assigns_val, dict):
+        for ch, vid in assigns_val.items():
+            chs = str(ch or '').strip()
+            vids = str(vid or '').strip()
+            if chs and vids:
+                cmap[chs] = vids
+    else:
+        assigns = list(assigns_val or [])
+        for a in assigns:
+            try:
+                ch = str((a or {}).get('character') or '').strip()
+                vid = str((a or {}).get('voice_id') or '').strip()
+                if ch and vid:
+                    cmap[ch] = vid
+            except Exception:
+                pass
+
+    if 'Narrator' not in cmap:
+        raise ValueError('casting_missing_narrator')
+
+    prompt = {
+        'format': 'SFML',
+        'version': 0,
+        'story': {'id': story_id, 'title': title, 'story_md': story_md},
+        'casting_map': cmap,
+    }
+    return st, cmap, prompt
+
+
+@app.post('/api/production/sfml_prompt_debug')
+def api_production_sfml_prompt_debug(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Return the exact SFML LLM prompt + formatted payload for readability."""
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        _st, _cmap, prompt = _sfml_build_prompt_for_story(story_id)
+
+        # Load nuance prompt from settings (same logic as generation).
+        sfml_prompt_extra = ''
+        sfml_prompt_version = 1
+        try:
+            connS = db_connect()
+            try:
+                db_init(connS)
+                sp = _settings_get(connS, 'sfml_prompt')
+            finally:
+                connS.close()
+            if isinstance(sp, dict):
+                sfml_prompt_extra = str(sp.get('extra') or '')
+                try:
+                    sfml_prompt_version = int(sp.get('version') or 1)
+                except Exception:
+                    sfml_prompt_version = 1
+        except Exception:
+            sfml_prompt_extra = ''
+            sfml_prompt_version = 1
+
+        if len(sfml_prompt_extra) > 2500:
+            sfml_prompt_extra = sfml_prompt_extra[:2500]
+
+        # IMPORTANT: this should match the generation instructions.
+        # We keep a stable, minimal base + append nuance.
+        base = _sfml_prompt_base_text().strip() + "\n\n" + "SFML v1 SPEC (authoritative): https://github.com/I0Q/storyforge/blob/main/docs/sfml.md\n"
+        instructions = base
+        if (sfml_prompt_extra or '').strip():
+            instructions = instructions + "\n\nNUANCE PROMPT\n" + (sfml_prompt_extra or '').strip() + "\n"
+
+        return {
+            'ok': True,
+            'model': 'google/gemma-2-9b-it',
+            'prompt_version': int(sfml_prompt_version or 1),
+            'instructions': instructions,
+            'payload': prompt,
+            'payload_pretty': json.dumps(prompt, indent=2, ensure_ascii=False),
+        }
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
 @app.post('/api/production/sfml_generate')
