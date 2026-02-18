@@ -1221,8 +1221,8 @@ def index(response: Response):
         <button type='button' class='secondary' onclick='sfmlImproveRefresh()'>Reload</button>
       </div>
 
-      <div style='margin-top:12px;font-weight:950;'>Nuance prompt</div>
-      <div class='muted'>This is the main iteration surface. It's appended to the stable base SFML prompt. Keep it general (no story-specific facts).</div>
+      <div style='margin-top:12px;font-weight:950;'>SFML generator prompt (versioned)</div>
+      <div class='muted'>This is the full prompt text we send to the SFML LLM (rules + example + heuristics). Keep it general (no story-specific facts).</div>
       <textarea id='sfmlPromptExtra' class='codeBox' style='margin-top:8px;width:100%;height:160px;white-space:pre-wrap'></textarea>
 
       <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between'>
@@ -1232,7 +1232,7 @@ def index(response: Response):
           <button type='button' class='secondary' onclick='sfmlPromptRevertSelected()'>Revert</button>
         </div>
         <div class='row' style='gap:10px;align-items:center;flex-wrap:wrap'>
-          <button type='button' class='secondary' onclick='sfmlImproveSaveExtra()'>Save nuance prompt</button>
+          <button type='button' class='secondary' onclick='sfmlImproveSaveExtra()'>Save prompt</button>
           <button type='button' class='secondary' onclick='sfmlPromptPreview()'>Preview full prompt</button>
         </div>
       </div>
@@ -2129,13 +2129,12 @@ function sfmlImproveRefresh(){
     if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_failed');
     var en = !!j.enabled;
     var ver = j.version!=null ? String(j.version) : '-';
-    var extra = String(j.extra||'');
     var cb = document.getElementById('sfmlImproveEnabled');
     if (cb) cb.checked = en;
     var sp = document.getElementById('sfmlPromptVer');
-    if (sp) sp.textContent = 'Nuance v' + ver;
+    if (sp) sp.textContent = 'Prompt v' + ver;
     var ta = document.getElementById('sfmlPromptExtra');
-    if (ta) ta.value = extra;
+    if (ta) ta.value = String(j.text||'');
 
     // load versions list (best-effort)
     try{ sfmlPromptLoadVersions(); }catch(_e){}
@@ -2164,7 +2163,7 @@ function sfmlImproveSave(){
 function sfmlImproveSaveExtra(){
   var ta = document.getElementById('sfmlPromptExtra');
   var extra = ta ? String(ta.value||'') : '';
-  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({extra: extra})})
+  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text: extra})})
     .then(function(j){
       if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_save_failed');
       try{ toastShowNow('Saved', 'ok', 1800); }catch(_e){}
@@ -7888,9 +7887,9 @@ def api_production_sfml_prompt_debug(payload: dict[str, Any] = Body(default={}))
         story_id = str((payload or {}).get('story_id') or '').strip()
         _st, _cmap, prompt = _sfml_build_prompt_for_story(story_id)
 
-        # Load nuance prompt from settings (same logic as generation).
-        sfml_prompt_extra = ''
-        sfml_prompt_version = 1
+        # Load full prompt text from settings (same logic as generation).
+        prompt_text = ''
+        prompt_version = 1
         try:
             connS = db_connect()
             try:
@@ -7899,32 +7898,39 @@ def api_production_sfml_prompt_debug(payload: dict[str, Any] = Body(default={}))
             finally:
                 connS.close()
             if isinstance(sp, dict):
-                sfml_prompt_extra = str(sp.get('extra') or '')
+                prompt_text = str(sp.get('text') or '')
                 try:
-                    sfml_prompt_version = int(sp.get('version') or 1)
+                    prompt_version = int(sp.get('version') or 1)
                 except Exception:
-                    sfml_prompt_version = 1
+                    prompt_version = 1
         except Exception:
-            sfml_prompt_extra = ''
-            sfml_prompt_version = 1
+            prompt_text = ''
+            prompt_version = 1
 
-        if len(sfml_prompt_extra) > 2500:
-            sfml_prompt_extra = sfml_prompt_extra[:2500]
+        if not (prompt_text or '').strip():
+            legacy_extra = ''
+            try:
+                if isinstance(sp, dict):
+                    legacy_extra = str(sp.get('extra') or '').strip()
+            except Exception:
+                legacy_extra = ''
+            prompt_text = _sfml_prompt_default_text().strip()
+            if legacy_extra:
+                prompt_text = prompt_text + "\n\n" + legacy_extra + "\n"
 
-        # IMPORTANT: this should match the generation instructions.
-        # We keep a stable, minimal base + append nuance.
-        base = _sfml_prompt_base_text().strip() + "\n\n" + "SFML v1 SPEC (authoritative): https://github.com/I0Q/storyforge/blob/main/docs/sfml.md\n"
-        instructions = base
-        if (sfml_prompt_extra or '').strip():
-            instructions = instructions + "\n\nNUANCE PROMPT\n" + (sfml_prompt_extra or '').strip() + "\n"
+        if len(prompt_text) > 20000:
+            prompt_text = prompt_text[:20000]
+
+        instructions = prompt_text
 
         return {
             'ok': True,
             'model': 'google/gemma-2-9b-it',
-            'prompt_version': int(sfml_prompt_version or 1),
+            'prompt_version': int(prompt_version or 1),
             'instructions': instructions,
             'payload': prompt,
             'payload_pretty': json.dumps(prompt, indent=2, ensure_ascii=False),
+            'full_text_sent': instructions + "\nJSON_PAYLOAD:\n" + json.dumps(prompt, indent=2, ensure_ascii=False),
         }
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
@@ -8445,116 +8451,56 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             except Exception:
                 fails.append('quality.score_failed')
             return fails
-        # SFML prompt iteration (best-effort): load optional extra instructions + enabled toggle.
+        # SFML prompt iteration: load full versioned prompt text + enabled toggle.
         sfml_prompt_enabled = False
-        sfml_prompt_extra = ''
+        sfml_prompt_text = ''
         sfml_prompt_version = 1
+        sp = {}
         try:
             connS = db_connect()
             try:
                 db_init(connS)
-                sp = _settings_get(connS, 'sfml_prompt')
+                sp = _settings_get(connS, 'sfml_prompt') or {}
             finally:
                 connS.close()
             if isinstance(sp, dict):
                 sfml_prompt_enabled = bool(sp.get('enabled', False))
-                sfml_prompt_extra = str(sp.get('extra') or '')
+                sfml_prompt_text = str(sp.get('text') or '')
                 try:
                     sfml_prompt_version = int(sp.get('version') or 1)
                 except Exception:
                     sfml_prompt_version = 1
         except Exception:
             sfml_prompt_enabled = False
-            sfml_prompt_extra = ''
+            sfml_prompt_text = ''
             sfml_prompt_version = 1
+            sp = {}
 
-        # Guardrail: cap extra prompt size to prevent runaway prompt bloat.
-        if len(sfml_prompt_extra) > 2500:
-            sfml_prompt_extra = sfml_prompt_extra[:2500]
+        # Fallback/migration: if prompt text is missing, build from default (+ legacy extra).
+        if not (sfml_prompt_text or '').strip():
+            legacy_extra = ''
+            try:
+                if isinstance(sp, dict):
+                    legacy_extra = str(sp.get('extra') or '').strip()
+            except Exception:
+                legacy_extra = ''
+            sfml_prompt_text = _sfml_prompt_default_text().strip()
+            if legacy_extra:
+                sfml_prompt_text = sfml_prompt_text + "\n\n" + legacy_extra + "\n"
 
-        instructions_main = r'''You are an SFML v1 compiler. Output ONLY the SFML file as plain text (no markdown, no code fences, no commentary).
+        # Guardrail: cap prompt size.
+        if len(sfml_prompt_text) > 20000:
+            sfml_prompt_text = sfml_prompt_text[:20000]
 
-SFML v1 SPEC (authoritative): https://github.com/I0Q/storyforge/blob/main/docs/sfml.md
+        instructions_main = str(sfml_prompt_text)
 
-FORMAT (EXAMPLE IS AUTHORITATIVE)
+        # (legacy embedded prompt removed; prompt text is fully versioned via sf_settings.sfml_prompt.text)
 
-# SFML v1
+        # SFML v1 SPEC (authoritative): https://github.com/I0Q/storyforge/blob/main/docs/sfml.md
 
-cast:
-  Narrator: <voice_id>
-  Maris: <voice_id>
+        # (old embedded SFML prompt block removed; prompt is configured/versioned in Settings)
 
-scene scene-1 "<Story title>":
-  Narrator:
-    - Opening narration line.
-
-  PAUSE: 0.30
-
-  Maris:
-    - {delivery=calm} Another line.
-
-STRUCTURE RULES (HARD)
-- First non-empty line must be: # SFML v1
-- Must include a cast: block with EVERY key from casting_map (exact keys, no extras).
-- For each cast entry, the voice_id value must be EXACTLY the value from casting_map for that key.
-- Scenes must be: scene scene-<n> "<Title>":  (title REQUIRED; ':' required)
-  - Use meaningful titles derived from the story (never "Example Scene").
-- Speaker headers: two spaces + Name:  (no delivery tags on headers)
-- Bullets: four spaces + "- " + text
-- Delivery tags are allowed ONLY on bullets:    - {delivery=urgent} text
-  Allowed delivery: neutral|calm|urgent|dramatic|shout
-- PAUSE allowed:
-  - Scene-level: two spaces  "  PAUSE: 0.25"
-  - Speaker-level: four spaces "    PAUSE: 0.25"
-
-TEXT FIDELITY (HARD)
-- Do NOT paraphrase. Use the story text as-is.
-- Do NOT invent dialogue, actions, or details.
-- Only restructure into scenes/speaker blocks/bullets and insert PAUSE lines and bullet delivery tags.
-
-SCENES (QUALITY)
-- Prefer 1-3 scenes.
-- Use the real story title/beat for scene titles (do NOT output "Example Scene").
-- Create a new scene only on meaningful setting/time/major beat shifts.
-- Avoid many short scenes.
-
-SPEAKER ATTRIBUTION (HARD)
-- Quoted dialogue and call/response lines must be assigned to the speaking character, not Narrator.
-- Do NOT collapse all dialogue into Narrator. If characters exist, they must speak when the story contains dialogue.
-- Attribution heuristics (general):
-  - If text says "X said" / "X replied" / "said X" then the quoted line(s) belong to X.
-  - If a character calls another by name (e.g. "Ocean?"), that is the caller speaking.
-  - Narrator is for non-spoken narration only.
-
-SPEAKER BLOCKS (QUALITY)
-- Avoid one-line Narrator blocks unless truly isolated.
-- Avoid extremely long Narrator blocks; break on meaningful beat shifts.
-- Never output consecutive blocks for the same speaker (merge them).
-
-DELIVERY + PAUSES (QUALITY)
-- Delivery tags: if there is ANY non-narrator dialogue, you MUST add delivery tags to character dialogue bullets.
-  - Minimum: at least 2 character dialogue bullets in the whole script must include a {delivery=...} tag.
-- Pauses: do NOT place a PAUSE after every bullet.
-  - Use pauses only at beat boundaries (scene openings, reveals, before/after key lines).
-  - Vary pause durations (e.g. 0.20, 0.35, 0.60, 1.00) based on the beat.
-  - Target: roughly 1 pause per 3-6 bullets on average.
-
-FINAL CHECK (SILENT)
-- Speaker names must exactly match casting_map keys.
-- Output contains ONLY the SFML text.
-
-Now output the SFML file only.
-'''
-
-        if (sfml_prompt_extra or '').strip():
-            instructions_main = (
-                instructions_main
-                + "\n\nPROMPT_EXTRA (LOCAL, OPTIONAL)\n"
-                + "- These are additional instructions learned from past runs.\n"
-                + "- Follow them as long as they do not conflict with the HARD rules above.\n\n"
-                + (sfml_prompt_extra or '').strip()
-                + "\n"
-            )
+        # (No separate prompt-extra append: the full prompt text is versioned as one blob.)
 
         def _repair_prompt(failures: list[str], broken: str) -> str:
             fs = '\n'.join('- ' + f for f in (failures or []))
@@ -8664,7 +8610,7 @@ Now output the SFML file only.
                     (
                         story_id,
                         int(sfml_prompt_version or 1),
-                        str(sfml_prompt_extra or ''),
+                        str(instructions_main or ''),
                         'google/gemma-2-9b-it',
                         int(gen_dur_ms or 0),
                         json.dumps(list(warnings or []), separators=(',', ':')),
@@ -8685,29 +8631,29 @@ Now output the SFML file only.
             try:
                 improve_req = {
                     'prompt_version': int(sfml_prompt_version or 1),
-                    'current_extra': str(sfml_prompt_extra or ''),
+                    'current_prompt_text': str(instructions_main or ''),
                     'warnings': list(warnings or []),
                     'story_id': story_id,
                     'title': title,
                 }
                 improve_instructions = (
-                    "You are improving a small prompt addendum called PROMPT_EXTRA for an SFML v1 generator. "
-                    "Your goal is to reduce the WARNINGS in future runs while respecting the HARD rules.\n\n"
+                    "You are improving an SFML generator prompt (full prompt text). "
+                    "Goal: reduce WARNINGS in future runs while maintaining correctness.\n\n"
                     "Rules:\n"
-                    "- Output ONLY the new PROMPT_EXTRA text (no JSON, no markdown, no commentary).\n"
-                    "- Keep it concise (max ~25 lines).\n"
-                    "- Do NOT include story-specific facts; it must generalize.\n"
-                    "- Do NOT restate the full spec; only add targeted extra guidance.\n"
-                    "- If current_extra is already good and warnings are empty, output the same text.\n"
+                    "- Output ONLY the updated prompt text (no JSON, no markdown, no commentary).\n"
+                    "- Keep it general (no story-specific facts).\n"
+                    "- Avoid redundancy; do not restate the same rule multiple times.\n"
+                    "- Preserve strict format requirements (cast, scenes, indentation, delivery tags, PAUSE).\n"
+                    "- If warnings are empty, output the same prompt text.\n"
                 )
-                new_extra = _llm_sfml_call(improve_instructions, improve_req, temperature=0.2, max_tokens=700)
-                new_extra = _strip_fences(new_extra)
-                new_extra = _normalize_ws(new_extra)
-                if len(new_extra) > 2500:
-                    new_extra = new_extra[:2500]
+                new_prompt = _llm_sfml_call(improve_instructions, improve_req, temperature=0.2, max_tokens=1200)
+                new_prompt = _strip_fences(new_prompt)
+                new_prompt = _normalize_ws(new_prompt)
+                if len(new_prompt) > 20000:
+                    new_prompt = new_prompt[:20000]
 
                 # Only update if it actually changed (avoid version spam)
-                if (new_extra or '').strip() != (sfml_prompt_extra or '').strip():
+                if (new_prompt or '').strip() != (instructions_main or '').strip():
                     connP = db_connect()
                     try:
                         db_init(connP)
@@ -8720,7 +8666,7 @@ Now output the SFML file only.
                             v2 = int(sfml_prompt_version or 1) + 1
                         sP['enabled'] = True
                         sP['version'] = int(v2)
-                        sP['extra'] = str(new_extra or '')
+                        sP['text'] = str(new_prompt or '')
 
                         # Record version for audit/debug
                         try:
@@ -8728,9 +8674,9 @@ Now output the SFML file only.
                             curP.execute(
                                 "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
                                 (
-                                    'sfml_prompt_extra',
+                                    'sfml_prompt_text',
                                     int(v2),
-                                    str(new_extra or ''),
+                                    str(new_prompt or ''),
                                     json.dumps({'source': 'auto', 'story_id': story_id}, separators=(',', ':')),
                                     int(now),
                                 ),
@@ -10041,26 +9987,45 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
 
 
 def _sfml_prompt_defaults() -> dict[str, Any]:
-    # "extra" is the editable Nuance prompt.
-    return {'enabled': False, 'version': 1, 'extra': ''}
+    # "text" is the full versioned SFML generator prompt (includes format example + rules).
+    return {'enabled': False, 'version': 1, 'text': ''}
 
 
-def _sfml_prompt_base_text() -> str:
-    # Keep this stable and minimal; the Nuance prompt does most of the guidance.
-    # We intentionally do NOT embed the full external spec here.
+def _sfml_prompt_default_text() -> str:
+    # Default full prompt. Keep it tight: one example + one set of rules.
     return (
         "You are an SFML v1 compiler. Output ONLY the SFML file as plain text (no markdown, no code fences, no commentary).\n\n"
-        "FORMAT\n"
-        "- First non-empty line: # SFML v1\n"
-        "- Must include cast: with ALL casting_map keys and EXACT voice_ids\n"
-        "- Scenes: scene scene-<n> \"<Title>\":\n"
-        "- Speaker blocks: two spaces + Name: then bullets (four spaces + '- ')\n"
-        "- Allowed delivery tag on bullets only: - {delivery=calm|neutral|urgent|dramatic|shout} text\n"
-        "- Allowed pauses: '  PAUSE: 0.25' (scene) or '    PAUSE: 0.25' (speaker)\n\n"
+        "FORMAT EXAMPLE (authoritative)\n"
+        "# SFML v1\n\n"
+        "cast:\n"
+        "  Narrator: <voice_id>\n"
+        "  Character: <voice_id>\n\n"
+        "scene scene-1 \"<Title>\":\n"
+        "  Narrator:\n"
+        "    - Opening narration line.\n\n"
+        "  PAUSE: 0.30\n\n"
+        "  Character:\n"
+        "    - {delivery=calm} A line of dialogue.\n\n"
         "HARD RULES\n"
-        "- Do NOT paraphrase or invent story text.\n"
-        "- Assign quoted dialogue to the speaking characters when possible.\n"
-        "- Output contains ONLY the SFML text.\n"
+        "- First non-empty line must be: # SFML v1\n"
+        "- Must include cast: with EVERY key from casting_map (exact keys, no extras).\n"
+        "- For each cast entry, the voice_id must be EXACTLY the value from casting_map.\n"
+        "- Scenes must be: scene scene-<n> \"<Title>\": (title required; ':' required).\n"
+        "- Speaker headers: two spaces + Name: (no delivery tags on headers).\n"
+        "- Bullets: four spaces + '- ' + text\n"
+        "- Delivery tags allowed ONLY on bullets: - {delivery=neutral|calm|urgent|dramatic|shout} text\n"
+        "- PAUSE allowed:\n"
+        "  - Scene-level: two spaces  '  PAUSE: 0.25'\n"
+        "  - Speaker-level: four spaces '    PAUSE: 0.25'\n"
+        "- Do NOT paraphrase. Use story text as-is.\n"
+        "- Do NOT invent dialogue/actions/details.\n"
+        "- Output contains ONLY the SFML text.\n\n"
+        "QUALITY GUIDANCE (iterative)\n"
+        "- Prefer 1-3 scenes with meaningful titles.\n"
+        "- Attribute quoted dialogue to the speaking character (avoid collapsing everything into Narrator).\n"
+        "- Avoid one giant block: split long narration/dialogue into smaller digestible bullets.\n"
+        "- Use pauses at beat boundaries (not after every sentence) and vary durations.\n"
+        "- If there is any non-Narrator dialogue, include delivery tags on character dialogue bullets.\n"
     )
 
 
@@ -10075,17 +10040,25 @@ def api_settings_sfml_prompt_get():
                 s = {}
         finally:
             conn.close()
+        # Migrate legacy fields: {extra} -> {text}
         d = _sfml_prompt_defaults()
-        d.update({k: s.get(k) for k in ('enabled', 'version', 'extra') if k in s})
+        d.update({k: s.get(k) for k in ('enabled', 'version', 'text') if k in s})
+        if not str(d.get('text') or '').strip():
+            # If old installs only have 'extra', merge it into the default prompt.
+            legacy_extra = str(s.get('extra') or '').strip()
+            base = _sfml_prompt_default_text().strip()
+            if legacy_extra:
+                base = base + "\n\n" + legacy_extra + "\n"
+            d['text'] = base
         # normalize
         d['enabled'] = bool(d.get('enabled', False))
         try:
             d['version'] = int(d.get('version') or 1)
         except Exception:
             d['version'] = 1
-        d['extra'] = str(d.get('extra') or '')
-        if len(d['extra']) > 8000:
-            d['extra'] = d['extra'][:8000]
+        d['text'] = str(d.get('text') or '')
+        if len(d['text']) > 20000:
+            d['text'] = d['text'][:20000]
         return {'ok': True, **d}
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
@@ -10095,7 +10068,7 @@ def api_settings_sfml_prompt_get():
 def api_settings_sfml_prompt_set(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     try:
         enabled_in = (payload or {}).get('enabled', None)
-        extra_in = (payload or {}).get('extra', None)
+        text_in = (payload or {}).get('text', None)
 
         conn = db_connect()
         try:
@@ -10105,21 +10078,21 @@ def api_settings_sfml_prompt_set(payload: dict[str, Any] = Body(default={})):  #
             if not isinstance(s0, dict):
                 s0 = {}
             s = _sfml_prompt_defaults()
-            s.update({k: s0.get(k) for k in ('enabled', 'version', 'extra') if k in s0})
+            s.update({k: s0.get(k) for k in ('enabled', 'version', 'text') if k in s0})
 
             if enabled_in is not None:
                 s['enabled'] = bool(enabled_in)
-            if extra_in is not None:
-                s['extra'] = str(extra_in or '')
-                if len(s['extra']) > 8000:
-                    s['extra'] = s['extra'][:8000]
+            if text_in is not None:
+                s['text'] = str(text_in or '')
+                if len(s['text']) > 20000:
+                    s['text'] = s['text'][:20000]
 
             # Bump version if prompt text changed.
             try:
-                prev = str(s0.get('extra') or '')
+                prev = str(s0.get('text') or '')
             except Exception:
                 prev = ''
-            if extra_in is not None and str(prev) != str(s.get('extra') or ''):
+            if text_in is not None and str(prev) != str(s.get('text') or ''):
                 try:
                     s['version'] = int(s.get('version') or 1) + 1
                 except Exception:
@@ -10131,9 +10104,9 @@ def api_settings_sfml_prompt_set(payload: dict[str, Any] = Body(default={})):  #
                     cur.execute(
                         "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
                         (
-                            'sfml_prompt_extra',
+                            'sfml_prompt_text',
                             int(s['version'] or 1),
-                            str(s.get('extra') or ''),
+                            str(s.get('text') or ''),
                             json.dumps({'source': 'manual'}, separators=(',', ':')),
                             now,
                         ),
@@ -10164,7 +10137,7 @@ def api_settings_sfml_prompt_versions_get(limit: int = 25):
             cur = conn.cursor()
             cur.execute(
                 'SELECT version, meta_json, created_at FROM sf_prompt_versions WHERE key=%s ORDER BY version DESC LIMIT %s',
-                ('sfml_prompt_extra', lim),
+                ('sfml_prompt_text', lim),
             )
             rows = cur.fetchall() or []
         finally:
@@ -10204,7 +10177,7 @@ def api_settings_sfml_prompt_revert(payload: dict[str, Any] = Body(default={})):
             cur = conn.cursor()
             cur.execute(
                 'SELECT prompt_text FROM sf_prompt_versions WHERE key=%s AND version=%s LIMIT 1',
-                ('sfml_prompt_extra', ver),
+                ('sfml_prompt_text', ver),
             )
             row = cur.fetchone()
             if not row:
@@ -10215,11 +10188,11 @@ def api_settings_sfml_prompt_revert(payload: dict[str, Any] = Body(default={})):
             if not isinstance(s0, dict):
                 s0 = {}
             s = _sfml_prompt_defaults()
-            s.update({k: s0.get(k) for k in ('enabled', 'version', 'extra') if k in s0})
+            s.update({k: s0.get(k) for k in ('enabled', 'version', 'text') if k in s0})
 
-            # Set extra + bump version
-            prev_extra = str(s.get('extra') or '')
-            s['extra'] = prompt_text
+            # Set prompt text + bump version
+            prev_txt = str(s.get('text') or '')
+            s['text'] = prompt_text
             s['enabled'] = bool(s.get('enabled', False))
             try:
                 s['version'] = int(s.get('version') or 1) + 1
@@ -10232,10 +10205,10 @@ def api_settings_sfml_prompt_revert(payload: dict[str, Any] = Body(default={})):
                 cur.execute(
                     "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
                     (
-                        'sfml_prompt_extra',
+                        'sfml_prompt_text',
                         int(s['version'] or 1),
-                        str(s.get('extra') or ''),
-                        json.dumps({'source': 'revert', 'from_version': ver, 'prev_changed': (prev_extra != prompt_text)}, separators=(',', ':')),
+                        str(s.get('text') or ''),
+                        json.dumps({'source': 'revert', 'from_version': ver, 'prev_changed': (prev_txt != prompt_text)}, separators=(',', ':')),
                         now,
                     ),
                 )
@@ -10262,12 +10235,13 @@ def api_settings_sfml_prompt_preview():
             conn.close()
         if not isinstance(s, dict):
             s = {}
-        extra = str(s.get('extra') or '').strip()
-        base = _sfml_prompt_base_text().strip()
-        full = base
-        if extra:
-            full = full + "\n\nNUANCE PROMPT\n" + extra + "\n"
-        return {'ok': True, 'base_prompt': base, 'nuance_prompt': extra, 'full_prompt': full}
+        txt = str(s.get('text') or '').strip()
+        if not txt:
+            legacy_extra = str(s.get('extra') or '').strip()
+            txt = _sfml_prompt_default_text().strip()
+            if legacy_extra:
+                txt = txt + "\n\n" + legacy_extra + "\n"
+        return {'ok': True, 'full_prompt': txt}
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
