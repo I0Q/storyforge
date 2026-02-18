@@ -7981,7 +7981,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
 
 
-        def _llm_sfml_call(instructions_text: str, prompt_payload: dict[str, object]) -> str:
+        def _llm_sfml_call(instructions_text: str, prompt_payload: dict[str, object], *, temperature: float = 0.3, max_tokens: int = 3400) -> str:
             req = {
                 'model': 'google/gemma-2-9b-it',
                 'messages': [
@@ -7994,8 +7994,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         ),
                     },
                 ],
-                'temperature': 0.3,
-                'max_tokens': 3200,
+                'temperature': float(temperature),
+                'max_tokens': int(max_tokens),
             }
             r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
             r.raise_for_status()
@@ -8182,6 +8182,15 @@ Now output the SFML file only.
             fs = '\n'.join('- ' + f for f in (failures or []))
             return (
                 instructions_main
+                + "\nREPAIR MODE (HARD)\n"
+                + "You MUST fix every failure listed below. If you cannot satisfy ALL failures, try again until you can.\n"
+                + "Output ONLY the corrected SFML text (no commentary, no code fences).\n"
+                + "Do NOT invent or paraphrase story text. Preserve the original bullet text as much as possible; only restructure blocks/scenes and add PAUSE/delivery tags.\n"
+                + "Typical repairs:\n"
+                + "- delivery.too_few: add {delivery=...} to at least 2 NON-Narrator dialogue bullets.\n"
+                + "- pause.too_few: add 2-6 pauses total; vary values (0.20/0.35/0.60/1.00) and place at beat boundaries, not after every bullet.\n"
+                + "- pause.uniform / pause.low_variance: change some pause values so there is variance.\n"
+                + "- narrator.too_long_blocks / blocks.too_long: split long blocks into smaller ones (new speaker blocks and/or new scenes).\n"
                 + "\nFAILURES TO FIX (must fix all):\n" + (fs or '- (none)') + "\n\n"
                 + "BROKEN_SFML (fix it, change as little as possible):\n" + (broken or '') + "\n"
             )
@@ -8189,12 +8198,13 @@ Now output the SFML file only.
         txt_raw = ''
         sfml_ok = ''
         failures_last: list[str] = []
-        for attempt in range(5):
+        for attempt in range(8):
             try:
                 if attempt == 0:
-                    txt_raw = _llm_sfml_call(instructions_main, prompt)
+                    txt_raw = _llm_sfml_call(instructions_main, prompt, temperature=0.3, max_tokens=3400)
                 else:
-                    txt_raw = _llm_sfml_call(_repair_prompt(failures_last, txt_raw), prompt)
+                    # Repairs: lower temperature for compliance.
+                    txt_raw = _llm_sfml_call(_repair_prompt(failures_last, txt_raw), prompt, temperature=0.1, max_tokens=3400)
 
                 sfml_ok = _v1_validate_and_coalesce(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
                 failures_last = _score_quality(sfml_ok)
