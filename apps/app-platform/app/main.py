@@ -3184,6 +3184,7 @@ function prodSfmlPromptRevert(){
     .then(function(r){ toast(r && r.ok ? ('Reverted (new version created)') : ('Error: '+(r&&r.error||''))); return prodSfmlPromptReload(); });
 }
 
+
 function prodSfmlPromptPreviewFullText(){
   var storySel=document.getElementById('prodStorySel');
   var storyId=storySel?String(storySel.value||'').trim():'';
@@ -3195,25 +3196,15 @@ function prodSfmlPromptPreviewFullText(){
     .then(function(j){
       if(!(j&&j.ok)) { if(box) box.textContent='Error: '+(j&&j.error||''); return; }
       var parts=[];
-      if(j.model) parts.push('MODEL
-'+j.model+'
-');
-      if(j.prompt_version!=null) parts.push('PROMPT VERSION
-'+String(j.prompt_version)+'
-');
-      if(j.instructions) parts.push('INSTRUCTIONS
-'+String(j.instructions).trim()+'
-');
-      if(j.payload_pretty) parts.push('JSON PAYLOAD
-'+String(j.payload_pretty).trim()+'
-');
-      if(j.full_text_sent) parts.push('FULL TEXT SENT
-'+String(j.full_text_sent).trim()+'
-');
-      if(box) box.textContent=parts.join('
-');
+      if(j.model) parts.push('MODEL\n'+j.model+'\n');
+      if(j.prompt_version!=null) parts.push('PROMPT VERSION\n'+String(j.prompt_version)+'\n');
+      if(j.instructions) parts.push('INSTRUCTIONS\n'+String(j.instructions).trim()+'\n');
+      if(j.payload_pretty) parts.push('JSON PAYLOAD\n'+String(j.payload_pretty).trim()+'\n');
+      if(j.full_text_sent) parts.push('FULL TEXT SENT\n'+String(j.full_text_sent).trim()+'\n');
+      if(box) box.textContent=parts.join('\n');
     });
 }
+
 function prodGenerateSfml(){
   try{
     var out=document.getElementById('prodOut');
@@ -3221,9 +3212,6 @@ function prodGenerateSfml(){
     if (!st.saved){ if(out) out.innerHTML='<div class="err">Save casting first</div>'; return; }
     var sid = String(st.story_id||'').trim();
     if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
-
-    // hide prompt debug box when generating
-    try{ var dbg=document.getElementById('prodSfmlPromptDbg'); if(dbg){ dbg.classList.add('hide'); dbg.textContent=''; } }catch(_e){}
 
     prodSetSfmlBusy(true, 'Generating SFML...', 'Asking the LLM to produce a full script');
     if (out) out.textContent='';
