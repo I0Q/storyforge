@@ -7954,7 +7954,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         else:
                             raise ValueError('bullet_outside_block')
                     rest = ln[len('    - '):]
-                    m_del = re.match(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s+.+', rest)
+                    # Accept optional space after the delivery tag and normalize later; require some text.
+                    m_del = re.match(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*.+', rest)
                     if m_del and not allow_delivery:
                         raise ValueError('delivery_not_allowed')
                     if rest.startswith('{delivery=') and not m_del:
