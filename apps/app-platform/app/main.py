@@ -8071,10 +8071,9 @@ cast:
   Narrator: <voice_id>
   Maris: <voice_id>
 
-scene scene-1 "Example Scene":
+scene scene-1 "<Story title>":
   Narrator:
     - Opening narration line.
-
 
   PAUSE: 0.30
 
@@ -8085,12 +8084,15 @@ STRUCTURE RULES (HARD)
 - First non-empty line must be: # SFML v1
 - Must include a cast: block with EVERY key from casting_map (exact keys, no extras).
 - For each cast entry, the voice_id value must be EXACTLY the value from casting_map for that key.
-- Scenes must be: scene scene-<n> "<Title>":  (title optional, but ':' is required)
+- Scenes must be: scene scene-<n> "<Title>":  (title REQUIRED; ':' required)
+  - Use meaningful titles derived from the story (never "Example Scene").
 - Speaker headers: two spaces + Name:  (no delivery tags on headers)
 - Bullets: four spaces + "- " + text
-- Delivery tags are OPTIONAL and only allowed on bullets, like:    - {delivery=urgent} text
+- Delivery tags are allowed ONLY on bullets:    - {delivery=urgent} text
   Allowed delivery: neutral|calm|urgent|dramatic|shout
-- PAUSE is OPTIONAL and can be scene-level (2 spaces: "  PAUSE: 0.25") or speaker-level (4 spaces: "    PAUSE: 0.25").
+- PAUSE allowed:
+  - Scene-level: two spaces  "  PAUSE: 0.25"
+  - Speaker-level: four spaces "    PAUSE: 0.25"
 
 TEXT FIDELITY (HARD)
 - Do NOT paraphrase. Use the story text as-is.
@@ -8098,13 +8100,29 @@ TEXT FIDELITY (HARD)
 - Only restructure into scenes/speaker blocks/bullets and insert PAUSE lines and bullet delivery tags.
 
 SCENES (QUALITY)
-- Prefer 1-3 scenes. Create a new scene only on meaningful setting/time/major beat shifts.
+- Prefer 1-3 scenes.
+- Use the real story title/beat for scene titles (do NOT output "Example Scene").
+- Create a new scene only on meaningful setting/time/major beat shifts.
 - Avoid many short scenes.
+
+SPEAKER ATTRIBUTION (HARD)
+- Quoted dialogue and call/response lines must be assigned to the speaking character, not Narrator.
+- Attribution heuristics:
+  - If the story says "Said the ocean" / "the ocean replied" then those quoted lines belong to Ocean.
+  - If a character directly responds (e.g. "Ocean?"), that line belongs to that character (Maris), not Narrator.
+  - Do not put spoken dialogue under Narrator.
 
 SPEAKER BLOCKS (QUALITY)
 - Avoid one-line Narrator blocks unless truly isolated.
 - Avoid extremely long Narrator blocks; break on meaningful beat shifts.
 - Never output consecutive blocks for the same speaker (merge them).
+
+DELIVERY + PAUSES (QUALITY)
+- If dialogue exists, you MUST add delivery tags to character dialogue bullets.
+  - Minimum: at least 2 character dialogue bullets in the whole script must include a {delivery=...} tag.
+- Do NOT spam pauses after every bullet.
+  - Use pauses only at beat boundaries (scene openings, reveals, before/after key lines).
+  - Target: roughly 1 pause per 3-6 bullets on average.
 
 FINAL CHECK (SILENT)
 - Speaker names must exactly match casting_map keys.

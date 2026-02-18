@@ -236,10 +236,28 @@
       }
     }
 
+    // PAUSE line
+    if (tr.toUpperCase().indexOf('PAUSE:') === 0){
+      return leadEsc + '<span class="sfmlTokPause">' + escHtml(tr) + '</span>';
+    }
+
+    // Bullet delivery tag highlighting: "- {delivery=calm} text"
+    if (tr.indexOf('- ') === 0 && tr.indexOf('{delivery=') > 0){
+      var k = tr.indexOf('{delivery=');
+      var pre = tr.slice(0, k);
+      var rest3 = tr.slice(k);
+      var end = rest3.indexOf('}');
+      if (end > 0){
+        var tag = rest3.slice(0, end+1);
+        var after = rest3.slice(end+1);
+        return leadEsc + '<span class="sfmlTokBase">' + escHtml(pre) + '</span>' +
+          '<span class="sfmlTokTag">' + escHtml(tag) + '</span>' +
+          '<span class="sfmlTokBase">' + escHtml(after) + '</span>';
+      }
+    }
+
     // quoted strings (fallback)
-    // keep simple for safety
     if (t.indexOf('"') >= 0){
-      // not a full parser; just tint whole line if it contains quotes
       return leadEsc + '<span class="sfmlTokBase">' + escHtml(t) + '</span>';
     }
 
