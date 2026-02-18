@@ -3196,12 +3196,13 @@ function prodSfmlPromptPreviewFullText(){
     .then(function(j){
       if(!(j&&j.ok)) { if(box) box.textContent='Error: '+(j&&j.error||''); return; }
       var parts=[];
-      if(j.model) parts.push('MODEL\n'+j.model+'\n');
-      if(j.prompt_version!=null) parts.push('PROMPT VERSION\n'+String(j.prompt_version)+'\n');
-      if(j.instructions) parts.push('INSTRUCTIONS\n'+String(j.instructions).trim()+'\n');
-      if(j.payload_pretty) parts.push('JSON PAYLOAD\n'+String(j.payload_pretty).trim()+'\n');
-      if(j.full_text_sent) parts.push('FULL TEXT SENT\n'+String(j.full_text_sent).trim()+'\n');
-      if(box) box.textContent=parts.join('\n');
+      // NOTE: This JS bundle is embedded in a Python string; backslashes must be double-escaped.
+      if(j.model) parts.push('MODEL\\n'+j.model+'\\n');
+      if(j.prompt_version!=null) parts.push('PROMPT VERSION\\n'+String(j.prompt_version)+'\\n');
+      if(j.instructions) parts.push('INSTRUCTIONS\\n'+String(j.instructions).trim()+'\\n');
+      if(j.payload_pretty) parts.push('JSON PAYLOAD\\n'+String(j.payload_pretty).trim()+'\\n');
+      if(j.full_text_sent) parts.push('FULL TEXT SENT\\n'+String(j.full_text_sent).trim()+'\\n');
+      if(box) box.textContent=parts.join('\\n');
     });
 }
 
