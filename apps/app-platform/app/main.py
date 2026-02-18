@@ -8032,7 +8032,8 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                             pause_vals.append(m.group(1))
 
                 pause_count = len(pause_vals)
-                if pause_count < 2:
+                # Require some pauses for pacing, but don't force it on tiny scripts.
+                if bullet_count >= 8 and pause_count < 2:
                     fails.append(f'pause.too_few:{pause_count}')
 
                 # Reject pause spam + uniform pauses (metronome)
@@ -8049,8 +8050,9 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         if top / float(pause_count) >= 0.75:
                             fails.append('pause.low_variance')
 
-                # Delivery: count delivery tags on non-narrator bullets
+                # Delivery + dialogue presence: enforce only when there is non-narrator dialogue.
                 delivery_char = 0
+                non_narr_bullets = 0
                 cur_sp = None
                 for ln in lines:
                     m = re.match(r'^  ([^:]+):\s*$', ln)
@@ -8058,9 +8060,17 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         cur_sp = m.group(1)
                         continue
                     if ln.startswith('    - '):
-                        if cur_sp and cur_sp != 'Narrator' and '{delivery=' in ln:
-                            delivery_char += 1
-                if delivery_char < 2:
+                        if cur_sp and cur_sp != 'Narrator':
+                            non_narr_bullets += 1
+                            if '{delivery=' in ln:
+                                delivery_char += 1
+
+                # Require the script to actually assign SOME lines to characters (not all Narrator).
+                if non_narr_bullets < 2:
+                    fails.append(f'dialogue.too_few_character_bullets:{non_narr_bullets}')
+
+                # If there is any character dialogue, require delivery tags.
+                if non_narr_bullets >= 2 and delivery_char < 2:
                     fails.append(f'delivery.too_few:{delivery_char}')
 
                 # Block sizing
@@ -8154,10 +8164,11 @@ SCENES (QUALITY)
 
 SPEAKER ATTRIBUTION (HARD)
 - Quoted dialogue and call/response lines must be assigned to the speaking character, not Narrator.
-- Attribution heuristics:
-  - If the story says "Said the ocean" / "the ocean replied" then those quoted lines belong to Ocean.
-  - If a character directly responds (e.g. "Ocean?"), that line belongs to that character (Maris), not Narrator.
-  - Do not put spoken dialogue under Narrator.
+- Do NOT collapse all dialogue into Narrator. If characters exist, they must speak when the story contains dialogue.
+- Attribution heuristics (general):
+  - If text says "X said" / "X replied" / "said X" then the quoted line(s) belong to X.
+  - If a character calls another by name (e.g. "Ocean?"), that is the caller speaking.
+  - Narrator is for non-spoken narration only.
 
 SPEAKER BLOCKS (QUALITY)
 - Avoid one-line Narrator blocks unless truly isolated.
