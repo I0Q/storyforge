@@ -3166,9 +3166,10 @@ function prodShowSfmlPromptDebug(){
         try{ payloadPretty = JSON.stringify(j.payload||{}, null, 2); }catch(_e){ payloadPretty = String(j.payload_pretty||''); }
 
         var txt = '';
-        txt += 'MODEL\n' + String(j.model||'') + '\n\n';
-        txt += 'INSTRUCTIONS (fixed + nuance appended)\n' + String(j.instructions||'') + '\n\n';
-        txt += 'JSON PAYLOAD (formatted)\n' + payloadPretty + '\n';
+        // Use literal \\n sequences here (this file is server-side Python that embeds JS in a string).
+        txt += 'MODEL\\n' + String(j.model||'') + '\\n\\n';
+        txt += 'INSTRUCTIONS (fixed + nuance appended)\\n' + String(j.instructions||'') + '\\n\\n';
+        txt += 'JSON PAYLOAD (formatted)\\n' + payloadPretty + '\\n';
 
         box.textContent = txt;
         box.classList.remove('hide');
