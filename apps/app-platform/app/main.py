@@ -8013,16 +8013,56 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             fails: list[str] = []
             try:
                 lines = (sfml_text or '').splitlines()
+
+                # Scenes
                 scene_count = sum(1 for ln in lines if ln.startswith('scene scene-'))
                 if scene_count <= 0:
                     fails.append('scene.missing')
                 if scene_count > 3:
                     fails.append(f'scene.too_many:{scene_count}')
 
-                pause_count = sum(1 for ln in lines if ln.startswith('  PAUSE:') or ln.startswith('    PAUSE:'))
-                if pause_count < 3:
+                # Bullets + pauses + delivery metrics
+                bullet_count = sum(1 for ln in lines if ln.startswith('    - '))
+                pause_vals = []
+                for ln in lines:
+                    if ln.startswith('  PAUSE:') or ln.startswith('    PAUSE:'):
+                        m = re.match(r'^\s*PAUSE:\s*(\d+\.\d+)\s*$', ln)
+                        if m:
+                            pause_vals.append(m.group(1))
+
+                pause_count = len(pause_vals)
+                if pause_count < 2:
                     fails.append(f'pause.too_few:{pause_count}')
 
+                # Reject pause spam + uniform pauses (metronome)
+                if bullet_count > 0:
+                    if pause_count / float(bullet_count) > 0.45:
+                        fails.append(f'pause.too_many:{pause_count}/{bullet_count}')
+                if pause_count >= 4:
+                    uniq = sorted(set(pause_vals))
+                    if len(uniq) <= 1:
+                        fails.append('pause.uniform')
+                    else:
+                        # if one value dominates
+                        top = max(pause_vals.count(v) for v in uniq)
+                        if top / float(pause_count) >= 0.75:
+                            fails.append('pause.low_variance')
+
+                # Delivery: count delivery tags on non-narrator bullets
+                delivery_char = 0
+                cur_sp = None
+                for ln in lines:
+                    m = re.match(r'^  ([^:]+):\s*$', ln)
+                    if m:
+                        cur_sp = m.group(1)
+                        continue
+                    if ln.startswith('    - '):
+                        if cur_sp and cur_sp != 'Narrator' and '{delivery=' in ln:
+                            delivery_char += 1
+                if delivery_char < 2:
+                    fails.append(f'delivery.too_few:{delivery_char}')
+
+                # Block sizing
                 cur = None
                 blocks = []
                 for ln in lines:
@@ -8041,21 +8081,27 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 if cur:
                     blocks.append(cur)
 
+                # Enforce narrator not too long, and any speaker not too long
+                long_any = 0
                 one_line = 0
-                too_long = 0
+                long_narr = 0
                 for b in blocks:
-                    if b.get('speaker') != 'Narrator':
-                        continue
+                    sp = str(b.get('speaker') or '')
                     bl = int(b.get('bullets') or 0)
                     ch = int(b.get('chars') or 0)
-                    if bl <= 1:
+                    if bl <= 1 and sp == 'Narrator':
                         one_line += 1
-                    if bl > 12 or ch > 900:
-                        too_long += 1
+                    if bl > 10 or ch > 900:
+                        long_any += 1
+                    if sp == 'Narrator' and (bl > 8 or ch > 700):
+                        long_narr += 1
                 if one_line > 0:
                     fails.append(f'narrator.too_many_one_line:{one_line}')
-                if too_long > 0:
-                    fails.append(f'narrator.too_long_blocks:{too_long}')
+                if long_narr > 0:
+                    fails.append(f'narrator.too_long_blocks:{long_narr}')
+                if long_any > 0:
+                    fails.append(f'blocks.too_long:{long_any}')
+
             except Exception:
                 fails.append('quality.score_failed')
             return fails
@@ -8118,10 +8164,11 @@ SPEAKER BLOCKS (QUALITY)
 - Never output consecutive blocks for the same speaker (merge them).
 
 DELIVERY + PAUSES (QUALITY)
-- If dialogue exists, you MUST add delivery tags to character dialogue bullets.
+- Delivery tags: if there is ANY non-narrator dialogue, you MUST add delivery tags to character dialogue bullets.
   - Minimum: at least 2 character dialogue bullets in the whole script must include a {delivery=...} tag.
-- Do NOT spam pauses after every bullet.
+- Pauses: do NOT place a PAUSE after every bullet.
   - Use pauses only at beat boundaries (scene openings, reveals, before/after key lines).
+  - Vary pause durations (e.g. 0.20, 0.35, 0.60, 1.00) based on the beat.
   - Target: roughly 1 pause per 3-6 bullets on average.
 
 FINAL CHECK (SILENT)
