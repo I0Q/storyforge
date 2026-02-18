@@ -1207,7 +1207,7 @@ def index(response: Response):
 
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>SFML improvement loop</div>
-      <div class='muted'>One-run generation, but we persist artifacts and (optionally) auto-improve the prompt for the next run.</div>
+      <div class='muted'>One-run generation. We persist artifacts and (optionally) auto-improve the <b>Nuance prompt</b> for the next run.</div>
 
       <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap'>
         <label style='display:flex;gap:10px;align-items:center;user-select:none'>
@@ -1218,12 +1218,23 @@ def index(response: Response):
         <button type='button' class='secondary' onclick='sfmlImproveRefresh()'>Reload</button>
       </div>
 
-      <div style='margin-top:12px;font-weight:950;'>Prompt extra (debug)</div>
-      <div class='muted'>Appended to the base SFML instructions. Keep this short.</div>
-      <textarea id='sfmlPromptExtra' class='codeBox' style='margin-top:8px;width:100%;height:120px;white-space:pre-wrap'></textarea>
-      <div class='row' style='margin-top:10px;justify-content:flex-end;gap:10px;flex-wrap:wrap'>
-        <button type='button' class='secondary' onclick='sfmlImproveSaveExtra()'>Save prompt extra</button>
+      <div style='margin-top:12px;font-weight:950;'>Nuance prompt</div>
+      <div class='muted'>This is the main iteration surface. It’s appended to the stable base SFML prompt. Keep it general (no story-specific facts).</div>
+      <textarea id='sfmlPromptExtra' class='codeBox' style='margin-top:8px;width:100%;height:160px;white-space:pre-wrap'></textarea>
+
+      <div class='row' style='margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between'>
+        <div class='row' style='gap:10px;align-items:center;flex-wrap:wrap'>
+          <span class='muted'>Rollback:</span>
+          <select id='sfmlPromptVersions' style='min-width:200px;'></select>
+          <button type='button' class='secondary' onclick='sfmlPromptRevertSelected()'>Revert</button>
+        </div>
+        <div class='row' style='gap:10px;align-items:center;flex-wrap:wrap'>
+          <button type='button' class='secondary' onclick='sfmlImproveSaveExtra()'>Save nuance prompt</button>
+          <button type='button' class='secondary' onclick='sfmlPromptPreview()'>Preview full prompt</button>
+        </div>
       </div>
+
+      <div id='sfmlPromptPreviewBox' class='codeBox hide' style='margin-top:10px;max-height:none;height:34vh;overflow:auto;white-space:pre-wrap;'></div>
     </div>
 
     <div class='card'>
@@ -2119,9 +2130,15 @@ function sfmlImproveRefresh(){
     var cb = document.getElementById('sfmlImproveEnabled');
     if (cb) cb.checked = en;
     var sp = document.getElementById('sfmlPromptVer');
-    if (sp) sp.textContent = 'Prompt v' + ver;
+    if (sp) sp.textContent = 'Nuance v' + ver;
     var ta = document.getElementById('sfmlPromptExtra');
     if (ta) ta.value = extra;
+
+    // load versions list (best-effort)
+    try{ sfmlPromptLoadVersions(); }catch(_e){}
+    // hide preview box on refresh
+    try{ var pb=document.getElementById('sfmlPromptPreviewBox'); if(pb) pb.classList.add('hide'); }catch(_e){}
+
     return j;
   }).catch(function(e){
     try{ toastShowNow('SFML settings failed', 'warn', 2600); }catch(_e){}
@@ -2152,6 +2169,57 @@ function sfmlImproveSaveExtra(){
     }).catch(function(e){
       try{ toastShowNow('Save failed', 'warn', 2600); }catch(_e){}
     });
+}
+
+function sfmlPromptLoadVersions(){
+  return fetchJsonAuthed('/api/settings/sfml_prompt_versions').then(function(j){
+    if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_versions_failed');
+    var sel = document.getElementById('sfmlPromptVersions');
+    if (!sel) return j;
+    var vers = Array.isArray(j.versions) ? j.versions : [];
+    sel.innerHTML = '';
+    if (!vers.length){
+      var o=document.createElement('option'); o.value=''; o.textContent='(none)'; sel.appendChild(o);
+      return j;
+    }
+    for (var i=0;i<vers.length;i++){
+      var v = vers[i]||{};
+      var ov = document.createElement('option');
+      ov.value = String(v.version||'');
+      ov.textContent = 'v' + String(v.version||'') + ' — ' + String(v.source||'') + ' — ' + String(v.created_at||'');
+      sel.appendChild(ov);
+    }
+    return j;
+  }).catch(function(e){
+    // silent
+  });
+}
+
+function sfmlPromptRevertSelected(){
+  var sel = document.getElementById('sfmlPromptVersions');
+  var v = sel ? String(sel.value||'') : '';
+  if (!v) return;
+  return fetchJsonAuthed('/api/settings/sfml_prompt_revert', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({version: v})})
+    .then(function(j){
+      if (!j || !j.ok) throw new Error((j&&j.error)||'revert_failed');
+      try{ toastShowNow('Reverted', 'ok', 1800); }catch(_e){}
+      return sfmlImproveRefresh();
+    }).catch(function(e){
+      try{ toastShowNow('Revert failed', 'warn', 2600); }catch(_e){}
+    });
+}
+
+function sfmlPromptPreview(){
+  return fetchJsonAuthed('/api/settings/sfml_prompt_preview').then(function(j){
+    if (!j || !j.ok) throw new Error((j&&j.error)||'preview_failed');
+    var pb = document.getElementById('sfmlPromptPreviewBox');
+    if (!pb) return j;
+    pb.textContent = String(j.full_prompt||'');
+    pb.classList.remove('hide');
+    return j;
+  }).catch(function(e){
+    try{ toastShowNow('Preview failed', 'warn', 2600); }catch(_e){}
+  });
 }
 
 function renderMetrics(m){
@@ -9802,7 +9870,27 @@ def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # n
 
 
 def _sfml_prompt_defaults() -> dict[str, Any]:
+    # "extra" is the editable Nuance prompt.
     return {'enabled': False, 'version': 1, 'extra': ''}
+
+
+def _sfml_prompt_base_text() -> str:
+    # Keep this stable and minimal; the Nuance prompt does most of the guidance.
+    # We intentionally do NOT embed the full external spec here.
+    return (
+        "You are an SFML v1 compiler. Output ONLY the SFML file as plain text (no markdown, no code fences, no commentary).\n\n"
+        "FORMAT\n"
+        "- First non-empty line: # SFML v1\n"
+        "- Must include cast: with ALL casting_map keys and EXACT voice_ids\n"
+        "- Scenes: scene scene-<n> \"<Title>\":\n"
+        "- Speaker blocks: two spaces + Name: then bullets (four spaces + '- ')\n"
+        "- Allowed delivery tag on bullets only: - {delivery=calm|neutral|urgent|dramatic|shout} text\n"
+        "- Allowed pauses: '  PAUSE: 0.25' (scene) or '    PAUSE: 0.25' (speaker)\n\n"
+        "HARD RULES\n"
+        "- Do NOT paraphrase or invent story text.\n"
+        "- Assign quoted dialogue to the speaking characters when possible.\n"
+        "- Output contains ONLY the SFML text.\n"
+    )
 
 
 @app.get('/api/settings/sfml_prompt')
@@ -9887,6 +9975,128 @@ def api_settings_sfml_prompt_set(payload: dict[str, Any] = Body(default={})):  #
             conn.close()
 
         return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.get('/api/settings/sfml_prompt_versions')
+def api_settings_sfml_prompt_versions_get(limit: int = 25):
+    try:
+        lim = int(limit or 25)
+        if lim < 1:
+            lim = 1
+        if lim > 100:
+            lim = 100
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT version, meta_json, created_at FROM sf_prompt_versions WHERE key=%s ORDER BY version DESC LIMIT %s',
+                ('sfml_prompt_extra', lim),
+            )
+            rows = cur.fetchall() or []
+        finally:
+            conn.close()
+
+        out = []
+        for r in rows:
+            try:
+                v = int(r[0] or 0)
+            except Exception:
+                v = 0
+            meta = {}
+            try:
+                meta = json.loads(r[1] or '{}') if (r[1] or '').strip() else {}
+            except Exception:
+                meta = {}
+            ts = int(r[2] or 0) if r and len(r) > 2 else 0
+            src = str((meta or {}).get('source') or '')
+            out.append({'version': v, 'source': src, 'created_at': ts})
+
+        return {'ok': True, 'versions': out}
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.post('/api/settings/sfml_prompt_revert')
+def api_settings_sfml_prompt_revert(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    try:
+        v = str((payload or {}).get('version') or '').strip()
+        if not v or not v.isdigit():
+            return {'ok': False, 'error': 'bad_version'}
+        ver = int(v)
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT prompt_text FROM sf_prompt_versions WHERE key=%s AND version=%s LIMIT 1',
+                ('sfml_prompt_extra', ver),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {'ok': False, 'error': 'version_not_found'}
+            prompt_text = str(row[0] or '')
+
+            s0 = _settings_get(conn, 'sfml_prompt')
+            if not isinstance(s0, dict):
+                s0 = {}
+            s = _sfml_prompt_defaults()
+            s.update({k: s0.get(k) for k in ('enabled', 'version', 'extra') if k in s0})
+
+            # Set extra + bump version
+            prev_extra = str(s.get('extra') or '')
+            s['extra'] = prompt_text
+            s['enabled'] = bool(s.get('enabled', False))
+            try:
+                s['version'] = int(s.get('version') or 1) + 1
+            except Exception:
+                s['version'] = 1
+
+            # Record new version as a revert event
+            try:
+                now = int(time.time())
+                cur.execute(
+                    "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
+                    (
+                        'sfml_prompt_extra',
+                        int(s['version'] or 1),
+                        str(s.get('extra') or ''),
+                        json.dumps({'source': 'revert', 'from_version': ver, 'prev_changed': (prev_extra != prompt_text)}, separators=(',', ':')),
+                        now,
+                    ),
+                )
+            except Exception:
+                pass
+
+            _settings_set(conn, 'sfml_prompt', s)
+        finally:
+            conn.close()
+
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.get('/api/settings/sfml_prompt_preview')
+def api_settings_sfml_prompt_preview():
+    try:
+        conn = db_connect()
+        try:
+            db_init(conn)
+            s = _settings_get(conn, 'sfml_prompt')
+        finally:
+            conn.close()
+        if not isinstance(s, dict):
+            s = {}
+        extra = str(s.get('extra') or '').strip()
+        base = _sfml_prompt_base_text().strip()
+        full = base
+        if extra:
+            full = full + "\n\nNUANCE PROMPT\n" + extra + "\n"
+        return {'ok': True, 'base_prompt': base, 'nuance_prompt': extra, 'full_prompt': full}
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
