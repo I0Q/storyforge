@@ -3900,7 +3900,7 @@ function renderGpus(b){
 
       <div class='gpuRow' style='margin-top:10px'>
         <div class='k'>VRAM</div>
-        <div class='v'>${vt ? `${(vu/1024).toFixed(1)} / ${(vt/1024).toFixed(1)} GB` : '-'}</div>
+        <div class='v'>${vt ? ((vu/1024).toFixed(1) + ' / ' + (vt/1024).toFixed(1) + ' GB') : '-'}</div>
       </div>
       <div class='bar small' id='barVram${idx}'><div></div></div>
     </div>`;
