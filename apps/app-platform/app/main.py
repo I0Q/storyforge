@@ -626,7 +626,7 @@ MONITOR_HTML = """
       <div class='row' style='justify-content:space-between;'>
         <div>
           <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
+          <div id='monSub' class='muted'>Connecting...</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
           <button id='monCloseBtn' class='secondary' type='button' onclick='closeMonitorEv(event)'>Close</button>
@@ -651,7 +651,7 @@ MONITOR_HTML = """
 
       <div style='font-weight:950;margin-top:12px;'>Processes</div>
       <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading...</pre>
     </div>
   </div>
 """
@@ -670,8 +670,8 @@ function stopMetricsStream(){ if(metricsES){ try{ metricsES.close(); }catch(e){}
 function setBar(elId,pct){ var el=document.getElementById(elId); if(!el) return; var p=Math.max(0,Math.min(100,pct||0)); var f=el.querySelector('div'); if(f) f.style.width=p.toFixed(0)+'%'; el.classList.remove('warn','bad'); if(p>=85) el.classList.add('bad'); else if(p>=60) el.classList.add('warn'); }
 function fmtPct(x){ if(x==null) return '-'; return (Number(x).toFixed(1))+'%'; }
 function fmtTs(ts){ if(!ts) return '-'; try{ return new Date(ts*1000).toLocaleString(); }catch(e){ return String(ts); } }
-function updateDockFromMetrics(m){ var el=document.getElementById('dockStats'); if(!el) return; var b=(m&&m.body)?m.body:(m||{}); var cpu=(b.cpu_pct!=null)?Number(b.cpu_pct).toFixed(1)+'%':'-'; var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var ram=rt?rp.toFixed(1)+'%':'-'; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); var maxGpu=null; if(gpus.length){ maxGpu=0; for(var i=0;i<gpus.length;i++){ var u=Number((gpus[i]||{}).util_gpu_pct||0); if(u>maxGpu) maxGpu=u; } } var gpu=(maxGpu==null)?'-':maxGpu.toFixed(1)+'%'; el.textContent='CPU '+cpu+' • RAM '+ram+' • GPU '+gpu; }
-function renderGpus(b){ var el=document.getElementById('monGpus'); if(!el) return; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); if(!gpus.length){ el.innerHTML='<div class="muted">No GPU data</div>'; return; } el.innerHTML=gpus.slice(0,8).map(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; var util=Number(g.util_gpu_pct||0); var power=(g.power_w!=null)?Number(g.power_w).toFixed(0)+'W':null; var temp=(g.temp_c!=null)?Number(g.temp_c).toFixed(0)+'C':null; var right=[power,temp].filter(Boolean).join(' • '); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); return "<div class='gpuCard'>"+"<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+"<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+"<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+"<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt?((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB'):'-')+"</div></div>"+"<div class='bar small' id='barVram"+idx+"'><div></div></div>"+"</div>"; }).join(''); gpus.slice(0,8).forEach(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; setBar('barGpu'+idx, Number(g.util_gpu_pct||0)); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); setBar('barVram'+idx, vt?(vu/vt*100):0); }); }
+function updateDockFromMetrics(m){ var el=document.getElementById('dockStats'); if(!el) return; var b=(m&&m.body)?m.body:(m||{}); var cpu=(b.cpu_pct!=null)?Number(b.cpu_pct).toFixed(1)+'%':'-'; var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var ram=rt?rp.toFixed(1)+'%':'-'; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); var maxGpu=null; if(gpus.length){ maxGpu=0; for(var i=0;i<gpus.length;i++){ var u=Number((gpus[i]||{}).util_gpu_pct||0); if(u>maxGpu) maxGpu=u; } } var gpu=(maxGpu==null)?'-':maxGpu.toFixed(1)+'%'; el.textContent='CPU '+cpu+' * RAM '+ram+' * GPU '+gpu; }
+function renderGpus(b){ var el=document.getElementById('monGpus'); if(!el) return; var gpus=Array.isArray(b.gpus)?b.gpus:(b.gpu?[b.gpu]:[]); if(!gpus.length){ el.innerHTML='<div class="muted">No GPU data</div>'; return; } el.innerHTML=gpus.slice(0,8).map(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; var util=Number(g.util_gpu_pct||0); var power=(g.power_w!=null)?Number(g.power_w).toFixed(0)+'W':null; var temp=(g.temp_c!=null)?Number(g.temp_c).toFixed(0)+'C':null; var right=[power,temp].filter(Boolean).join(' * '); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); return "<div class='gpuCard'>"+"<div class='gpuHead'><div class='l'>GPU "+idx+"</div><div class='r'>"+(right||'')+"</div></div>"+"<div class='gpuRow'><div class='k'>Util</div><div class='v'>"+fmtPct(util)+"</div></div>"+"<div class='bar small' id='barGpu"+idx+"'><div></div></div>"+"<div class='gpuRow' style='margin-top:10px'><div class='k'>VRAM</div><div class='v'>"+(vt?((vu/1024).toFixed(1)+' / '+(vt/1024).toFixed(1)+' GB'):'-')+"</div></div>"+"<div class='bar small' id='barVram"+idx+"'><div></div></div>"+"</div>"; }).join(''); gpus.slice(0,8).forEach(function(g,i){ g=g||{}; var idx=(g.index!=null)?g.index:i; setBar('barGpu'+idx, Number(g.util_gpu_pct||0)); var vt=Number(g.vram_total_mb||0), vu=Number(g.vram_used_mb||0); setBar('barVram'+idx, vt?(vu/vt*100):0); }); }
 function updateMonitorFromMetrics(m){ var b=(m&&m.body)?m.body:(m||{}); var cpu=Number(b.cpu_pct||0); var c=document.getElementById('monCpu'); if(c) c.textContent=fmtPct(cpu); setBar('barCpu',cpu); var rt=Number(b.ram_total_mb||0), ru=Number(b.ram_used_mb||0); var rp=rt?(ru/rt*100):0; var r=document.getElementById('monRam'); if(r) r.textContent=rt?(ru.toFixed(0)+' / '+rt.toFixed(0)+' MB ('+rp.toFixed(1)+'%)'):'-'; setBar('barRam',rp); renderGpus(b); var sub=document.getElementById('monSub'); if(sub) sub.textContent='Tinybox time: '+(b.ts?fmtTs(b.ts):'-'); updateDockFromMetrics(m); try{ var procs=Array.isArray(b.processes)?b.processes:[]; var pre=document.getElementById('monProc'); if(pre){ if(!procs.length) pre.textContent='(no process data)'; else{ var lines=['PID     %CPU   %MEM   GPU   ELAPSED   COMMAND','-----------------------------------------------']; for(var i=0;i<procs.length;i++){ var p=procs[i]||{}; var pid=String(p.pid||'').padEnd(7,' '); var cpuS=String(Number(p.cpu_pct||0).toFixed(1)).padStart(5,' '); var memS=String(Number(p.mem_pct||0).toFixed(1)).padStart(5,' '); var gpuS=(p.gpu_mem_mb!=null?String(Number(p.gpu_mem_mb).toFixed(0))+'MB':'-').padStart(6,' '); var et=String(p.elapsed||'').padEnd(9,' '); var cmd=String(p.args||p.command||p.name||''); lines.push(pid+'  '+cpuS+'  '+memS+'  '+gpuS+'  '+et+'  '+cmd);} pre.textContent=lines.join(String.fromCharCode(10)); } } }catch(e){} }
 
 // Auto-reconnect SSE (iOS/Safari drops EventSource frequently)
@@ -692,7 +692,7 @@ function setMetricsInterval(sec){
 function _metricsScheduleReconnect(label){
   try{ if(metricsReconnectTimer) return; }catch(e){}
   try{ stopMetricsStream(); }catch(e){}
-  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent=label||'Reconnecting…'; }catch(e){}
+  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent=label||'Reconnecting...'; }catch(e){}
   var delay = Math.max(400, Math.min(10000, Number(metricsReconnectBackoffMs||900)));
   metricsReconnectBackoffMs = Math.min(10000, Math.floor(delay*1.7));
   try{
@@ -708,13 +708,13 @@ function startMetricsStream(){
   if(!monitorEnabled) return;
   stopMetricsStream();
   try{ if(metricsReconnectTimer){ clearTimeout(metricsReconnectTimer); metricsReconnectTimer=null; } }catch(e){}
-  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting…'; }catch(e){}
+  try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connecting...'; }catch(e){}
   try{
     metricsES=new EventSource(_metricsUrl());
     metricsES.onopen=function(){ metricsReconnectBackoffMs = 900; try{ var ds=document.getElementById('dockStats'); if(ds) ds.textContent='Connected'; }catch(e){} };
     metricsES.onmessage=function(ev){ try{ var m=JSON.parse(ev.data||'{}'); lastMetrics=m; updateMonitorFromMetrics(m);}catch(e){} };
-    metricsES.onerror=function(_e){ _metricsScheduleReconnect('Monitor reconnecting…'); };
-  }catch(e){ _metricsScheduleReconnect('Monitor reconnecting…'); }
+    metricsES.onerror=function(_e){ _metricsScheduleReconnect('Monitor reconnecting...'); };
+  }catch(e){ _metricsScheduleReconnect('Monitor reconnecting...'); }
 }
 function _sfSetBottomPad(px){
   try{ document.documentElement.style.setProperty('--sfBottomPad', String(Math.max(0, Math.floor(Number(px||0)))) + 'px'); }catch(e){}
@@ -759,7 +759,7 @@ function openMonitor(){
   if(b){ b.classList.remove('hide'); b.style.display='block'; }
   if(sh){ sh.classList.remove('hide'); sh.style.display='block'; }
 
-  // Lock body scroll so the sheet always feels “stuck” to the bottom (iOS Safari).
+  // Lock body scroll so the sheet always feels "stuck" to the bottom (iOS Safari).
   try{ window.__sfScrollY = window.scrollY || 0; }catch(e){}
   try{ document.body.classList.add('sheetOpen'); }catch(e){}
   try{ document.body.style.position='fixed'; document.body.style.top = '-' + String(window.__sfScrollY||0) + 'px'; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }catch(e){}
@@ -793,7 +793,7 @@ try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); try{ _sfUpdateBot
 
 DEBUG_BANNER_HTML = """
   <div id='boot' class='boot muted'>
-    <span id='bootText'><strong>Build</strong>: __BUILD__ • JS: booting…</span>
+    <span id='bootText'><strong>Build</strong>: __BUILD__ * JS: booting...</span>
     <div id='bootDeploy' class='hide' style='flex:1 1 auto; min-width:200px; margin-left:12px'>
       <div class='muted' style='font-weight:950'>StoryForge updating...</div>
       <div class='updateTrack' style='margin-top:6px;position:relative'>
@@ -1069,7 +1069,7 @@ def index(response: Response):
 
         </div>
       </div>
-      <div id='jobs'>Loading…</div>
+      <div id='jobs'>Loading...</div>
     </div>
   </div>
 
@@ -1126,7 +1126,7 @@ def index(response: Response):
         <a href='/voices/new'><button class='secondary' type='button'>Generate new voice model</button></a>
       </div>
 
-      <div id='voicesList' style='margin-top:10px' class='muted'>Loading…</div>
+      <div id='voicesList' style='margin-top:10px' class='muted'>Loading...</div>
     </div>
   </div>
 
@@ -1143,7 +1143,7 @@ def index(response: Response):
         <button type='button' class='secondary' onclick='prodSuggestCasting()'>Suggest casting</button>
       </div>
       <div id='prodBusy' class='updateBar hide' style='margin-top:10px'>
-        <div class='muted' style='font-weight:950' id='prodBusyTitle'>Working…</div>
+        <div class='muted' style='font-weight:950' id='prodBusyTitle'>Working...</div>
         <div class='updateTrack'><div class='updateProg'></div></div>
         <div id='prodBusySub' class='muted'>Please wait</div>
       </div>
@@ -1163,7 +1163,7 @@ def index(response: Response):
       </div>
 
       <div id='prodSfmlBusy' class='updateBar hide' style='margin-top:10px'>
-        <div class='muted' style='font-weight:950' id='prodSfmlBusyTitle'>Working…</div>
+        <div class='muted' style='font-weight:950' id='prodSfmlBusyTitle'>Working...</div>
         <div class='updateTrack'><div class='updateProg'></div></div>
         <div id='prodSfmlBusySub' class='muted'>Please wait</div>
       </div>
@@ -1184,7 +1184,7 @@ def index(response: Response):
         <a href='/settings/providers/new'><button type='button' class='secondary'>Add provider</button></a>
       </div>
 
-      <div id='providersBox' class='muted' style='margin-top:10px'>Loading…</div>
+      <div id='providersBox' class='muted' style='margin-top:10px'>Loading...</div>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;justify-content:flex-end'>
         <button type='button' onclick='saveProviders()'>Save</button>
@@ -1194,7 +1194,7 @@ def index(response: Response):
     <div class='card'>
       <div style='font-weight:950;margin-bottom:6px;'>Notifications</div>
       <div class='muted'>Browser/OS push notifications for job completion (completed or failed). iOS requires Add to Home Screen.</div>
-      <div id='notifOut' class='muted' style='margin-top:8px'>Loading…</div>
+      <div id='notifOut' class='muted' style='margin-top:8px'>Loading...</div>
       <div class='row' style='margin-top:10px;gap:12px;flex-wrap:wrap'>
         <button id='notifEnableBtn' type='button' onclick='notifEnable()'>Enable on this device</button>
         <button id='notifDisableBtn' class='secondary' type='button' onclick='notifDisable()'>Disable on this device</button>
@@ -1217,7 +1217,7 @@ def index(response: Response):
           <input id='sfmlImproveEnabled' type='checkbox' onchange='sfmlImproveSave()' />
           <span>Enable improvement loop</span>
         </label>
-        <span class='muted' id='sfmlPromptVer'>Prompt v—</span>
+        <span class='muted' id='sfmlPromptVer'>Prompt v-</span>
         <button type='button' class='secondary' onclick='sfmlImproveRefresh()'>Reload</button>
       </div>
 
@@ -1324,7 +1324,7 @@ function __sfToastInit(){
 try{ document.addEventListener('DOMContentLoaded', __sfToastInit); }catch(e){}
 try{ __sfToastInit(); }catch(e){}
 
-// If the boot banner script fails to run (some Safari edge cases), don't leave it stuck on 'booting…'.
+// If the boot banner script fails to run (some Safari edge cases), don't leave it stuck on 'booting...'.
 try{
   setTimeout(function(){
     try{
@@ -1332,7 +1332,7 @@ try{
       if (!bt) return;
       var t=String(bt.textContent||'');
       if (t.indexOf('JS: booting')!==-1){
-        bt.textContent = t.replace('JS: booting…','JS: ok').replace('JS: booting...','JS: ok');
+        bt.textContent = t.replace('JS: booting...','JS: ok').replace('JS: booting...','JS: ok');
       }
     }catch(_e){}
   }, 0);
@@ -1373,7 +1373,7 @@ function showTab(name, opts){
     if (name==='history') {
       try{ bindJobsLazyScroll(); }catch(e){};
       try{ loadHistory(true); }catch(e){}
-      // Ensure live updates start; and add a small delayed retry so the page never sits on "Loading…".
+      // Ensure live updates start; and add a small delayed retry so the page never sits on "Loading...".
       try{ startJobsStream(); }catch(e){}
       try{ setTimeout(function(){ try{ loadHistory(true); }catch(_e){} }, 800); }catch(e){}
     }
@@ -1615,7 +1615,7 @@ function notifOut(msg, kind){
 }
 
 function notifLoad(){
-  notifOut('Loading…');
+  notifOut('Loading...');
   // render default kinds first
   var defSel={};
   try{ var ks=notifKindsList(); for (var i=0;i<ks.length;i++) defSel[ks[i]] = (ks[i]==='produce_audio'); }catch(_e){}
@@ -1639,7 +1639,7 @@ function notifLoad(){
 function notifSaveKinds(){
   try{
     var kinds = notifSelectedKinds();
-    notifOut('Saving…');
+    notifOut('Saving...');
     return fetchJsonAuthed('/api/notifications/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({device_id:notifDeviceId(), job_kinds:kinds})})
       .then(function(j){
         if (!j || !j.ok) throw new Error((j&&j.error)||'save_failed');
@@ -1651,7 +1651,7 @@ function notifSaveKinds(){
 
 function notifEnable(){
   // subscribe this device
-  notifOut('Enabling…');
+  notifOut('Enabling...');
   if (!('serviceWorker' in navigator) || !('PushManager' in window)){
     notifOut('Push not supported in this browser.', 'err');
     return;
@@ -1683,7 +1683,7 @@ function notifEnable(){
 }
 
 function notifDisable(){
-  notifOut('Disabling…');
+  notifOut('Disabling...');
   if (!('serviceWorker' in navigator)){
     notifOut('Disabled.');
     return;
@@ -1701,7 +1701,7 @@ function notifDisable(){
 }
 
 function notifTest(){
-  notifOut('Sending test…');
+  notifOut('Sending test...');
   return fetchJsonAuthed('/api/notifications/test', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({device_id:notifDeviceId()})})
     .then(function(j){
       if (!j || !j.ok) throw new Error((j&&j.error)||'test_failed');
@@ -1757,7 +1757,7 @@ function saveJobToRoster(jobId){
     };
 
     var btn = card ? card.querySelector('.saveRosterBtn') : null;
-    if (btn) btn.textContent='Saving…';
+    if (btn) btn.textContent='Saving...';
     fetchJsonAuthed('/api/voices', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
         if (!j || !j.ok){ throw new Error((j&&j.error)||'save_failed'); }
@@ -1782,7 +1782,7 @@ function saveJobToStoryAudio(jobId){
     var payload = {job_id: String(jobId||''), story_id: storyId, mp3_url: url, meta_json: JSON.stringify(meta||{})};
 
     var btn = card ? card.querySelector('.saveStoryAudioBtn') : null;
-    if (btn) btn.textContent='Saving…';
+    if (btn) btn.textContent='Saving...';
 
     fetchJsonAuthed('/api/library/story_audio/save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
       .then(function(j){
@@ -1903,7 +1903,7 @@ function renderJobs(jobs){
     })();
 
     const voiceName = (meta && (meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id)) ? String(meta.display_name || meta.voice_name || meta.name || meta.roster_id || meta.id) : '';
-    const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' • ' + voiceName) : '')) : (job.title||job.id);
+    const cardTitle = isSample ? ((job.title ? String(job.title) : 'Voice sample') + (voiceName ? (' * ' + voiceName) : '')) : (job.title||job.id);
 
     const errVal = (job && job.error_text) ? String(job.error_text||'') : '';
     const errRow = (String(job.state||'')==='failed' && errVal) ? (
@@ -1981,7 +1981,7 @@ function loadHistory(reset){
     __SF_JOBS_NEXT_BEFORE = null;
     __SF_JOBS_LOADING = false;
     __SF_JOBS_DONE = false;
-    if (el) el.textContent='Loading…';
+    if (el) el.textContent='Loading...';
   }
   if (__SF_JOBS_LOADING || __SF_JOBS_DONE) return Promise.resolve();
   __SF_JOBS_LOADING = true;
@@ -2128,7 +2128,7 @@ function sfmlImproveRefresh(){
   return fetchJsonAuthed('/api/settings/sfml_prompt').then(function(j){
     if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_failed');
     var en = !!j.enabled;
-    var ver = j.version!=null ? String(j.version) : '—';
+    var ver = j.version!=null ? String(j.version) : '-';
     var extra = String(j.extra||'');
     var cb = document.getElementById('sfmlImproveEnabled');
     if (cb) cb.checked = en;
@@ -2189,7 +2189,7 @@ function sfmlPromptLoadVersions(){
       var v = vers[i]||{};
       var ov = document.createElement('option');
       ov.value = String(v.version||'');
-      ov.textContent = 'v' + String(v.version||'') + ' — ' + String(v.source||'') + ' — ' + String(v.created_at||'');
+      ov.textContent = 'v' + String(v.version||'') + ' - ' + String(v.source||'') + ' - ' + String(v.created_at||'');
       sel.appendChild(ov);
     }
     return j;
@@ -2358,7 +2358,7 @@ function setMonitorEnabled(on){
   document.body.classList.remove('monOff');
   if (dock) dock.classList.remove('hide');
   if (btn){ btn.textContent = 'Disable monitor'; btn.classList.add('secondary'); }
-  const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+  const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting...';
   startMetricsStream();
 }
 
@@ -2595,7 +2595,7 @@ function renderProviders(providers){
     var llmModel = String(p.llm_model || 'google/gemma-2-9b-it');
 
     var header = "<div class='row provHead' data-pid='"+escAttr(id)+"' onclick='toggleProvBtn(this)' style='justify-content:space-between;cursor:pointer;'>"+
-      "<div><div style='font-weight:950'>"+escapeHtml(name||kind||'Provider')+"</div><div class='muted'>"+escapeHtml(kind)+" • id: <code>"+escapeHtml(id)+"</code></div></div>"+
+      "<div><div style='font-weight:950'>"+escapeHtml(name||kind||'Provider')+"</div><div class='muted'>"+escapeHtml(kind)+" * id: <code>"+escapeHtml(id)+"</code></div></div>"+
       "<div class='row' style='justify-content:flex-end;gap:10px;flex-wrap:wrap'>"+
       "</div>"+
     "</div>";
@@ -2634,7 +2634,7 @@ function renderProviders(providers){
             return "<option value='"+escAttr(m.id)+"' "+sel+">"+escapeHtml(m.label)+"</option>";
           }).join('')+
         "</select>"+
-        "<div id='llmReload_"+escAttr(id)+"' class='muted hide' style='margin-top:8px'>Reloading LLM…</div>"+
+        "<div id='llmReload_"+escAttr(id)+"' class='muted hide' style='margin-top:8px'>Reloading LLM...</div>"+
       "</div>"+
       "<div class='k'>LLM GPUs</div><div>"+
         "<input type='hidden' data-pid='"+escAttr(id)+"' data-k='llm_gpus' value='"+escAttr(llmG.join(','))+"'/>"+
@@ -2726,7 +2726,7 @@ function collectProvidersFromUI(){
 
 function reloadProviders(){
   var el=document.getElementById('providersBox');
-  if (el) el.textContent='Loading…';
+  if (el) el.textContent='Loading...';
   return fetchJsonAuthed('/api/settings/providers').then(function(j){
     if (!j || !j.ok){ if(el) el.innerHTML="<div class='muted'>Error: "+escapeHtml((j&&j.error)||'unknown')+"</div>"; return; }
     window.__SF_PROVIDERS = (j.providers || []);
@@ -2764,7 +2764,7 @@ function saveProviders(){
         if (j && j.llm_reconfigure && j.llm_reconfigure.ok){
           var g = (j.llm_reconfigure.gpus||[]).join(',');
           try{ sessionStorage.setItem('sf_llm_reloading', JSON.stringify({ts:Date.now(), gpus:g})); }catch(e){}
-          try{ toastSet('Reloading LLM on GPU(s) '+g+'… (may take ~1–2 min)', 'info', 2600); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
+          try{ toastSet('Reloading LLM on GPU(s) '+g+'... (may take ~1-2 min)', 'info', 2600); window.__sfToastInit && window.__sfToastInit(); }catch(e){}
         }
       }catch(e){}
 
@@ -2831,7 +2831,7 @@ function loadProduction(){
   try{
     var sel=document.getElementById('prodStorySel');
     var out=document.getElementById('prodOut');
-    if (out) out.textContent='Loading stories…';
+    if (out) out.textContent='Loading stories...';
 
     return fetchJsonAuthed('/api/library/stories').then(function(j){
       if (!j || !j.ok){ throw new Error((j&&j.error)||'library_failed'); }
@@ -2876,7 +2876,7 @@ function prodLoadCasting(storyId){
     var out=document.getElementById('prodOut');
     var sid = String(storyId||'').trim();
     if (!sid) return;
-    prodSetBusy(true, 'Loading…', 'Fetching saved casting and SFML');
+    prodSetBusy(true, 'Loading...', 'Fetching saved casting and SFML');
     fetchJsonAuthed('/api/production/casting/'+encodeURIComponent(sid)).then(function(j){
       if (!j || !j.ok) { prodSetBusy(false); return; }
       window.__SF_PROD.story_id = sid;
@@ -2920,7 +2920,7 @@ function prodSetBusy(on, title, sub){
     if (!box) return;
     if (on){
       box.classList.remove('hide');
-      if (t) t.textContent = title || 'Working…';
+      if (t) t.textContent = title || 'Working...';
       if (s) s.textContent = sub || 'Please wait';
     }else{
       box.classList.add('hide');
@@ -2936,7 +2936,7 @@ function prodSetSfmlBusy(on, title, sub){
     if (!box) return;
     if (on){
       box.classList.remove('hide');
-      if (t) t.textContent = title || 'Working…';
+      if (t) t.textContent = title || 'Working...';
       if (s) s.textContent = sub || 'Please wait';
     }else{
       box.classList.add('hide');
@@ -2980,7 +2980,7 @@ function prodRenderAssignments(){
         if (v.gender && v.gender!=='unknown') t.push(v.gender);
         if (v.age && v.age!=='unknown') t.push(v.age);
         if (v.pitch && v.pitch!=='unknown') t.push('pitch '+v.pitch);
-        var label = nm + (t.length?(' • '+t.join(' • ')):'');
+        var label = nm + (t.length?(' * '+t.join(' * ')):'');
         var sel = (String(selected||'')===id) ? ' selected' : '';
         return "<option value='"+escAttr(id)+"'"+sel+">"+escapeHtml(label)+"</option>";
       }).join('');
@@ -3016,7 +3016,7 @@ function prodRenderAssignments(){
         body += "<div class='row' style='gap:10px;flex-wrap:nowrap;align-items:center;margin-top:10px'>"
           + "<div class='muted' style='flex:0 0 auto'>played by</div>"
           + "<span class='swatch' style='background:"+escAttr(voiceHex)+"'></span>"
-          + "<div style='min-width:0'>"+escapeHtml(voiceName||'—')+"</div>"
+          + "<div style='min-width:0'>"+escapeHtml(voiceName||'-')+"</div>"
           + "</div>";
       }
       if (reason){
@@ -3072,7 +3072,7 @@ function prodSuggestCasting(){
     var out=document.getElementById('prodOut');
     var storyId = sel ? String(sel.value||'').trim() : '';
     if (!storyId){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
-    prodSetBusy(true, 'Suggesting casting…', 'Asking the LLM to match voices to characters');
+    prodSetBusy(true, 'Suggesting casting...', 'Asking the LLM to match voices to characters');
     if (out) out.textContent='';
 
     fetchJsonAuthed('/api/production/suggest_casting', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
@@ -3104,7 +3104,7 @@ function prodSaveCasting(silent){
     var assigns = Array.isArray(st.assignments) ? st.assignments : [];
     if (!assigns.length){ if(out && !silent) out.innerHTML='<div class="err">No assignments</div>'; return; }
 
-    prodSetBusy(true, 'Saving casting…', 'Autosaving your casting choices');
+    prodSetBusy(true, 'Saving casting...', 'Autosaving your casting choices');
     if (out) out.textContent='';
     var payload = { story_id: String(st.story_id), assignments: assigns.map(function(a){ return {character:a.character, voice_id:a.voice_id}; }) };
 
@@ -3133,7 +3133,7 @@ function prodGenerateSfml(){
     // hide prompt debug box when generating
     try{ var dbg=document.getElementById('prodSfmlPromptDbg'); if(dbg){ dbg.classList.add('hide'); dbg.textContent=''; } }catch(_e){}
 
-    prodSetSfmlBusy(true, 'Generating SFML…', 'Asking the LLM to produce a full script');
+    prodSetSfmlBusy(true, 'Generating SFML...', 'Asking the LLM to produce a full script');
     if (out) out.textContent='';
     fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
       .then(function(j){
@@ -3198,7 +3198,7 @@ function prodProduceAudio(){
     var sid = String(st.story_id||'').trim();
     if (!sid){ if(out) out.innerHTML='<div class="err">Pick a story</div>'; return; }
 
-    prodSetSfmlBusy(true, 'Producing audio…', 'Queuing a render job');
+    prodSetSfmlBusy(true, 'Producing audio...', 'Queuing a render job');
     if (out) out.textContent='';
 
     var eng = '';
@@ -3390,7 +3390,7 @@ function prodRenderSfml(sfml){
 
 function loadVoices(){
   var el=document.getElementById('voicesList');
-  if (el) el.textContent='Loading…';
+  if (el) el.textContent='Loading...';
   return fetchJsonAuthed('/api/voices').then(function(j){
     if (!j.ok){ if(el) el.innerHTML = "<div class='muted'>Error loading voices</div>"; return; }
     var voices = j.voices || [];
@@ -3444,7 +3444,7 @@ function loadVoices(){
           try{ eng = String(v.engine||'').trim(); }catch(_e){ eng=''; }
           if (eng) parts.push('engine ' + eng);
           if (parts.length){
-            chips += "<div class='muted' style='font-size:12px;margin-top:6px'>" + escapeHtml(parts.join(' • ')) + "</div>";
+            chips += "<div class='muted' style='font-size:12px;margin-top:6px'>" + escapeHtml(parts.join(' * ')) + "</div>";
           }
         }catch(_e){}
 
@@ -3674,7 +3674,7 @@ function disableVoice(idEnc){
 
 function loadLibrary(){
   const el=document.getElementById('lib');
-  el.textContent='Loading…';
+  el.textContent='Loading...';
   document.getElementById('libDetailCard').style.display='none';
 
   return fetchJsonAuthed('/api/library/stories').then(function(j){
@@ -3778,7 +3778,7 @@ function openMonitor(){
   try{ document.body.classList.add('noScroll'); }catch(e){}
   try{ document.body.style.position='fixed'; document.body.style.top = '-' + String(window.__sfScrollY||0) + 'px'; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }catch(e){}
   try{ document.body.classList.add('sheetOpen'); }catch(e){}
-  const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting…';
+  const ds=document.getElementById('dockStats'); if (ds) ds.textContent='Connecting...';
   try{ metricsIntervalSec = 1; }catch(e){}
   startMetricsStream();
   if (lastMetrics) updateMonitorFromMetrics(lastMetrics);
@@ -3833,7 +3833,7 @@ function renderGpus(b){
     const util = Number(g.util_gpu_pct||0);
     const power = (g.power_w!=null) ? Number(g.power_w).toFixed(0)+'W' : null;
     const temp = (g.temp_c!=null) ? Number(g.temp_c).toFixed(0)+'C' : null;
-    const right = [power, temp].filter(Boolean).join(' • ');
+    const right = [power, temp].filter(Boolean).join(' * ');
 
     const vt = Number(g.vram_total_mb||0);
     const vu = Number(g.vram_used_mb||0);
@@ -3888,7 +3888,7 @@ function updateDockFromMetrics(m){
     }
   }
   const gpu = (maxGpu==null) ? '-' : maxGpu.toFixed(1)+'%';
-  el.textContent = `CPU ${cpu} • RAM ${ram} • GPU ${gpu}`;
+  el.textContent = `CPU ${cpu} * RAM ${ram} * GPU ${gpu}`;
 }
 
 
@@ -3937,7 +3937,7 @@ try{
 
 try{
   var __bootText = __sfEnsureBootBanner();
-  if (__bootText) __bootText.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: running';
+  if (__bootText) __bootText.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' * JS: running';
 }catch(_e){}
 
 // deploy/update watch removed (will be rebuilt from scratch)
@@ -3959,7 +3959,7 @@ reloadProviders();
 
 try{
   var __bootText2 = __sfEnsureBootBanner();
-  if (__bootText2) __bootText2.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' • JS: ok';
+  if (__bootText2) __bootText2.textContent = 'Build: ' + (window.__SF_BUILD||'?') + ' * JS: ok';
   try{ __sfStartDeployWatch(); }catch(e){}
 }catch(_e){}
 </script>
@@ -3981,7 +3981,7 @@ try{
       <div class='row' style='justify-content:space-between;'>
         <div>
           <div class='sheetTitle'>System monitor</div>
-          <div id='monSub' class='muted'>Connecting…</div>
+          <div id='monSub' class='muted'>Connecting...</div>
         </div>
         <div class='row' style='justify-content:flex-end;'>
 
@@ -4008,7 +4008,7 @@ try{
 
       <div style='font-weight:950;margin-top:12px;'>Processes</div>
       <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
-      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading…</pre>
+      <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading...</pre>
     </div>
 
 
@@ -4300,7 +4300,7 @@ def voices_edit_page(voice_id: str, response: Response):
       <button type='button' class='secondary' onclick='analyzeVoice()'>Analyze voice</button>
     </div>
     <input id='voice_traits_json' type='hidden' value='__VTRAITS__' />
-    <div id='traitsBox' class='term' style='margin-top:10px'>Loading…</div>
+    <div id='traitsBox' class='term' style='margin-top:10px'>Loading...</div>
     <details class='rawBox' style='margin-top:10px'>
       <summary>Raw JSON</summary>
       <pre id='traits_raw' class='term' style='white-space:pre-wrap;max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch'>__VTRAITS__</pre>
@@ -4362,7 +4362,7 @@ function renderTraits(){
     var pre = document.getElementById('traits_raw');
     if (pre && raw) pre.textContent = raw;
 
-    if (!raw || raw==='—'){
+    if (!raw || raw==='-'){
       box.innerHTML = '<div class="muted">No metadata yet. Tap <b>Analyze voice</b>.</div>';
       return;
     }
@@ -4398,23 +4398,23 @@ function renderTraits(){
     }
 
     var tone = Array.isArray(vt.tone) ? vt.tone : [];
-    var toneHtml = tone.length ? tone.map(function(t){ return chip(t,''); }).join('') : '<span class="muted">—</span>';
+    var toneHtml = tone.length ? tone.map(function(t){ return chip(t,''); }).join('') : '<span class="muted">-</span>';
 
     var dur = (m.duration_s!=null) ? fmtNum(m.duration_s,2)+'s' : '';
     var lufs = (m.lufs_i!=null) ? fmtNum(m.lufs_i,1)+' LUFS' : '';
 
     var f0 = (f.f0_hz_median!=null) ? fmtNum(f.f0_hz_median,0)+' Hz' : '';
-    var f0r = (f.f0_hz_p10!=null && f.f0_hz_p90!=null) ? (fmtNum(f.f0_hz_p10,0)+'–'+fmtNum(f.f0_hz_p90,0)+' Hz') : '';
+    var f0r = (f.f0_hz_p10!=null && f.f0_hz_p90!=null) ? (fmtNum(f.f0_hz_p10,0)+'-'+fmtNum(f.f0_hz_p90,0)+' Hz') : '';
 
     box.innerHTML = ''
       + '<div class="traitsGrid">'
       + '<div class="k">gender</div><div class="v">'+escapeHtml(String(vt.gender||'unknown'))+'</div>'
       + '<div class="k">age</div><div class="v">'+escapeHtml(String(vt.age||'unknown'))+'</div>'
-      + '<div class="k">pitch</div><div class="v">'+escapeHtml(String(vt.pitch||'unknown'))+(f0?(' • '+escapeHtml(f0)):'')+(f0r?(' <span class="muted">('+escapeHtml(f0r)+')</span>'):'')+'</div>'
+      + '<div class="k">pitch</div><div class="v">'+escapeHtml(String(vt.pitch||'unknown'))+(f0?(' * '+escapeHtml(f0)):'')+(f0r?(' <span class="muted">('+escapeHtml(f0r)+')</span>'):'')+'</div>'
       + '<div class="k">accent</div><div class="v">'+escapeHtml(String(vt.accent||''))+'</div>'
       + '<div class="k">tone</div><div class="v"><div class="chips">'+toneHtml+'</div></div>'
-      + '<div class="k">duration</div><div class="v">'+(dur?escapeHtml(dur):'<span class="muted">—</span>')+'</div>'
-      + '<div class="k">loudness</div><div class="v">'+(lufs?escapeHtml(lufs):'<span class="muted">—</span>')+'</div>'
+      + '<div class="k">duration</div><div class="v">'+(dur?escapeHtml(dur):'<span class="muted">-</span>')+'</div>'
+      + '<div class="k">loudness</div><div class="v">'+(lufs?escapeHtml(lufs):'<span class="muted">-</span>')+'</div>'
       + '<div class="k">engine</div><div class="v">'+escapeHtml(String(m.engine||''))+'</div>'
       + '<div class="k">voice_ref</div><div class="v">'+escapeHtml(String(m.voice_ref||''))+'</div>'
       + (m.tortoise_voice?('<div class="k">tortoise</div><div class="v">'+escapeHtml(String(m.tortoise_voice||''))+'</div>'):'')
@@ -4553,7 +4553,7 @@ async function deleteVoice(){
         .replace('__SURL__', surl)
         .replace('__ENABLED__', enabled_checked)
         .replace('__VID_RAW__', voice_id)
-        .replace('__VTRAITS__', esc(vtraits_json) if vtraits_json else '—')
+        .replace('__VTRAITS__', esc(vtraits_json) if vtraits_json else '-')
         .replace('__DN_DISABLED__', dn_disabled)
     )
     html = (html
@@ -4697,22 +4697,22 @@ def voices_new_page(response: Response):
         <summary class='muted' style='cursor:pointer'>Advanced</summary>
         <div class='row' style='gap:10px;flex-wrap:wrap;margin-top:10px'>
           <div style='flex:1;min-width:160px'>
-            <div class='muted' style='font-size:12px'>Reference adherence (low → freer)</div>
+            <div class='muted' style='font-size:12px'>Reference adherence (low -> freer)</div>
             <input id='st2Alpha' type='range' min='0' max='1' step='0.05' value='0.30' oninput='st2SyncLabels()' />
             <div class='muted' style='font-size:12px'>Value: <span id='st2AlphaV'>0.30</span></div>
           </div>
           <div style='flex:1;min-width:160px'>
-            <div class='muted' style='font-size:12px'>Expressiveness (higher → more variation)</div>
+            <div class='muted' style='font-size:12px'>Expressiveness (higher -> more variation)</div>
             <input id='st2Beta' type='range' min='0' max='1' step='0.05' value='0.70' oninput='st2SyncLabels()' />
             <div class='muted' style='font-size:12px'>Value: <span id='st2BetaV'>0.70</span></div>
           </div>
           <div style='flex:1;min-width:160px'>
-            <div class='muted' style='font-size:12px'>Quality / detail (more → slower)</div>
+            <div class='muted' style='font-size:12px'>Quality / detail (more -> slower)</div>
             <input id='st2Steps' type='range' min='4' max='30' step='1' value='10' oninput='st2SyncLabels()' />
             <div class='muted' style='font-size:12px'>Value: <span id='st2StepsV'>10</span></div>
           </div>
           <div style='flex:1;min-width:160px'>
-            <div class='muted' style='font-size:12px'>Style strength (more → stronger character)</div>
+            <div class='muted' style='font-size:12px'>Style strength (more -> stronger character)</div>
             <input id='st2Scale' type='range' min='0.5' max='3' step='0.1' value='1.0' oninput='st2SyncLabels()' />
             <div class='muted' style='font-size:12px'>Value: <span id='st2ScaleV'>1.0</span></div>
           </div>
@@ -4743,14 +4743,14 @@ def voices_new_page(response: Response):
         </div>
 
         <div id='clipUrlRow' class='hide' style='flex:1;min-width:0'>
-          <input id='clipUrl' placeholder='https://…/clip.wav' />
+          <input id='clipUrl' placeholder='https://.../clip.wav' />
         </div>
       </div>
     </div>
 
     <div class='k'>Sample text <span class='muted' id='sampleTextCount' style='margin-left:8px'>0 chars</span></div>
     <div class='row' style='gap:10px;flex-wrap:nowrap'>
-      <textarea id='sampleText' placeholder='Hello…' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
+      <textarea id='sampleText' placeholder='Hello...' style='flex:1;min-width:0'>Hello. This is a test sample for a new voice.</textarea>
       <button type='button' class='copyBtn' onclick='genSampleText()' aria-label='Random sample text' title='Random sample text' style='align-self:stretch'>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -4858,7 +4858,7 @@ function updateSampleTextCount(){
     var chars = txt.length;
     var words = 0;
     try{ words = txt.trim() ? txt.trim().split(/\s+/).length : 0; }catch(e){ words = 0; }
-    c.textContent = String(chars) + ' chars • ' + String(words) + ' words';
+    c.textContent = String(chars) + ' chars * ' + String(words) + ' words';
   }catch(e){}
 }
 
@@ -5247,7 +5247,7 @@ function genSampleText(){
 function trainAndSave(){
   // New UX: generating a sample should NOT auto-save to roster.
   // Queue a job, redirect to Jobs, then user can Play + Save from the job card.
-  var out=$('out'); if(out) out.textContent='Queuing job…';
+  var out=$('out'); if(out) out.textContent='Queuing job...';
 
   var displayName = String((($('voiceName')||{}).value||'')).trim();
   var engine = String((($('engineSel')||{}).value||'')).trim();
@@ -5270,7 +5270,7 @@ function testSample(){
 
   // Prefer using the last trained voice_ref if present; otherwise, try current preset/url/upload.
   var vref = String(val('voice_ref') || '').trim();
-  var out=$('out'); if(out) out.textContent='Generating…';
+  var out=$('out'); if(out) out.textContent='Generating...';
 
   function go(voiceRef){
     var payload={engine: engine, voice: String(voiceRef||''), text: String(val('sampleText')||val('text')||'') || ('Hello. This is ' + (val('voiceName')||val('id')||'a voice') + '.'), upload:true};
@@ -5502,10 +5502,10 @@ def todo_page(request: Request, response: Response):
                 meta_parts.append('created ' + esc(created_s))
             if updated_s and updated_s != created_s:
                 meta_parts.append('updated ' + esc(updated_s))
-            meta_html = "<div class='todoMeta'>" + " • ".join(meta_parts) + "</div>" if meta_parts else ""
+            meta_html = "<div class='todoMeta'>" + " * ".join(meta_parts) + "</div>" if meta_parts else ""
             # If id is missing, render as plain text
             if tid is None:
-                box = '☑' if checked else '☐'
+                box = '[x]' if checked else '[ ]'
                 body_parts.append(f"<div class='todoPlain'>{box} {txt}</div>")
                 continue
 
@@ -5764,7 +5764,7 @@ def base_template_page(response: Response):
     <select id='sweepVoice' style='margin-top:6px'></select>
 
     <div class='muted' style='margin-top:10px'>Text</div>
-    <textarea id='sweepText' placeholder='Type a single line to compare deliveries…' style='margin-top:6px'></textarea>
+    <textarea id='sweepText' placeholder='Type a single line to compare deliveries...' style='margin-top:6px'></textarea>
 
     <div class='row' style='margin-top:10px;justify-content:flex-end'>
       <button type='button' class='secondary' onclick='queueSweep()'>Generate deliveries</button>
@@ -5783,7 +5783,7 @@ def base_template_page(response: Response):
     </div>
 
     <div class='row' style='margin-top:10px'>
-      <input id='audioUrl' placeholder='Or paste any audio URL…' />
+      <input id='audioUrl' placeholder='Or paste any audio URL...' />
       <button type='button' onclick='playUrl()'>Play URL</button>
     </div>
   </div>
@@ -5820,7 +5820,7 @@ async function loadSweepVoices(){
   try{
     var sel = document.getElementById('sweepVoice');
     if (!sel) return;
-    sel.innerHTML = "<option value=''>Loading…</option>";
+    sel.innerHTML = "<option value=''>Loading...</option>";
 
     var engSel = String((document.getElementById('sweepEngine')||{}).value||'styletts2').trim();
 
@@ -5904,7 +5904,7 @@ async function queueSweep(){
     var sequential = (engineSel === 'tortoise');
 
     var styles = ['neutral','calm','urgent','dramatic','whisper','shout'];
-    if(out) out.textContent = (sequential ? 'Queuing (sequential)…' : 'Queuing…');
+    if(out) out.textContent = (sequential ? 'Queuing (sequential)...' : 'Queuing...');
 
     for (var i=0;i<styles.length;i++){
       var d = styles[i];
@@ -5914,7 +5914,7 @@ async function queueSweep(){
         text: text,
         upload: true,
         delivery: d,
-        display_name: 'Delivery test • ' + d,
+        display_name: 'Delivery test * ' + d,
         roster_id: '',
       };
       var rr = await fetch('/api/tts_job', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
@@ -5925,7 +5925,7 @@ async function queueSweep(){
       }
 
       if (sequential){
-        try{ if(out) out.textContent = 'Running ' + String(d) + '… (' + String(i+1) + '/' + String(styles.length) + ')'; }catch(_e){}
+        try{ if(out) out.textContent = 'Running ' + String(d) + '... (' + String(i+1) + '/' + String(styles.length) + ')'; }catch(_e){}
         var st = await _waitJobDone(String(jj.job_id||''), 30*60*1000);
         if (st === 'failed'){
           if(out) out.innerHTML = "<div class='err'>Job failed: " + esc(String(d)) + "</div>";
@@ -5936,12 +5936,12 @@ async function queueSweep(){
           return;
         }
       }else{
-        try{ if(out) out.textContent = 'Queued ' + String(i+1) + ' / ' + String(styles.length) + '…'; }catch(_e){}
+        try{ if(out) out.textContent = 'Queued ' + String(i+1) + ' / ' + String(styles.length) + '...'; }catch(_e){}
         try{ await new Promise(function(res){ setTimeout(res, 150); }); }catch(_e){}
       }
     }
 
-    if(out) out.textContent = (sequential ? 'Done. Opening Jobs…' : 'Queued. Opening Jobs…');
+    if(out) out.textContent = (sequential ? 'Done. Opening Jobs...' : 'Queued. Opening Jobs...');
     window.location.href = '/#tab-history';
   }catch(e){
     if(out) out.innerHTML = "<div class='err'>" + esc(String(e)) + "</div>";
@@ -7204,7 +7204,7 @@ def api_deploy_start(request: Request, payload: dict[str, Any] = Body(default={}
     """Mark deploy as started. Call from your deploy hook/pipeline."""
     _require_deploy_token(request)
     now = int(time.time())
-    msg = str((payload or {}).get('message') or 'Deploying…')
+    msg = str((payload or {}).get('message') or 'Deploying...')
     commit = _deploy_commit_from_payload(payload)
     v = {'state': 'deploying', 'message': msg, 'commit': commit}
 
@@ -8162,7 +8162,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
 
                 # Common model mistake: bullet lines indented like scene-level items (2 spaces)
                 # Example: "  - text" (should be "    - text")
-                if ln.startswith('  - ') or ln.startswith('  – ') or ln.startswith('  — '):
+                if ln.startswith('  - ') or ln.startswith('  - ') or ln.startswith('  - '):
                     # If the model emits a bullet without opening a speaker block, default to Narrator.
                     if cur_speaker is None:
                         if 'Narrator' in casting_map:
@@ -8171,7 +8171,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         else:
                             raise ValueError('bullet_outside_block')
                     b = ln.strip()
-                    b = re.sub(r'^[–—]\s+', '- ', b)
+                    b = re.sub(r'^[--]\s+', '- ', b)
                     cur_block_lines.append('    ' + b)
                     i += 1
                     continue
@@ -8183,14 +8183,14 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                     if name not in casting_map:
                         # If this "speaker" line is actually a mis-indented bullet (common model mistake), normalize as bullet.
                         lss = (ln or '').lstrip()
-                        if lss.startswith('- ') or lss.startswith('– ') or lss.startswith('— '):
+                        if lss.startswith('- ') or lss.startswith('- ') or lss.startswith('- '):
                             if cur_speaker is None and 'Narrator' in casting_map:
                                 cur_speaker = 'Narrator'
                                 cur_block_lines = []
                             if cur_speaker is None:
                                 raise ValueError('bullet_outside_block')
                             b = lss
-                            b = re.sub(r'^[–—]\s+', '- ', b)
+                            b = re.sub(r'^[--]\s+', '- ', b)
                             cur_block_lines.append('    ' + b)
                             i += 1
                             continue
@@ -9052,7 +9052,7 @@ def api_story_audio_save(payload: dict[str, Any] = Body(default={})):  # noqa: B
         if not story_id or not job_id or not mp3_url:
             return {'ok': False, 'error': 'missing_required_fields'}
 
-        # Build label: <story title> — <YYYY-MM-DD HH:mm> (America/New_York)
+        # Build label: <story title> - <YYYY-MM-DD HH:mm> (America/New_York)
         from datetime import datetime
         try:
             from zoneinfo import ZoneInfo
@@ -9070,7 +9070,7 @@ def api_story_audio_save(payload: dict[str, Any] = Body(default={})):  # noqa: B
             cur.execute('SELECT title FROM sf_stories WHERE id=%s', (story_id,))
             row = cur.fetchone()
             title = str((row[0] if row else '') or story_id)
-            label = f"{title} — {ts_label}"
+            label = f"{title} - {ts_label}"
 
             # Best-effort: link saved audio to a durable production recipe.
             production_id = ''
