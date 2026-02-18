@@ -8212,6 +8212,14 @@ Now output the SFML file only.
                 err = 'sfml_generate_failed'
             return {'ok': False, 'error': err}
 
+        # If we still have quality failures after retries, fail hard so the UI doesn't "accept" bad SFML.
+        if failures_last:
+            try:
+                err2 = 'sfml_quality_failed:' + ';'.join(failures_last or [])
+            except Exception:
+                err2 = 'sfml_quality_failed'
+            return {'ok': False, 'error': err2}
+
         txt = (sfml_ok or '').strip()
         if not txt:
             return {'ok': False, 'error': 'empty_llm_output'}
