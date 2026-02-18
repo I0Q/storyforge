@@ -3158,7 +3158,8 @@ function prodShowSfmlPromptDebug(){
 
     prodSetSfmlBusy(true, 'Loading prompt...', 'Fetching the exact SFML LLM prompt + JSON payload');
 
-    fetchJsonAuthed('/api/production/sfml_prompt_debug', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid})})
+    // Use the same codepath as generation, but in debug_only mode (no LLM call).
+    fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id:sid, debug_only:true})})
       .then(function(j){
         prodSetSfmlBusy(false);
         if (!j || !j.ok){ throw new Error((j&&j.error)||'prompt_debug_failed'); }
@@ -3168,8 +3169,11 @@ function prodShowSfmlPromptDebug(){
         var txt = '';
         // Use literal \\n sequences here (this file is server-side Python that embeds JS in a string).
         txt += 'MODEL\\n' + String(j.model||'') + '\\n\\n';
-        txt += 'INSTRUCTIONS (fixed + nuance appended)\\n' + String(j.instructions||'') + '\\n\\n';
+        txt += 'INSTRUCTIONS (exact, as sent)\\n' + String(j.instructions||'') + '\\n\\n';
         txt += 'JSON PAYLOAD (formatted)\\n' + payloadPretty + '\\n';
+        if (j.full_text_sent){
+          txt += '\\nFULL TEXT SENT\\n' + String(j.full_text_sent||'') + '\\n';
+        }
 
         box.textContent = txt;
         box.classList.remove('hide');
@@ -8570,6 +8574,21 @@ Now output the SFML file only.
                 + "\nFAILURES TO FIX (must fix all):\n" + (fs or '- (none)') + "\n\n"
                 + "BROKEN_SFML (fix it, change as little as possible):\n" + (broken or '') + "\n"
             )
+
+        # Debug-only: return the exact prompt + payload without calling the LLM.
+        if bool((payload or {}).get('debug_only')):
+            try:
+                full_text_sent = instructions_main + '\nJSON_PAYLOAD:\n' + json.dumps(prompt, indent=2, ensure_ascii=False)
+            except Exception:
+                full_text_sent = instructions_main
+            return {
+                'ok': True,
+                'model': 'google/gemma-2-9b-it',
+                'instructions': instructions_main,
+                'payload': prompt,
+                'payload_pretty': json.dumps(prompt, indent=2, ensure_ascii=False),
+                'full_text_sent': full_text_sent,
+            }
 
         # Generation strategy: single-shot generation (no repair loop). We iterate on the prompt over time.
         txt_raw = ''
