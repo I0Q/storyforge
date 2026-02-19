@@ -6577,8 +6577,8 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
     """Update a job record (used by external workers like Tinybox).
 
     Auth: x-sf-job-token
-    Payload supports: id (required), title, state, started_at, finished_at,
-    total_segments, segments_done, mp3_url, sfml_url.
+    Payload supports: id (required), title, kind, meta_json, state, started_at, finished_at,
+    total_segments, segments_done, mp3_url, sfml_url, error_text.
     """
     _require_job_token(request)
     try:
@@ -6588,6 +6588,8 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
 
         fields = {
             'title': payload.get('title'),
+            'kind': payload.get('kind'),
+            'meta_json': payload.get('meta_json'),
             'state': payload.get('state'),
             'started_at': payload.get('started_at'),
             'finished_at': payload.get('finished_at'),
@@ -6595,6 +6597,7 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
             'segments_done': payload.get('segments_done'),
             'mp3_url': payload.get('mp3_url'),
             'sfml_url': payload.get('sfml_url'),
+            'error_text': payload.get('error_text'),
         }
 
         conn = db_connect()
