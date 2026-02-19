@@ -3124,64 +3124,29 @@ function prodSaveCasting(silent){
 
 
 function _diffLines(oldTxt, newTxt){
-  // Minimal Myers diff (line-based). Returns array of {kind:'eq'|'add'|'del', line:string}
+  // Simple line diff that ALWAYS preserves all new lines.
+  // Returns array of {kind:'eq'|'add'|'del', line:string}
+  // (Not a perfect diff; optimized for stability + highlighting additions.)
   oldTxt = String(oldTxt||'');
   newTxt = String(newTxt||'');
   var NL = String.fromCharCode(10);
   var a = oldTxt.split(NL);
   var b = newTxt.split(NL);
-  var N=a.length, M=b.length;
-  var max = N+M;
-  var v = {};
-  v[1] = 0;
-  var trace = [];
-
-  for (var d=0; d<=max; d++){
-    var vv = {};
-    for (var k=-d; k<=d; k+=2){
-      var x;
-      if (k===-d || (k!==d && (v[k-1]||0) < (v[k+1]||0))){
-        x = v[k+1] || 0;
-      } else {
-        x = (v[k-1] || 0) + 1;
-      }
-      var y = x - k;
-      while (x < N && y < M && a[x] === b[y]){ x++; y++; }
-      vv[k] = x;
-      if (x >= N && y >= M){
-        trace.push(vv);
-        // backtrack
-        var out = [];
-        var bx = N, by = M;
-        for (var dd=trace.length-1; dd>=0; dd--){
-          var tv = trace[dd];
-          var kk = bx - by;
-          var prevK;
-          if (kk===-(dd) || (kk!==(dd) && (tv[kk-1]||0) < (tv[kk+1]||0))) prevK = kk+1; else prevK = kk-1;
-          var prevX = tv[prevK] || 0;
-          var prevY = prevX - prevK;
-          while (bx > prevX && by > prevY){
-            out.push({kind:'eq', line: a[bx-1]});
-            bx--; by--;
-          }
-          if (dd===0) break;
-          if (bx === prevX){
-            // came from insert
-            out.push({kind:'add', line: b[by-1]});
-            by--;
-          } else {
-            out.push({kind:'del', line: a[bx-1]});
-            bx--;
-          }
-        }
-        out.reverse();
-        return out;
-      }
+  var i = 0, j = 0;
+  var out = [];
+  while (i < a.length && j < b.length){
+    if (a[i] === b[j]){
+      out.push({kind:'eq', line: a[i]});
+      i++; j++;
+    } else {
+      // treat as insertion in new (highlight)
+      out.push({kind:'add', line: b[j]});
+      j++;
     }
-    trace.push(vv);
-    v = vv;
   }
-  return [];
+  while (j < b.length){ out.push({kind:'add', line: b[j]}); j++; }
+  while (i < a.length){ out.push({kind:'del', line: a[i]}); i++; }
+  return out;
 }
 
 function _renderPromptDiff(hostEl, prevTxt, curTxt){
