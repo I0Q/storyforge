@@ -9106,6 +9106,15 @@ def api_production_produce_audio(payload: dict[str, Any] = Body(default={})):  #
         except Exception:
             casting = {}
 
+        # If engine wasn't explicitly provided by the UI, infer it from the saved casting.
+        # This avoids accidentally triggering "multi-engine" behavior.
+        if not engine:
+            try:
+                if isinstance(casting, dict):
+                    engine = str((casting or {}).get('engine') or '').strip()
+            except Exception:
+                engine = ''
+
         # Mark voices as debuted once they are used in a Produce run.
         try:
             vids = []
