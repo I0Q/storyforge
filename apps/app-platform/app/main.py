@@ -8617,26 +8617,151 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 'full_text_sent': full_text_sent,
             }
 
+        def _v1_validate_only(sfml_text: str, casting_map: dict[str, str], *, allow_pauses: bool, allow_delivery: bool) -> None:
+            """Validate SFML v1 against spec WITHOUT mutating the text."""
+            sfml_text = str(sfml_text or '')
+            if '\t' in sfml_text:
+                raise ValueError('tab_not_allowed')
+            if len(sfml_text) > 20000:
+                raise ValueError('too_long')
+
+            raw_lines = sfml_text.splitlines()
+
+            def is_ignorable(s: str) -> bool:
+                s = str(s or '')
+                return (not s.strip())
+
+            i = 0
+            # header: first non-empty line must be exactly '# SFML v1'
+            while i < len(raw_lines) and is_ignorable(raw_lines[i]):
+                i += 1
+            if i >= len(raw_lines) or raw_lines[i].strip() != '# SFML v1':
+                raise ValueError('bad_header')
+            i += 1
+
+            # Cast
+            while i < len(raw_lines) and is_ignorable(raw_lines[i]):
+                i += 1
+            if i >= len(raw_lines) or raw_lines[i].strip() != 'cast:':
+                raise ValueError('missing_cast')
+            i += 1
+
+            cast: dict[str, str] = {}
+            while i < len(raw_lines):
+                ln = raw_lines[i]
+                if is_ignorable(ln):
+                    i += 1
+                    continue
+                if ln.startswith('scene '):
+                    break
+                m = re.match(r'^  ([^:]+):\s*(.+?)\s*$', ln)
+                if not m:
+                    raise ValueError('bad_cast_line')
+                cast[str(m.group(1) or '')] = str(m.group(2) or '')
+                i += 1
+
+            want_keys = list(casting_map.keys())
+            if set(want_keys) != set(cast.keys()):
+                raise ValueError('cast_mismatch')
+
+            in_scene = False
+            cur_speaker: str | None = None
+            cur_has_lines = False
+
+            def flush_block():
+                nonlocal cur_speaker, cur_has_lines
+                if cur_speaker is None:
+                    return
+                if not cur_has_lines:
+                    raise ValueError('empty_speaker_block:' + str(cur_speaker))
+                cur_speaker = None
+                cur_has_lines = False
+
+            while i < len(raw_lines):
+                ln = raw_lines[i]
+                if is_ignorable(ln):
+                    i += 1
+                    continue
+
+                m_scene = re.match(r'^scene\s+(scene-\d+)\s*(?:\"([^\"]*)\")?\s*:\s*$', ln)
+                if m_scene:
+                    flush_block()
+                    in_scene = True
+                    i += 1
+                    continue
+
+                if not in_scene:
+                    raise ValueError('content_outside_scene')
+
+                # Speaker header
+                m_sp = re.match(r'^  ([^-][^:{]*?)(?:\s+\{delivery=(neutral|calm|urgent|dramatic|shout)\})?\s*:\s*$', ln)
+                if m_sp:
+                    flush_block()
+                    name = str(m_sp.group(1) or '').strip()
+                    if name not in casting_map:
+                        raise ValueError('unknown_speaker:' + name)
+                    if m_sp.group(2) and not allow_delivery:
+                        raise ValueError('delivery_not_allowed')
+                    cur_speaker = name
+                    cur_has_lines = False
+                    i += 1
+                    continue
+
+                if cur_speaker is None:
+                    raise ValueError('missing_speaker_header')
+
+                # Bullets
+                if ln.startswith('    - '):
+                    rest = ln[len('    - '):]
+                    if not rest.strip():
+                        raise ValueError('empty_bullet')
+                    # delivery tags on bullets (optional)
+                    if rest.lstrip().startswith('{delivery='):
+                        m_del = re.match(r'^\{delivery=(neutral|calm|urgent|dramatic|shout)\}\s*.+', rest.strip())
+                        if not m_del:
+                            raise ValueError('bad_delivery')
+                        if not allow_delivery:
+                            raise ValueError('delivery_not_allowed')
+                    cur_has_lines = True
+                    i += 1
+                    continue
+
+                # Pauses
+                if ln.startswith('    PAUSE:'):
+                    if not allow_pauses:
+                        raise ValueError('pause_not_allowed')
+                    m_p = re.match(r'^    PAUSE:\s*(\d+(?:\.\d+)?)\s*$', ln)
+                    if not m_p:
+                        raise ValueError('bad_pause')
+                    cur_has_lines = True
+                    i += 1
+                    continue
+
+                raise ValueError('unrecognized_line')
+
+            flush_block()
+
         # Generation strategy: single-shot generation (no repair loop). We iterate on the prompt over time.
         txt_raw = ''
-        sfml_ok = ''
+        txt = ''
         failures_last: list[str] = []
         gen_start_ms = int(time.time() * 1000)
         gen_dur_ms = 0
         try:
             txt_raw = _llm_sfml_call(instructions_main, prompt, temperature=0.3, max_tokens=3400)
             gen_dur_ms = int(time.time() * 1000) - gen_start_ms
-            sfml_ok = _v1_validate_and_coalesce(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
-            failures_last = _score_quality(sfml_ok)
+            _v1_validate_only(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
+            txt = str(txt_raw or '')
+            failures_last = _score_quality(txt)
         except Exception as e:
             try:
                 gen_dur_ms = int(time.time() * 1000) - gen_start_ms
             except Exception:
                 gen_dur_ms = 0
             failures_last = ['validator_error:' + str(e)]
-            sfml_ok = ''
+            txt = ''
 
-        if not sfml_ok:
+        if not txt:
             # Surface failure reasons to help debugging in UI.
             try:
                 err = 'sfml_generate_failed:' + ';'.join(failures_last or [])
@@ -8647,33 +8772,9 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                 raw_snip = raw_snip[:2000] + '\n...<truncated>'
             return {'ok': False, 'error': err, 'raw': raw_snip}
 
-        txt = (sfml_ok or '').strip()
-        if not txt:
-            return {'ok': False, 'error': 'empty_llm_output'}
-
         # NOTE: quality failures are returned as warnings (we do not fail the request).
         # This keeps the UI unblocked while we iterate on the prompt.
         warnings = failures_last or []
-
-        # Strip accidental markdown fences
-        txt = re.sub(r'^```[a-zA-Z0-9_-]*\s*', '', txt).strip()
-        txt = re.sub(r'```\s*$', '', txt).strip()
-
-        # Normalize common format mistakes so exported SFML is consistent.
-        # For v1 we mainly normalize indentation (2 spaces) and avoid tabs.
-        try:
-            lines = []
-            for ln in (txt or '').splitlines():
-                # replace tabs with two spaces
-                ln = (ln or '').replace('\t', '  ')
-                lines.append(ln.rstrip())
-            txt = '\n'.join(lines).strip()
-        except Exception:
-            pass
-
-        # Cap size
-        if len(txt) > 20000:
-            txt = txt[:20000]
 
         # Persist generation artifacts (best-effort) for prompt iteration.
         try:
