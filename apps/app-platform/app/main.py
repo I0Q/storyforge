@@ -1179,13 +1179,10 @@ def index(response: Response):
       </div>
 
       <div style='margin-top:12px;font-weight:950;'>SFML generator prompt (versioned)</div>
-      <div id='prodSfmlPromptBox' class='codeBox' style='margin-top:8px;max-height:none;height:220px;overflow:auto;white-space:pre-wrap;'></div>
+      <textarea id='prodSfmlPromptText' class='codeBox' style='margin-top:8px;max-height:none;height:220px;overflow:auto;white-space:pre;resize:vertical;'></textarea>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center'>
-        <div class='muted'>Version: <span id='prodSfmlPromptVer'>-</span></div>
-        <div class='row' style='gap:10px;flex-wrap:wrap;justify-content:flex-end'>
-          <button type='button' class='secondary' onclick='prodIterateSfmlPrompt()'>Iterate</button>
-        </div>
+        <div class='muted'>Version: <span id='prodSfmlPromptVer'>-</span> <span id='prodSfmlPromptSaveStat' class='muted'></span></div>
       </div>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;align-items:center'>
@@ -3190,36 +3187,64 @@ function _renderPromptDiff(hostEl, prevTxt, curTxt){
   hostEl.innerHTML = html;
 }
 
+window.__SF_PROMPT_SAVE_T = null;
+
+function prodSfmlPromptSaveNow(){
+  try{
+    var ta=document.getElementById('prodSfmlPromptText');
+    if(!ta) return;
+    var stat=document.getElementById('prodSfmlPromptSaveStat');
+    var txt=String(ta.value||'');
+    if(stat) stat.textContent='(saving...)';
+    return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text: txt})})
+      .then(function(r){
+        if(!(r&&r.ok)) throw new Error((r&&r.error)||'save_failed');
+        if(stat) stat.textContent='(saved)';
+        return prodSfmlPromptRefresh();
+      })
+      .catch(function(e){ if(stat) stat.textContent='(save failed)'; toast('Error: '+String(e&&e.message?e.message:e)); });
+  }catch(e){}
+}
+
+function prodSfmlPromptArmSave(){
+  try{
+    var stat=document.getElementById('prodSfmlPromptSaveStat');
+    if(stat) stat.textContent='(unsaved)';
+    if (window.__SF_PROMPT_SAVE_T) clearTimeout(window.__SF_PROMPT_SAVE_T);
+    window.__SF_PROMPT_SAVE_T = setTimeout(function(){ try{ prodSfmlPromptSaveNow(); }catch(_e){} }, 900);
+  }catch(e){}
+}
+
+function prodSfmlPromptBind(){
+  try{
+    var ta=document.getElementById('prodSfmlPromptText');
+    if(!ta) return;
+    if(ta.__sfBound) return;
+    ta.__sfBound = true;
+    ta.addEventListener('input', function(){ try{ prodSfmlPromptArmSave(); }catch(_e){} });
+    ta.addEventListener('blur', function(){ try{ prodSfmlPromptSaveNow(); }catch(_e){} });
+  }catch(e){}
+}
+
 function prodSfmlPromptRefresh(){
   // Avoid out-of-order rendering when multiple refreshes overlap (common on iOS focus/pageshow).
-  try{
-    window.__SF_PROMPT_REFRESH_ID = (window.__SF_PROMPT_REFRESH_ID||0) + 1;
-  }catch(_e){}
+  try{ window.__SF_PROMPT_REFRESH_ID = (window.__SF_PROMPT_REFRESH_ID||0) + 1; }catch(_e){}
   var rid = window.__SF_PROMPT_REFRESH_ID || 1;
+
+  prodSfmlPromptBind();
 
   return fetchJsonAuthed('/api/settings/sfml_prompt')
     .then(function(j){
       try{ if ((window.__SF_PROMPT_REFRESH_ID||0) !== rid) return; }catch(_e){}
       if(!(j&&j.ok)) { toast('Error: '+(j&&j.error||'')); return; }
-      var box=document.getElementById('prodSfmlPromptBox');
+      var ta=document.getElementById('prodSfmlPromptText');
       var v=document.getElementById('prodSfmlPromptVer');
+      var stat=document.getElementById('prodSfmlPromptSaveStat');
       if(v) v.textContent=String(j.version||'-');
+      if(stat) stat.textContent='';
 
       var curTxt = String(j.text||'');
-      var curVer = (j.version!=null) ? parseInt(String(j.version),10) : null;
-      var prevVer = (curVer && curVer>1) ? (curVer-1) : null;
-
-      function finish(prevTxt){
-        try{ if ((window.__SF_PROMPT_REFRESH_ID||0) !== rid) return; }catch(_e){}
-        try{ _renderPromptDiff(box, prevTxt, curTxt); }catch(_e){ if(box) box.textContent = curTxt; }
-      }
-
-      if (!prevVer){ finish(''); }
-      else {
-        fetchJsonAuthed('/api/settings/sfml_prompt_text?version=' + encodeURIComponent(String(prevVer)))
-          .then(function(pj){ finish((pj&&pj.ok)?String(pj.text||''):''); })
-          .catch(function(_e){ finish(''); });
-      }
+      if(ta && String(ta.value||'')!==curTxt) ta.value = curTxt;
 
       // versions (rollback)
       return fetchJsonAuthed('/api/settings/sfml_prompt_versions')
@@ -3252,21 +3277,9 @@ function prodSfmlPromptRevert(){
     .then(function(r){ toast(r && r.ok ? ('Rolled back (new version created)') : ('Error: '+(r&&r.error||''))); return prodSfmlPromptRefresh(); });
 }
 
+// Iterate removed for now (manual editing + auto versioning only).
 function prodIterateSfmlPrompt(){
-  try{
-    var storySel=document.getElementById('prodStorySel');
-    var storyId=storySel?String(storySel.value||'').trim():'';
-    if(!storyId){ toast('Pick a story first'); return; }
-    prodSetSfmlBusy(true, 'Iterating prompt...', 'Improving the prompt vs the previous version');
-    return fetchJsonAuthed('/api/production/sfml_prompt_iterate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
-      .then(function(j){
-        prodSetSfmlBusy(false);
-        if(!(j&&j.ok)) { toast('Error: '+(j&&j.error||'')); return; }
-        toastShowNow('Prompt updated (v'+String(j.version||'?')+')', 'ok', 1800);
-        return prodSfmlPromptRefresh();
-      })
-      .catch(function(e){ prodSetSfmlBusy(false); toast('Error: '+String(e&&e.message?e.message:e)); });
-  }catch(e){ try{ prodSetSfmlBusy(false); }catch(_e){} }
+  toast('Iterate is disabled. Edit the prompt manually above.');
 }
 
 function prodGenerateSfml(){
@@ -3284,7 +3297,21 @@ function prodGenerateSfml(){
         if (!j || !j.ok || !j.sfml){ throw new Error((j&&j.error)||'sfml_failed'); }
         prodSetSfmlBusy(false);
         window.__SF_PROD.sfml = String(j.sfml||'');
-        if (out) out.textContent='';
+
+        // Surface validator errors + warnings for this generated SFML.
+        try{
+          var msgs=[];
+          var valid = (j.valid===true);
+          if (!valid){
+            var es = Array.isArray(j.validator_errors) ? j.validator_errors : [];
+            if (es.length) msgs.push('<div class="err">Invalid SFML (validator): '+escapeHtml(es.join('; '))+'</div>');
+            else msgs.push('<div class="err">Invalid SFML (validator)</div>');
+          }
+          var ws = Array.isArray(j.warnings) ? j.warnings : [];
+          if (ws.length){ msgs.push('<div class="muted">Warnings: '+escapeHtml(ws.join('; '))+'</div>'); }
+          if (out) out.innerHTML = msgs.join('');
+        }catch(_e){ if(out) out.textContent=''; }
+
         prodRenderSfml(window.__SF_PROD.sfml);
       })
       .catch(function(e){ prodSetSfmlBusy(false); if(out) out.innerHTML='<div class="err">'+escapeHtml(String(e&&e.message?e.message:e))+'</div>'; });
