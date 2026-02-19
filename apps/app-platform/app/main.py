@@ -978,7 +978,7 @@ def index(response: Response):
 <html>
 <head>
   <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1'/>
   <title>StoryForge</title>
   <style>__INDEX_BASE_CSS__</style>
   <link rel="manifest" href="/manifest.webmanifest" />
@@ -4689,7 +4689,7 @@ def settings_new_provider_page(response: Response):
 <html>
 <head>
   <meta charset='utf-8'/>
-  <meta name='viewport' content='width=device-width, initial-scale=1'/>
+  <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1'/>
   <title>StoryForge - Add provider</title>
   <style>__INDEX_BASE_CSS__</style>
 </head>
