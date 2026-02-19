@@ -8845,7 +8845,32 @@ def api_production_sfml_prompt_iterate(payload: dict[str, Any] = Body(default={}
             "- If warnings are empty, output the same prompt text.\n"
         )
 
-        new_prompt = _llm_sfml_call(improve_instructions, improve_req, temperature=0.2, max_tokens=1200)
+        # Local LLM call helper (the main sfml_generate helper is nested; keep this route self-contained).
+        def _llm_call(instructions_text: str, prompt_payload: dict[str, object], *, temperature: float = 0.2, max_tokens: int = 1200) -> str:
+            req = {
+                'model': 'google/gemma-2-9b-it',
+                'messages': [
+                    {
+                        'role': 'user',
+                        'content': instructions_text + '\nJSON_PAYLOAD:\n' + json.dumps(prompt_payload, separators=(',', ':')),
+                    },
+                ],
+                'temperature': float(temperature),
+                'max_tokens': int(max_tokens),
+            }
+            r = requests.post(GATEWAY_BASE + '/v1/llm', json=req, headers=_h(), timeout=180)
+            r.raise_for_status()
+            j = r.json()
+            txt0 = ''
+            try:
+                ch0 = (((j or {}).get('choices') or [])[0] or {})
+                msg = ch0.get('message') or {}
+                txt0 = str(msg.get('content') or ch0.get('text') or '')
+            except Exception:
+                txt0 = ''
+            return (txt0 or '').strip()
+
+        new_prompt = _llm_call(improve_instructions, improve_req, temperature=0.2, max_tokens=1200)
         new_prompt = _strip_fences(new_prompt)
         new_prompt = _normalize_ws(new_prompt)
         if len(new_prompt) > 20000:
