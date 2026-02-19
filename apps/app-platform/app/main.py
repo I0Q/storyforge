@@ -3118,8 +3118,9 @@ function _diffLines(oldTxt, newTxt){
   // Minimal Myers diff (line-based). Returns array of {kind:'eq'|'add'|'del', line:string}
   oldTxt = String(oldTxt||'');
   newTxt = String(newTxt||'');
-  var a = oldTxt.split(/\n/);
-  var b = newTxt.split(/\n/);
+  var NL = String.fromCharCode(10);
+  var a = oldTxt.split(NL);
+  var b = newTxt.split(NL);
   var N=a.length, M=b.length;
   var max = N+M;
   var v = {};
