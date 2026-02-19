@@ -8731,39 +8731,46 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             flush_block()
 
         # Generation strategy: single-shot generation (no repair loop). We iterate on the prompt over time.
+        # IMPORTANT: we NEVER mutate/normalize the LLM SFML text. Validation is used for scoring/iteration only.
         txt_raw = ''
         txt = ''
-        failures_last: list[str] = []
+        validator_ok = False
+        validator_errors: list[str] = []
+        warnings: list[str] = []
         gen_start_ms = int(time.time() * 1000)
         gen_dur_ms = 0
         try:
             txt_raw = _llm_sfml_call(instructions_main, prompt, temperature=0.3, max_tokens=3400)
-            gen_dur_ms = int(time.time() * 1000) - gen_start_ms
-            _v1_validate_only(txt_raw, cmap, allow_pauses=True, allow_delivery=True)
-            txt = str(txt_raw or '')
-            failures_last = _score_quality(txt)
-        except Exception as e:
+        finally:
             try:
                 gen_dur_ms = int(time.time() * 1000) - gen_start_ms
             except Exception:
                 gen_dur_ms = 0
-            failures_last = ['validator_error:' + str(e)]
-            txt = ''
 
-        if not txt:
-            # Surface failure reasons to help debugging in UI.
-            try:
-                err = 'sfml_generate_failed:' + ';'.join(failures_last or [])
-            except Exception:
-                err = 'sfml_generate_failed'
-            raw_snip = (txt_raw or '').strip()
-            if len(raw_snip) > 2000:
-                raw_snip = raw_snip[:2000] + '\n...<truncated>'
-            return {'ok': False, 'error': err, 'raw': raw_snip}
+        txt = str(txt_raw or '')
+        if not txt.strip():
+            return {'ok': False, 'error': 'empty_llm_output'}
 
-        # NOTE: quality failures are returned as warnings (we do not fail the request).
-        # This keeps the UI unblocked while we iterate on the prompt.
-        warnings = failures_last or []
+        # Cap size (defense-in-depth)
+        if len(txt) > 20000:
+            txt = txt[:20000]
+
+        # Validate (no mutation). If invalid, still return ok:true with validator_errors.
+        try:
+            _v1_validate_only(txt, cmap, allow_pauses=True, allow_delivery=True)
+            validator_ok = True
+        except Exception as e:
+            validator_ok = False
+            validator_errors = ['validator_error:' + str(e)]
+
+        # Quality scoring (best-effort; do not fail)
+        try:
+            warnings = list(_score_quality(txt) or [])
+        except Exception:
+            warnings = []
+
+        # Fold validator errors into warnings for prompt iteration/artifacts (so Iterate has signal).
+        all_warn = list(validator_errors or []) + list(warnings or [])
 
         # Persist generation artifacts (best-effort) for prompt iteration.
         try:
@@ -8784,7 +8791,7 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
                         str(instructions_main or ''),
                         'google/gemma-2-9b-it',
                         int(gen_dur_ms or 0),
-                        json.dumps(list(warnings or []), separators=(',', ':')),
+                        json.dumps(list(all_warn or []), separators=(',', ':')),
                         raw_snip2,
                         txt,
                         now,
@@ -8882,9 +8889,13 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             # best-effort; do not fail generation
             pass
 
+        # Always surface validator status so the UI can show "invalid but saved".
+        out = {'ok': True, 'sfml': txt, 'valid': bool(validator_ok)}
+        if validator_errors:
+            out['validator_errors'] = list(validator_errors)
         if warnings:
-            return {'ok': True, 'sfml': txt, 'warnings': warnings}
-        return {'ok': True, 'sfml': txt}
+            out['warnings'] = list(warnings)
+        return out
     except Exception as e:
         return {'ok': False, 'error': f'sfml_generate_failed: {type(e).__name__}: {str(e)[:200]}'}
 
