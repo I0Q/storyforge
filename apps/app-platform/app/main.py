@@ -1683,6 +1683,86 @@ function jobAbort(jobId){
   }catch(e){}
 }
 
+// --- Job Watch (live per-job render log) ---
+let jobWatchES=null; let jobWatchJobId=''; let jobWatchAfter=0;
+function stopJobWatchStream(){ if(jobWatchES){ try{ jobWatchES.close(); }catch(e){} jobWatchES=null; } }
+function _jwFmtTs(ts){ try{ if(!ts) return ''; return new Date(Number(ts||0)*1000).toLocaleTimeString(); }catch(e){ return ''; } }
+function _jwAppendLines(lines){
+  try{
+    var pre=document.getElementById('jobWatchLog');
+    if(!pre) return;
+    var cur = String(pre.textContent||'');
+    if(cur==='(no events yet)') cur='';
+    var add = String(lines||'');
+    if(!add) return;
+    if(cur && !cur.endsWith('\n')) cur += '\n';
+    cur += add;
+    var parts = cur.split('\n');
+    if(parts.length > 2200) parts = parts.slice(parts.length-2200);
+    pre.textContent = parts.join('\n');
+    try{ pre.scrollTop = pre.scrollHeight; }catch(_e){}
+  }catch(e){}
+}
+function startJobWatchStream(jobId){
+  stopJobWatchStream();
+  jobWatchJobId = String(jobId||'');
+  jobWatchAfter = 0;
+  try{ var pre=document.getElementById('jobWatchLog'); if(pre) pre.textContent='(no events yet)'; }catch(e){}
+  try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job '+String(jobWatchJobId||'')+' * connecting...'; }catch(e){}
+  try{
+    var url = '/api/jobs/events/stream?job_id=' + encodeURIComponent(jobWatchJobId) + '&after_id=' + String(jobWatchAfter||0);
+    jobWatchES = new EventSource(url);
+    jobWatchES.onopen = function(){ try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job '+String(jobWatchJobId||'')+' * live'; }catch(e){} };
+    jobWatchES.onmessage = function(ev){
+      try{
+        var j = JSON.parse(ev.data||'{}');
+        if(!j || !j.ok) return;
+        var evs = Array.isArray(j.events) ? j.events : [];
+        if(typeof j.after_id !== 'undefined') jobWatchAfter = Number(j.after_id||jobWatchAfter||0);
+        if(!evs.length) return;
+        var out=[];
+        for(var i=0;i<evs.length;i++){
+          var e=evs[i]||{};
+          var ts=_jwFmtTs(e.ts||0);
+          var eng=String(e.engine||'').trim();
+          var txt=String(e.text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+          if(!txt) continue;
+          var prefix='';
+          if(ts) prefix += '['+ts+'] ';
+          if(eng) prefix += '('+eng+') ';
+          var tlines = txt.split('\n');
+          for(var k=0;k<tlines.length;k++){
+            if(!tlines[k]) continue;
+            out.push((k===0?prefix:'   ') + tlines[k]);
+          }
+        }
+        _jwAppendLines(out.join('\n'));
+      }catch(e){}
+    };
+    jobWatchES.onerror = function(_e){
+      try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job '+String(jobWatchJobId||'')+' * reconnecting...'; }catch(e){}
+      try{ stopJobWatchStream(); setTimeout(function(){ if(jobWatchJobId) startJobWatchStream(jobWatchJobId); }, 800); }catch(e){}
+    };
+  }catch(e){ try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job watch failed: '+String(e); }catch(_e){} }
+}
+function openJobWatch(jobId){
+  try{
+    var b=document.getElementById('jobWatchBackdrop');
+    var sh=document.getElementById('jobWatchSheet');
+    if(b){ b.classList.remove('hide'); b.style.display='block'; }
+    if(sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+    startJobWatchStream(jobId);
+  }catch(e){}
+}
+function closeJobWatch(){
+  try{ stopJobWatchStream(); }catch(e){}
+  try{ var b=document.getElementById('jobWatchBackdrop'); if(b){ b.classList.add('hide'); b.style.display='none'; } }catch(e){}
+  try{ var sh=document.getElementById('jobWatchSheet'); if(sh){ sh.classList.add('hide'); sh.style.display='none'; } }catch(e){}
+}
+function closeJobWatchEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeJobWatch(); return false; }
+function jobWatch(jobId){ openJobWatch(jobId); }
+function copyJobWatch(){ try{ copyToClipboard((document.getElementById('jobWatchLog')||{}).textContent||''); }catch(e){} }
+
 // --- Notifications (Web Push) ---
 function notifDeviceId(){
   try{
@@ -4284,8 +4364,25 @@ try{
       <div class='muted'>Live from Tinybox (top CPU/RAM/GPU mem).</div>
       <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading...</pre>
     </div>
+  </div>
 
-
+  <div id='jobWatchBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeJobWatchEv(event)' ontouchend='closeJobWatchEv(event)'></div>
+  <div id='jobWatchSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>Job watch</div>
+          <div id='jobWatchSub' class='muted'>Connecting...</div>
+        </div>
+        <div class='row' style='justify-content:flex-end;gap:10px;'>
+          <button class='secondary' type='button' onclick='copyJobWatch()'>Copy</button>
+          <button class='secondary' type='button' onclick='closeJobWatchEv(event)'>Close</button>
+        </div>
+      </div>
+      <pre id='jobWatchLog' class='term' style='margin-top:10px;max-height:60vh;overflow:auto;-webkit-overflow-scrolling:touch;'>(no events yet)</pre>
+    </div>
+  </div>
 
 </body>
 </html>"""
