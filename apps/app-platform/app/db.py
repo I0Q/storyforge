@@ -81,6 +81,16 @@ def _db_init_schema(conn) -> None:
 
     cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT \'\',\n  meta_json TEXT NOT NULL DEFAULT \'\',\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  error_text TEXT NOT NULL DEFAULT \'\',\n  created_at BIGINT NOT NULL\n);')
 
+    # Jobs indexes (helps with History/Jobs rendering and claims).
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS jobs_created_at_idx ON jobs(created_at DESC)")
+    except Exception:
+        pass
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS jobs_state_kind_created_at_idx ON jobs(state, kind, created_at)")
+    except Exception:
+        pass
+
     # Per-job event log (streamed to UI via SSE; appended by external workers).
     cur.execute(
         """
