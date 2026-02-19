@@ -80,6 +80,24 @@ def _db_init_schema(conn) -> None:
     cur = conn.cursor()
 
     cur.execute('CREATE TABLE IF NOT EXISTS jobs (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  kind TEXT NOT NULL DEFAULT \'\',\n  meta_json TEXT NOT NULL DEFAULT \'\',\n  state TEXT,\n  started_at BIGINT DEFAULT 0,\n  finished_at BIGINT,\n  total_segments BIGINT DEFAULT 0,\n  segments_done BIGINT DEFAULT 0,\n  mp3_url TEXT,\n  sfml_url TEXT,\n  error_text TEXT NOT NULL DEFAULT \'\',\n  created_at BIGINT NOT NULL\n);')
+
+    # Per-job event log (streamed to UI via SSE; appended by external workers).
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS job_events (
+  id BIGSERIAL PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  ts BIGINT NOT NULL,
+  engine TEXT NOT NULL DEFAULT '',
+  line_no BIGINT NOT NULL DEFAULT 0,
+  text TEXT NOT NULL DEFAULT ''
+);
+"""
+    )
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS job_events_job_id_id_idx ON job_events(job_id, id)")
+    except Exception:
+        pass
     # Migrations: add columns to existing jobs table
     try:
         cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT ''")
@@ -429,3 +447,57 @@ def db_list_jobs(conn, limit: int = 60, before: int | None = None):
         }
         for r in rows
     ]
+
+
+def db_append_job_event(conn, job_id: str, ts: int, engine: str = '', line_no: int = 0, text: str = '') -> int:
+    """Append an event to the per-job event log.
+
+    Returns inserted event id.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO job_events (job_id, ts, engine, line_no, text) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+        (str(job_id or ''), int(ts or 0), str(engine or ''), int(line_no or 0), str(text or '')),
+    )
+    row = cur.fetchone()
+    try:
+        return int(row[0] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def db_list_job_events(conn, job_id: str, after_id: int = 0, limit: int = 250):
+    cur = conn.cursor()
+    try:
+        cur.execute("SET statement_timeout = '5000'")
+    except Exception:
+        pass
+
+    lim = int(limit or 250)
+    if lim < 1:
+        lim = 1
+    if lim > 1000:
+        lim = 1000
+
+    aid = int(after_id or 0)
+    if aid < 0:
+        aid = 0
+
+    cur.execute(
+        'SELECT id, job_id, ts, engine, line_no, text FROM job_events WHERE job_id=%s AND id > %s ORDER BY id ASC LIMIT %s',
+        (str(job_id or ''), aid, lim),
+    )
+    rows = cur.fetchall() or []
+    out = []
+    for r in rows:
+        out.append(
+            {
+                'id': int(r[0] or 0),
+                'job_id': str(r[1] or ''),
+                'ts': int(r[2] or 0),
+                'engine': str(r[3] or ''),
+                'line_no': int(r[4] or 0),
+                'text': str(r[5] or ''),
+            }
+        )
+    return out

@@ -23,7 +23,7 @@ from .ui_page_shared import render_page
 from .ui_refactor_shared import base_css
 from .library_pages import register_library_pages
 from .library_viewer import register_library_viewer
-from .db import db_connect, db_init, db_list_jobs
+from .db import db_connect, db_init, db_list_jobs, db_append_job_event, db_list_job_events
 from .library import list_stories, list_stories_debug, get_story
 from .library_db import (
     delete_story_db,
@@ -667,6 +667,24 @@ MONITOR_HTML = """
       <pre id='monProc' class='term' style='margin-top:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch;'>Loading...</pre>
     </div>
   </div>
+
+  <div id='jobWatchBackdrop' class='sheetBackdrop hide' style='display:none' onclick='closeJobWatchEv(event)' ontouchend='closeJobWatchEv(event)'></div>
+  <div id='jobWatchSheet' class='sheet hide' style='display:none' role='dialog' aria-modal='true'>
+    <div class='sheetInner'>
+      <div class='sheetHandle'></div>
+      <div class='row' style='justify-content:space-between;'>
+        <div>
+          <div class='sheetTitle'>Job watch</div>
+          <div id='jobWatchSub' class='muted'>Connecting...</div>
+        </div>
+        <div class='row' style='justify-content:flex-end; gap:10px;'>
+          <button class='secondary' type='button' onclick='copyJobWatch()'>Copy</button>
+          <button id='jobWatchCloseBtn' class='secondary' type='button' onclick='closeJobWatchEv(event)'>Close</button>
+        </div>
+      </div>
+      <pre id='jobWatchLog' class='term' style='margin-top:10px;max-height:60vh;overflow:auto;-webkit-overflow-scrolling:touch;'>(no events yet)</pre>
+    </div>
+  </div>
 """
 
 # Monitor JS expects the same function names used on the main page.
@@ -801,6 +819,109 @@ function bindMonitorClose(){ try{ var btn=document.getElementById('monCloseBtn')
 try{ window.addEventListener('resize', function(){ try{ _sfUpdateBottomPad(); }catch(e){} }, {passive:true}); }catch(e){}
 try{ document.addEventListener('DOMContentLoaded', function(){ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); try{ _sfUpdateBottomPad(); }catch(e){} }); }catch(e){}
 try{ bindMonitorClose(); setMonitorEnabled(loadMonitorPref()); try{ _sfUpdateBottomPad(); }catch(e){} }catch(e){}
+
+// --- Job Watch (SSE streaming job event log) ---
+let jobWatchES=null; let jobWatchJobId=''; let jobWatchAfter=0; let jobWatchSheetOpen=false;
+function stopJobWatchStream(){ if(jobWatchES){ try{ jobWatchES.close(); }catch(e){} jobWatchES=null; } }
+function _jwFmtTs(ts){ try{ if(!ts) return ''; return new Date(Number(ts||0)*1000).toLocaleTimeString(); }catch(e){ return ''; } }
+function _jwAppendLines(lines){
+  try{
+    var pre=document.getElementById('jobWatchLog');
+    if(!pre) return;
+    var cur = String(pre.textContent||'');
+    if(cur==='(no events yet)') cur='';
+    var add = String(lines||'');
+    if(!add) return;
+    if(cur && !cur.endsWith('\n')) cur += '\n';
+    cur += add;
+    // cap size
+    var parts = cur.split('\n');
+    if(parts.length > 2200) parts = parts.slice(parts.length-2200);
+    pre.textContent = parts.join('\n');
+    // autoscroll if near bottom
+    try{
+      var near = (pre.scrollTop + pre.clientHeight) >= (pre.scrollHeight - 80);
+      if(near) pre.scrollTop = pre.scrollHeight;
+    }catch(_e){}
+  }catch(e){}
+}
+function startJobWatchStream(jobId){
+  stopJobWatchStream();
+  jobWatchJobId = String(jobId||'');
+  jobWatchAfter = 0;
+  try{ var pre=document.getElementById('jobWatchLog'); if(pre) pre.textContent='(no events yet)'; }catch(e){}
+  try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job '+String(jobWatchJobId||'')+' * connecting...'; }catch(e){}
+  try{
+    var url = '/api/jobs/events/stream?job_id=' + encodeURIComponent(jobWatchJobId) + '&after_id=' + String(jobWatchAfter||0);
+    jobWatchES = new EventSource(url);
+    jobWatchES.onopen = function(){ try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job '+String(jobWatchJobId||'')+' * live'; }catch(e){} };
+    jobWatchES.onmessage = function(ev){
+      try{
+        var j = JSON.parse(ev.data||'{}');
+        if(!j || !j.ok) return;
+        var evs = Array.isArray(j.events) ? j.events : [];
+        if(typeof j.after_id !== 'undefined') jobWatchAfter = Number(j.after_id||jobWatchAfter||0);
+        if(!evs.length) return;
+        var out=[];
+        for(var i=0;i<evs.length;i++){
+          var e=evs[i]||{};
+          var ts=_jwFmtTs(e.ts||0);
+          var eng=String(e.engine||'').trim();
+          var txt=String(e.text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+          if(!txt) continue;
+          var prefix='';
+          if(ts) prefix += '['+ts+'] ';
+          if(eng) prefix += '('+eng+') ';
+          // multi-line payloads: prefix first line only
+          var tlines = txt.split('\n');
+          for(var k=0;k<tlines.length;k++){
+            if(!tlines[k]) continue;
+            out.push((k===0?prefix:'   ') + tlines[k]);
+          }
+        }
+        _jwAppendLines(out.join('\n'));
+      }catch(e){}
+    };
+    jobWatchES.onerror = function(_e){ try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job '+String(jobWatchJobId||'')+' * reconnecting...'; }catch(e){} try{ stopJobWatchStream(); setTimeout(function(){ if(jobWatchSheetOpen && jobWatchJobId) startJobWatchStream(jobWatchJobId); }, 700); }catch(e){} };
+  }catch(e){ try{ var sub=document.getElementById('jobWatchSub'); if(sub) sub.textContent='Job watch failed: '+String(e); }catch(_e){} }
+}
+function openJobWatch(jobId){
+  jobWatchSheetOpen=true;
+  var b=document.getElementById('jobWatchBackdrop');
+  var sh=document.getElementById('jobWatchSheet');
+  if(b){ b.classList.remove('hide'); b.style.display='block'; }
+  if(sh){ sh.classList.remove('hide'); sh.style.display='block'; }
+  // lock body scroll (same trick as monitor)
+  try{ window.__sfJWScrollY = window.scrollY || 0; }catch(e){}
+  try{ document.body.classList.add('sheetOpen'); }catch(e){}
+  try{ document.body.style.position='fixed'; document.body.style.top = '-' + String(window.__sfJWScrollY||0) + 'px'; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }catch(e){}
+  try{ _sfUpdateBottomPad(); }catch(e){}
+  startJobWatchStream(jobId);
+}
+function closeJobWatch(){
+  jobWatchSheetOpen=false;
+  stopJobWatchStream();
+  var b=document.getElementById('jobWatchBackdrop');
+  var sh=document.getElementById('jobWatchSheet');
+  if(b){ b.classList.add('hide'); b.style.display='none'; }
+  if(sh){ sh.classList.add('hide'); sh.style.display='none'; }
+  // restore scroll
+  try{ document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width=''; }catch(e){}
+  try{ window.scrollTo(0, window.__sfJWScrollY||0); }catch(e){}
+  try{ document.body.classList.remove('sheetOpen'); }catch(e){}
+  try{ _sfUpdateBottomPad(); }catch(e){}
+}
+function closeJobWatchEv(ev){ try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){} closeJobWatch(); return false; }
+function jobWatch(jobId){ openJobWatch(jobId); }
+function copyJobWatch(){
+  try{
+    var pre=document.getElementById('jobWatchLog');
+    var t = pre ? String(pre.textContent||'') : '';
+    if(!t) return;
+    navigator.clipboard.writeText(t).then(function(){}, function(){});
+  }catch(e){}
+}
+
 </script>
 """
 
@@ -1883,6 +2004,7 @@ function renderJobs(jobs){
       if (abortable){
         h += `<div style='margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;'>`
           + `<button type='button' class='secondary' onclick="jobAbort('${escAttr(job.id||'')}')">Abort</button>`
+          + `<button type='button' class='secondary' onclick="jobWatch('${escAttr(job.id||'')}')">Watch</button>`
           + `</div>`;
       }
 
@@ -6669,6 +6791,116 @@ def api_jobs_update(request: Request, payload: dict[str, Any] = Body(default={})
         raise
     except Exception as e:
         return {'ok': False, 'error': f'update_failed: {type(e).__name__}: {e}'}
+
+
+@app.post('/api/jobs/events/append')
+def api_jobs_events_append(request: Request, payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Append a log/event line for a job (worker use).
+
+    Auth: x-sf-job-token (same as /api/jobs/update).
+    Payload: {job_id, ts?, engine?, line_no?, text}
+    """
+    _require_job_token(request)
+    try:
+        job_id = str((payload or {}).get('job_id') or (payload or {}).get('id') or '').strip()
+        if not job_id:
+            return {'ok': False, 'error': 'missing_job_id'}
+
+        try:
+            ts = int((payload or {}).get('ts') or 0) or int(time.time())
+        except Exception:
+            ts = int(time.time())
+
+        engine = str((payload or {}).get('engine') or '').strip()[:40]
+        text = str((payload or {}).get('text') or '').rstrip('\n')
+        try:
+            line_no = int((payload or {}).get('line_no') or 0)
+        except Exception:
+            line_no = 0
+
+        # Avoid pathological payloads
+        if len(text) > 6000:
+            text = text[:6000]
+
+        conn = db_connect()
+        try:
+            db_init(conn)
+            ev_id = db_append_job_event(conn, job_id=job_id, ts=ts, engine=engine, line_no=line_no, text=text)
+
+            # Best-effort retention: keep last ~5000 events per job.
+            try:
+                cur = conn.cursor()
+                cur.execute('SELECT max(id) FROM job_events WHERE job_id=%s', (job_id,))
+                row = cur.fetchone()
+                mx = int(row[0] or 0) if row else 0
+                if mx > 5200:
+                    cutoff = mx - 5000
+                    cur.execute('DELETE FROM job_events WHERE job_id=%s AND id < %s', (job_id, cutoff))
+            except Exception:
+                pass
+
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        return {'ok': True, 'id': int(ev_id or 0)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {'ok': False, 'error': f'events_append_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
+@app.get('/api/jobs/events/stream')
+async def api_jobs_events_stream(job_id: str = '', after_id: int = 0):
+    """SSE stream of per-job events for the UI.
+
+    This endpoint is intentionally unauthenticated (like /api/jobs/stream) and relies on the
+    app's existing perimeter/session controls.
+    """
+
+    async def gen():
+        import asyncio
+
+        jid = str(job_id or '').strip()
+        if not jid:
+            yield f"data: {json.dumps({'ok': False, 'error': 'missing_job_id'})}\n\n"
+            return
+
+        last = 0
+        try:
+            last = int(after_id or 0)
+        except Exception:
+            last = 0
+
+        # Long-poll-ish loop
+        while True:
+            try:
+                def _load():
+                    conn = db_connect()
+                    try:
+                        db_init(conn)
+                        evs = db_list_job_events(conn, job_id=jid, after_id=last, limit=250)
+                        return evs
+                    finally:
+                        conn.close()
+
+                evs = await asyncio.to_thread(_load)
+                if evs:
+                    last = int(evs[-1].get('id') or last)
+                data = json.dumps({'ok': True, 'job_id': jid, 'events': evs, 'after_id': last}, separators=(',', ':'))
+                yield f"data: {data}\n\n"
+            except Exception:
+                yield f"data: {json.dumps({'ok': False, 'error': 'events_failed'})}\n\n"
+            await asyncio.sleep(0.75)
+
+    headers = {
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+    }
+    return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
 
 
 @app.post('/api/jobs/abort')
