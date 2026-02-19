@@ -10205,6 +10205,19 @@ def api_settings_providers_get():
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
+@app.get('/api/worker/providers')
+def api_worker_providers_get(request: Request):
+    """Worker-safe provider settings.
+
+    Auth: x-sf-job-token
+
+    Returns the same providers list as /api/settings/providers, but is accessible
+    to external workers (Tinybox) so they can honor GPU allocation settings.
+    """
+    _require_job_token(request)
+    return api_settings_providers_get()
+
+
 @app.post('/api/settings/providers')
 def api_settings_providers_set(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     try:
