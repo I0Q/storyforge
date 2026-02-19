@@ -3226,8 +3226,15 @@ function _renderPromptDiff(hostEl, prevTxt, curTxt){
 }
 
 function prodSfmlPromptRefresh(){
+  // Avoid out-of-order rendering when multiple refreshes overlap (common on iOS focus/pageshow).
+  try{
+    window.__SF_PROMPT_REFRESH_ID = (window.__SF_PROMPT_REFRESH_ID||0) + 1;
+  }catch(_e){}
+  var rid = window.__SF_PROMPT_REFRESH_ID || 1;
+
   return fetchJsonAuthed('/api/settings/sfml_prompt')
     .then(function(j){
+      try{ if ((window.__SF_PROMPT_REFRESH_ID||0) !== rid) return; }catch(_e){}
       if(!(j&&j.ok)) { toast('Error: '+(j&&j.error||'')); return; }
       var box=document.getElementById('prodSfmlPromptBox');
       var v=document.getElementById('prodSfmlPromptVer');
@@ -3238,6 +3245,7 @@ function prodSfmlPromptRefresh(){
       var prevVer = (curVer && curVer>1) ? (curVer-1) : null;
 
       function finish(prevTxt){
+        try{ if ((window.__SF_PROMPT_REFRESH_ID||0) !== rid) return; }catch(_e){}
         try{ _renderPromptDiff(box, prevTxt, curTxt); }catch(_e){ if(box) box.textContent = curTxt; }
       }
 
@@ -3251,6 +3259,7 @@ function prodSfmlPromptRefresh(){
       // versions (rollback)
       return fetchJsonAuthed('/api/settings/sfml_prompt_versions')
         .then(function(vj){
+          try{ if ((window.__SF_PROMPT_REFRESH_ID||0) !== rid) return; }catch(_e){}
           var sel=document.getElementById('prodSfmlPromptRollbackSel');
           if(sel){
             sel.innerHTML='';
