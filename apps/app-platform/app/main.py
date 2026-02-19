@@ -1183,6 +1183,9 @@ def index(response: Response):
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center'>
         <div class='muted'>Version: <span id='prodSfmlPromptVer'>-</span> <span id='prodSfmlPromptSaveStat' class='muted'></span></div>
+        <div class='row' style='gap:10px;flex-wrap:wrap;justify-content:flex-end'>
+          <button type='button' class='secondary' onclick='prodSfmlPromptSaveNow()'>Save prompt</button>
+        </div>
       </div>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;align-items:center'>
@@ -3187,7 +3190,7 @@ function _renderPromptDiff(hostEl, prevTxt, curTxt){
   hostEl.innerHTML = html;
 }
 
-window.__SF_PROMPT_SAVE_T = null;
+// Manual-save prompt editor (no autosave/versioning)
 
 function prodSfmlPromptSaveNow(){
   try{
@@ -3206,12 +3209,10 @@ function prodSfmlPromptSaveNow(){
   }catch(e){}
 }
 
-function prodSfmlPromptArmSave(){
+function prodSfmlPromptMarkDirty(){
   try{
     var stat=document.getElementById('prodSfmlPromptSaveStat');
     if(stat) stat.textContent='(unsaved)';
-    if (window.__SF_PROMPT_SAVE_T) clearTimeout(window.__SF_PROMPT_SAVE_T);
-    window.__SF_PROMPT_SAVE_T = setTimeout(function(){ try{ prodSfmlPromptSaveNow(); }catch(_e){} }, 900);
   }catch(e){}
 }
 
@@ -3221,8 +3222,8 @@ function prodSfmlPromptBind(){
     if(!ta) return;
     if(ta.__sfBound) return;
     ta.__sfBound = true;
-    ta.addEventListener('input', function(){ try{ prodSfmlPromptArmSave(); }catch(_e){} });
-    ta.addEventListener('blur', function(){ try{ prodSfmlPromptSaveNow(); }catch(_e){} });
+    // Manual save only; typing marks dirty but does not version.
+    ta.addEventListener('input', function(){ try{ prodSfmlPromptMarkDirty(); }catch(_e){} });
   }catch(e){}
 }
 
@@ -8830,73 +8831,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         except Exception:
             pass
 
-        # Improvement loop: propose an updated prompt extra for the NEXT run.
-        # This is intentionally small + bounded to avoid prompt bloat.
-        if sfml_prompt_enabled:
-            try:
-                improve_req = {
-                    'prompt_version': int(sfml_prompt_version or 1),
-                    'current_prompt_text': str(instructions_main or ''),
-                    'warnings': list(warnings or []),
-                    'story_id': story_id,
-                    'title': title,
-                }
-                improve_instructions = (
-                    "You are improving an SFML generator prompt (full prompt text). "
-                    "Goal: reduce WARNINGS in future runs while maintaining correctness.\n\n"
-                    "Rules:\n"
-                    "- Output ONLY the updated prompt text (no JSON, no markdown, no commentary).\n"
-                    "- Keep it general (no story-specific facts).\n"
-                    "- Avoid redundancy; do not restate the same rule multiple times.\n"
-                    "- Preserve strict format requirements (cast, scenes, indentation, delivery tags, PAUSE).\n"
-                    "- If warnings are empty, output the same prompt text.\n"
-                )
-                new_prompt = _llm_sfml_call(improve_instructions, improve_req, temperature=0.2, max_tokens=1200)
-                new_prompt = _strip_fences(new_prompt)
-                new_prompt = _normalize_ws(new_prompt)
-                if len(new_prompt) > 20000:
-                    new_prompt = new_prompt[:20000]
-
-                # Only update if it actually changed (avoid version spam)
-                if (new_prompt or '').strip() != (instructions_main or '').strip():
-                    connP = db_connect()
-                    try:
-                        db_init(connP)
-                        sP = _settings_get(connP, 'sfml_prompt')
-                        if not isinstance(sP, dict):
-                            sP = _sfml_prompt_defaults()
-                        try:
-                            v2 = int(sP.get('version') or sfml_prompt_version or 1) + 1
-                        except Exception:
-                            v2 = int(sfml_prompt_version or 1) + 1
-                        sP['enabled'] = True
-                        sP['version'] = int(v2)
-                        sP['text'] = str(new_prompt or '')
-
-                        # Record version for audit/debug
-                        try:
-                            curP = connP.cursor()
-                            curP.execute(
-                                "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
-                                (
-                                    'sfml_prompt_text',
-                                    int(v2),
-                                    str(new_prompt or ''),
-                                    json.dumps({'source': 'auto', 'story_id': story_id}, separators=(',', ':')),
-                                    int(now),
-                                ),
-                            )
-                        except Exception:
-                            pass
-
-                        _settings_set(connP, 'sfml_prompt', sP)
-                    finally:
-                        try:
-                            connP.close()
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+        # Prompt improvement loop is disabled: generation must never mutate/version the prompt.
+        # Prompt versioning happens ONLY via an explicit user save action.
+        # (We keep validator errors + warnings in sf_sfml_gen_runs for manual prompt iteration.)
+        if False and sfml_prompt_enabled:
+            pass
 
         # Persist SFML into the story record (overwrite on regenerate)
         try:
