@@ -149,6 +149,9 @@ INDEX_BASE_CSS = base_css("""\
     html,body{overscroll-behavior-y:none;}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);padding:18px;max-width:920px;margin:0 auto;overflow-x:hidden;}
 
+    /* iOS Safari zooms on focus when font-size < 16px; keep form controls at 16px to prevent zoom */
+    input[type=text],input[type=number],input[type=password],input[type=url],input[type=email],textarea,select{font-size:16px;}
+
     /* iOS-friendly toggle switches */
     .switch{position:relative;display:inline-block;width:52px;height:30px;vertical-align:middle;}
     .switch input{opacity:0;width:0;height:0;}
