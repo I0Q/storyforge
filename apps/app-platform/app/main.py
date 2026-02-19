@@ -208,6 +208,12 @@ INDEX_BASE_CSS = base_css("""\
 
     /* Prompt diff highlighting (Production → SFML prompt) */
     .sfDiffAdd{background:rgba(38,208,124,0.14);border-left:3px solid rgba(38,208,124,0.65);padding-left:8px;margin-left:-8px;border-radius:8px;}
+    #prodSfmlPromptBox{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:13px;line-height:1.35;}
+    .sfPromptHeader{color:#cfe3ff;font-weight:950;}
+    .sfPromptComment{color:rgba(168,179,216,0.85);}
+    .sfPromptSyntax{color:rgba(74,163,255,0.95);}
+    .sfPromptBullet{color:rgba(231,237,255,0.96);}
+    .sfPromptBlank{min-height:10px;}
 
     .todoItem{display:block;margin:6px 0;line-height:1.35;}
     .todoItem input{transform:scale(1.1);margin-right:10px;}
@@ -3192,14 +3198,29 @@ function _renderPromptDiff(hostEl, prevTxt, curTxt){
   var diffs = _diffLines(prevTxt, curTxt);
   // Simple rendering: show full current text, but highlight added/changed lines.
   // (We keep deletions hidden to avoid clutter, per UX.)
+  function clsFor(line){
+    try{
+      var s = String(line||'');
+      var t = s.trim();
+      if (!t) return 'sfPromptBlank';
+      if (t.startsWith('#')) return 'sfPromptComment';
+      if (/^(FORMAT EXAMPLE|RULES|RULES:|OUTPUT|GOAL:)/.test(t)) return 'sfPromptHeader';
+      if (/^(cast:|scene\s+scene-\d+|PAUSE:)/.test(t)) return 'sfPromptSyntax';
+      if (t.startsWith('- ')) return 'sfPromptBullet';
+      return 'sfPromptLine';
+    }catch(_e){
+      return 'sfPromptLine';
+    }
+  }
+
   var html = '';
   for (var i=0;i<diffs.length;i++){
     var it = diffs[i];
     if (it.kind === 'del') continue;
-    var cls = (it.kind === 'add') ? 'sfDiffAdd' : '';
     var safe = escapeHtml(String(it.line||''));
-    if (cls) html += "<div class='"+cls+"'>"+safe+"</div>";
-    else html += "<div>"+safe+"</div>";
+    var c2 = clsFor(it.line);
+    var cls = (it.kind === 'add') ? ('sfDiffAdd ' + c2) : c2;
+    html += "<div class='"+cls+"'>"+(safe||'')+"</div>";
   }
   hostEl.innerHTML = html;
 }
@@ -8193,6 +8214,11 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
             def flush_block():
                 nonlocal cur_speaker, cur_block_lines
                 if cur_speaker is None:
+                    return
+                # Drop empty speaker blocks (can happen when the model emits a speaker header but no lines).
+                if not cur_block_lines:
+                    cur_speaker = None
+                    cur_block_lines = []
                     return
                 out.append(f"  {cur_speaker}:")
                 out.extend(cur_block_lines)
