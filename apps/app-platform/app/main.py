@@ -8780,6 +8780,7 @@ def api_production_sfml_prompt_iterate(payload: dict[str, Any] = Body(default={}
     This is the user-facing, one-click way to improve the prompt vs the previous version.
     """
     try:
+        import re
         story_id = str((payload or {}).get('story_id') or '').strip()
         if not story_id:
             return {'ok': False, 'error': 'missing_story_id'}
