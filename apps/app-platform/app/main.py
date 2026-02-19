@@ -1233,20 +1233,15 @@ def index(response: Response):
 
     
     <div class='card'>
-      <div style='font-weight:950;margin-bottom:6px;'>SFML improvement loop</div>
-      <div class='muted'>One-run generation. When enabled, we persist artifacts and may propose prompt improvements for the next run.</div>
-
-      <div class='row' style='margin-top:10px;gap:10px;align-items:center'>
-        <label class='row' style='gap:10px;align-items:center'>
-          <input id='sfmlImproveEnabled' type='checkbox' />
-          <span style='font-weight:800'>Enable improvement loop</span>
+      <div class='row' style='justify-content:space-between;align-items:center;gap:14px'>
+        <div style='min-width:0'>
+          <div style='font-weight:950;margin-bottom:6px;'>SFML improvement loop</div>
+          <div class='muted'>One-run generation. When enabled, we persist artifacts and may propose prompt improvements for the next run.</div>
+        </div>
+        <label class='switch'>
+          <input id='sfmlImproveEnabled' type='checkbox' onchange='sfmlImproveSaveEnabled()' />
+          <span class='slider'></span>
         </label>
-        <button type='button' class='secondary' onclick='sfmlImproveReload()'>Reload</button>
-        <span id='sfmlPromptVer' class='muted'></span>
-      </div>
-
-      <div class='row' style='margin-top:12px;gap:10px;flex-wrap:wrap;justify-content:flex-end'>
-        <button type='button' onclick='sfmlImproveSaveEnabled()'>Save</button>
       </div>
     </div>
 
@@ -2138,22 +2133,11 @@ function sfmlImproveRefresh(){
   return fetchJsonAuthed('/api/settings/sfml_prompt').then(function(j){
     if (!j || !j.ok) throw new Error((j&&j.error)||'sfml_prompt_failed');
     var en = !!j.enabled;
-    var ver = j.version!=null ? String(j.version) : '-';
     var cb = document.getElementById('sfmlImproveEnabled');
     if (cb) cb.checked = en;
-    var sp = document.getElementById('sfmlPromptVer');
-    if (sp) sp.textContent = 'Prompt v' + ver;
-    var ta = document.getElementById('sfmlPromptExtra');
-    if (ta) ta.value = String(j.text||'');
-
-    // load versions list (best-effort)
-    try{ sfmlPromptLoadVersions(); }catch(_e){}
-    // hide preview box on refresh
-    try{ var pb=document.getElementById('sfmlPromptPreviewBox'); if(pb) pb.classList.add('hide'); }catch(_e){}
-
     return j;
-  }).catch(function(e){
-    try{ toastShowNow('SFML settings failed', 'warn', 2600); }catch(_e){}
+  }).catch(function(_e){
+    try{ toastShowNow('SFML settings failed', 'warn', 2600); }catch(_e2){}
   });
 }
 
@@ -2174,7 +2158,7 @@ function sfmlImproveSaveEnabled(){
   var cb=document.getElementById('sfmlImproveEnabled');
   var enabled=cb && cb.checked ? true : false;
   return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enabled: enabled})})
-    .then(function(r){ toast(r && r.ok ? 'Saved' : ('Error: '+(r&&r.error||''))); return sfmlImproveReload(); });
+    .then(function(r){ toast(r && r.ok ? 'Saved' : ('Error: '+(r&&r.error||''))); return sfmlImproveRefresh(); });
 }
 
 function sfmlImproveSaveExtra(){
