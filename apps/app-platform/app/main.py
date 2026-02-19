@@ -4081,6 +4081,21 @@ var initTab = getTabFromHash() || getQueryParam('tab');
 if (initTab==='library' || initTab==='history' || initTab==='voices' || initTab==='production' || initTab==='advanced') { try{ showTab(initTab); }catch(e){} }
 
 refreshAll();
+
+// Keep SFML prompt box in sync with server when returning to the tab/app (no reload button).
+try{
+  function __sfMaybeRefreshPrompt(){
+    try{
+      var p = document.getElementById('pane-production');
+      var visible = p && !p.classList.contains('hide');
+      if (visible && typeof prodSfmlPromptRefresh === 'function') prodSfmlPromptRefresh();
+    }catch(_e){}
+  }
+  window.addEventListener('focus', __sfMaybeRefreshPrompt);
+  window.addEventListener('pageshow', __sfMaybeRefreshPrompt);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) __sfMaybeRefreshPrompt(); });
+}catch(_e){}
+
 // Start streaming immediately so the Metrics tab is instant.
 setMonitorEnabled(loadMonitorPref());
 setDebugUiEnabled(loadDebugPref());
