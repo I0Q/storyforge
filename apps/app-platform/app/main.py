@@ -8873,9 +8873,23 @@ def api_production_sfml_prompt_iterate(payload: dict[str, Any] = Body(default={}
                 txt0 = ''
             return (txt0 or '').strip()
 
+        def _strip(s: str) -> str:
+            s = str(s or '')
+            # remove common code fences
+            s = re.sub(r'^```\w*\s*', '', s.strip())
+            s = re.sub(r'```\s*$', '', s).strip()
+            return s
+
+        def _norm(s: str) -> str:
+            s = str(s or '')
+            # normalize newlines and strip trailing spaces
+            s = s.replace('\r\n', '\n').replace('\r', '\n')
+            s = '\n'.join([ln.rstrip() for ln in s.split('\n')]).strip() + '\n'
+            return s
+
         new_prompt = _llm_call(improve_instructions, improve_req, temperature=0.2, max_tokens=1200)
-        new_prompt = _strip_fences(new_prompt)
-        new_prompt = _normalize_ws(new_prompt)
+        new_prompt = _strip(new_prompt)
+        new_prompt = _norm(new_prompt)
         if len(new_prompt) > 20000:
             new_prompt = new_prompt[:20000]
 
