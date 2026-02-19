@@ -202,6 +202,10 @@ INDEX_BASE_CSS = base_css("""\
     @keyframes sfIndet{0%{transform:translateX(-60%);}100%{transform:translateX(260%);}}
 
     .card{border:1px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;background:var(--card);}
+
+    /* Prompt diff highlighting (Production → SFML prompt) */
+    .sfDiffAdd{background:rgba(38,208,124,0.14);border-left:3px solid rgba(38,208,124,0.65);padding-left:8px;margin-left:-8px;border-radius:8px;}
+
     .todoItem{display:block;margin:6px 0;line-height:1.35;}
     .todoItem input{transform:scale(1.1);margin-right:10px;}
     .todoItem span{vertical-align:middle;}
@@ -1166,25 +1170,20 @@ def index(response: Response):
       </div>
 
       <div style='margin-top:12px;font-weight:950;'>SFML generator prompt (versioned)</div>
-      <textarea id='prodSfmlPromptText' class='codeBox' style='margin-top:8px;width:100%;height:220px;white-space:pre-wrap'></textarea>
+      <div id='prodSfmlPromptBox' class='codeBox' style='margin-top:8px;max-height:none;height:220px;overflow:auto;white-space:pre-wrap;'></div>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center'>
         <div class='muted'>Version: <span id='prodSfmlPromptVer'>-</span></div>
         <div class='row' style='gap:10px;flex-wrap:wrap;justify-content:flex-end'>
-          <button type='button' class='secondary' onclick='prodSfmlPromptReload()'>Reload</button>
-          <button type='button' class='secondary' onclick='prodSfmlPromptSave()'>Save prompt</button>
-          <button type='button' class='secondary' onclick='prodSfmlPromptPreviewFullText()'>Preview full text sent</button>
+          <button type='button' class='secondary' onclick='prodIterateSfmlPrompt()'>Iterate</button>
         </div>
       </div>
 
       <div class='row' style='margin-top:10px;gap:10px;flex-wrap:wrap;align-items:center'>
         <div class='muted' style='font-weight:950;'>Rollback:</div>
         <select id='prodSfmlPromptRollbackSel' style='flex:1;min-width:220px;'></select>
-        <button type='button' class='secondary' onclick='prodSfmlPromptRevert()'>Revert</button>
+        <button type='button' class='secondary' onclick='prodSfmlPromptRevert()'>Rollback</button>
       </div>
-
-      <div id='prodSfmlPromptPreview' class='codeBox hide' style='margin-top:10px;max-height:none;height:55vh;overflow:auto;white-space:pre-wrap;'></div>
-</div>
 
       <div id='prodSfmlBusy' class='updateBar hide' style='margin-top:10px'>
         <div class='muted' style='font-weight:950' id='prodSfmlBusyTitle'>Working...</div>
@@ -2212,18 +2211,7 @@ function sfmlPromptRevertSelected(){
     });
 }
 
-function sfmlPromptPreview(){
-  return fetchJsonAuthed('/api/settings/sfml_prompt_preview').then(function(j){
-    if (!j || !j.ok) throw new Error((j&&j.error)||'preview_failed');
-    var pb = document.getElementById('sfmlPromptPreviewBox');
-    if (!pb) return j;
-    pb.textContent = String(j.full_prompt||'');
-    pb.classList.remove('hide');
-    return j;
-  }).catch(function(e){
-    try{ toastShowNow('Preview failed', 'warn', 2600); }catch(_e){}
-  });
-}
+// sfmlPromptPreview removed (prompt preview UI removed)
 
 function renderMetrics(m){
   lastMetrics = m;
@@ -2852,6 +2840,8 @@ function loadProduction(){
 
       // Load saved casting for initial selection
       try{ prodLoadCasting(String(sel.value||'')); }catch(_e){}
+      // Load current SFML prompt (with diff vs previous version)
+      try{ prodSfmlPromptRefresh(); }catch(_e){}
 
       // story change handler
       try{
@@ -2864,6 +2854,7 @@ function loadProduction(){
           if (out) out.textContent='';
           prodRenderAssignments();
           prodLoadCasting(sid);
+          try{ prodSfmlPromptRefresh(); }catch(_e){}
         };
       }catch(_e){}
 
@@ -3123,15 +3114,116 @@ function prodSaveCasting(silent){
 }
 
 
-function prodSfmlPromptReload(){
+function _diffLines(oldTxt, newTxt){
+  // Minimal Myers diff (line-based). Returns array of {kind:'eq'|'add'|'del', line:string}
+  oldTxt = String(oldTxt||'');
+  newTxt = String(newTxt||'');
+  var a = oldTxt.split(/\n/);
+  var b = newTxt.split(/\n/);
+  var N=a.length, M=b.length;
+  var max = N+M;
+  var v = {};
+  v[1] = 0;
+  var trace = [];
+
+  for (var d=0; d<=max; d++){
+    var vv = {};
+    for (var k=-d; k<=d; k+=2){
+      var x;
+      if (k===-d || (k!==d && (v[k-1]||0) < (v[k+1]||0))){
+        x = v[k+1] || 0;
+      } else {
+        x = (v[k-1] || 0) + 1;
+      }
+      var y = x - k;
+      while (x < N && y < M && a[x] === b[y]){ x++; y++; }
+      vv[k] = x;
+      if (x >= N && y >= M){
+        trace.push(vv);
+        // backtrack
+        var out = [];
+        var bx = N, by = M;
+        for (var dd=trace.length-1; dd>=0; dd--){
+          var tv = trace[dd];
+          var kk = bx - by;
+          var prevK;
+          if (kk===-(dd) || (kk!==(dd) && (tv[kk-1]||0) < (tv[kk+1]||0))) prevK = kk+1; else prevK = kk-1;
+          var prevX = tv[prevK] || 0;
+          var prevY = prevX - prevK;
+          while (bx > prevX && by > prevY){
+            out.push({kind:'eq', line: a[bx-1]});
+            bx--; by--;
+          }
+          if (dd===0) break;
+          if (bx === prevX){
+            // came from insert
+            out.push({kind:'add', line: b[by-1]});
+            by--;
+          } else {
+            out.push({kind:'del', line: a[bx-1]});
+            bx--;
+          }
+        }
+        out.reverse();
+        return out;
+      }
+    }
+    trace.push(vv);
+    v = vv;
+  }
+  return [];
+}
+
+function _renderPromptDiff(hostEl, prevTxt, curTxt){
+  if (!hostEl) return;
+  prevTxt = String(prevTxt||'');
+  curTxt = String(curTxt||'');
+
+  // If no previous text, just render as plain.
+  if (!prevTxt.trim()){
+    hostEl.textContent = curTxt;
+    return;
+  }
+
+  var diffs = _diffLines(prevTxt, curTxt);
+  // Simple rendering: show full current text, but highlight added/changed lines.
+  // (We keep deletions hidden to avoid clutter, per UX.)
+  var html = '';
+  for (var i=0;i<diffs.length;i++){
+    var it = diffs[i];
+    if (it.kind === 'del') continue;
+    var cls = (it.kind === 'add') ? 'sfDiffAdd' : '';
+    var safe = escapeHtml(String(it.line||''));
+    if (cls) html += "<div class='"+cls+"'>"+safe+"</div>";
+    else html += "<div>"+safe+"</div>";
+  }
+  hostEl.innerHTML = html;
+}
+
+function prodSfmlPromptRefresh(){
   return fetchJsonAuthed('/api/settings/sfml_prompt')
     .then(function(j){
       if(!(j&&j.ok)) { toast('Error: '+(j&&j.error||'')); return; }
-      var ta=document.getElementById('prodSfmlPromptText');
-      if(ta) ta.value=String(j.text||'');
+      var box=document.getElementById('prodSfmlPromptBox');
       var v=document.getElementById('prodSfmlPromptVer');
       if(v) v.textContent=String(j.version||'-');
-      // versions
+
+      var curTxt = String(j.text||'');
+      var curVer = (j.version!=null) ? parseInt(String(j.version),10) : null;
+      var prevVer = (curVer && curVer>1) ? (curVer-1) : null;
+
+      function finish(prevTxt){
+        try{ _renderPromptDiff(box, prevTxt, curTxt); }catch(_e){ if(box) box.textContent = curTxt; }
+      }
+
+      if (!prevVer){ finish(''); }
+      else {
+        fetchJsonAuthed('/api/settings/sfml_prompt_text?version=' + encodeURIComponent(String(prevVer)))
+          .then(function(pj){ finish((pj&&pj.ok)?String(pj.text||''):''); })
+          .catch(function(_e){ finish(''); });
+      }
+
+      // versions (rollback)
       return fetchJsonAuthed('/api/settings/sfml_prompt_versions')
         .then(function(vj){
           var sel=document.getElementById('prodSfmlPromptRollbackSel');
@@ -3153,41 +3245,29 @@ function prodSfmlPromptReload(){
     });
 }
 
-function prodSfmlPromptSave(){
-  var ta=document.getElementById('prodSfmlPromptText');
-  var txt=ta?String(ta.value||''):'';
-  return fetchJsonAuthed('/api/settings/sfml_prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text: txt})})
-    .then(function(r){ toast(r && r.ok ? 'Saved' : ('Error: '+(r&&r.error||''))); return prodSfmlPromptReload(); });
-}
-
 function prodSfmlPromptRevert(){
   var sel=document.getElementById('prodSfmlPromptRollbackSel');
   var ver=sel?String(sel.value||'').trim():'';
   if(!ver) return;
   return fetchJsonAuthed('/api/settings/sfml_prompt_revert', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({version: ver})})
-    .then(function(r){ toast(r && r.ok ? ('Reverted (new version created)') : ('Error: '+(r&&r.error||''))); return prodSfmlPromptReload(); });
+    .then(function(r){ toast(r && r.ok ? ('Rolled back (new version created)') : ('Error: '+(r&&r.error||''))); return prodSfmlPromptRefresh(); });
 }
 
-
-function prodSfmlPromptPreviewFullText(){
-  var storySel=document.getElementById('prodStorySel');
-  var storyId=storySel?String(storySel.value||'').trim():'';
-  if(!storyId){ toast('Pick a story first'); return; }
-  var box=document.getElementById('prodSfmlPromptPreview');
-  if(box){ box.classList.remove('hide'); box.textContent='Loading...'; }
-  // Use generation endpoint in debug_only mode (no LLM call): returns exact text + JSON payload.
-  return fetchJsonAuthed('/api/production/sfml_generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId, debug_only: true})})
-    .then(function(j){
-      if(!(j&&j.ok)) { if(box) box.textContent='Error: '+(j&&j.error||''); return; }
-      var parts=[];
-      // NOTE: This JS bundle is embedded in a Python string; backslashes must be double-escaped.
-      if(j.model) parts.push('MODEL\\n'+j.model+'\\n');
-      if(j.prompt_version!=null) parts.push('PROMPT VERSION\\n'+String(j.prompt_version)+'\\n');
-      if(j.instructions) parts.push('INSTRUCTIONS\\n'+String(j.instructions).trim()+'\\n');
-      if(j.payload_pretty) parts.push('JSON PAYLOAD\\n'+String(j.payload_pretty).trim()+'\\n');
-      if(j.full_text_sent) parts.push('FULL TEXT SENT\\n'+String(j.full_text_sent).trim()+'\\n');
-      if(box) box.textContent=parts.join('\\n');
-    });
+function prodIterateSfmlPrompt(){
+  try{
+    var storySel=document.getElementById('prodStorySel');
+    var storyId=storySel?String(storySel.value||'').trim():'';
+    if(!storyId){ toast('Pick a story first'); return; }
+    prodSetSfmlBusy(true, 'Iterating prompt...', 'Improving the prompt vs the previous version');
+    return fetchJsonAuthed('/api/production/sfml_prompt_iterate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({story_id: storyId})})
+      .then(function(j){
+        prodSetSfmlBusy(false);
+        if(!(j&&j.ok)) { toast('Error: '+(j&&j.error||'')); return; }
+        toastShowNow('Prompt updated (v'+String(j.version||'?')+')', 'ok', 1800);
+        return prodSfmlPromptRefresh();
+      })
+      .catch(function(e){ prodSetSfmlBusy(false); toast('Error: '+String(e&&e.message?e.message:e)); });
+  }catch(e){ try{ prodSetSfmlBusy(false); }catch(_e){} }
 }
 
 function prodGenerateSfml(){
@@ -8689,6 +8769,129 @@ def api_production_sfml_generate(payload: dict[str, Any] = Body(default={})):  #
         return {'ok': False, 'error': f'sfml_generate_failed: {type(e).__name__}: {str(e)[:200]}'}
 
 
+@app.post('/api/production/sfml_prompt_iterate')
+def api_production_sfml_prompt_iterate(payload: dict[str, Any] = Body(default={})):  # noqa: B008
+    """Manually iterate the SFML prompt based on the most recent gen run for this story.
+
+    This is the user-facing, one-click way to improve the prompt vs the previous version.
+    """
+    try:
+        story_id = str((payload or {}).get('story_id') or '').strip()
+        if not story_id:
+            return {'ok': False, 'error': 'missing_story_id'}
+
+        # Load current prompt settings
+        connS = db_connect()
+        try:
+            db_init(connS)
+            s0 = _settings_get(connS, 'sfml_prompt') or {}
+        finally:
+            connS.close()
+
+        if not isinstance(s0, dict):
+            s0 = {}
+        cur_prompt = str(s0.get('text') or '').strip()
+        try:
+            cur_ver = int(s0.get('version') or 1)
+        except Exception:
+            cur_ver = 1
+
+        if not cur_prompt:
+            cur_prompt = _sfml_prompt_default_text().strip()
+
+        # Pull latest warnings for this story (best-effort)
+        warnings: list[str] = []
+        title = story_id
+        try:
+            connA = db_connect()
+            try:
+                db_init(connA)
+                curA = connA.cursor()
+                curA.execute('SELECT title FROM sf_stories WHERE id=%s LIMIT 1', (story_id,))
+                r0 = curA.fetchone()
+                if r0 and r0[0]:
+                    title = str(r0[0] or story_id)
+                curA.execute(
+                    'SELECT warnings_json FROM sf_sfml_gen_runs WHERE story_id=%s ORDER BY created_at DESC LIMIT 1',
+                    (story_id,),
+                )
+                r = curA.fetchone()
+                if r and r[0]:
+                    try:
+                        warnings = json.loads(r[0]) if isinstance(r[0], str) else list(r[0] or [])
+                    except Exception:
+                        warnings = []
+            finally:
+                connA.close()
+        except Exception:
+            warnings = []
+
+        improve_req = {
+            'prompt_version': int(cur_ver or 1),
+            'current_prompt_text': str(cur_prompt or ''),
+            'warnings': list(warnings or []),
+            'story_id': story_id,
+            'title': title,
+        }
+        improve_instructions = (
+            "You are improving an SFML generator prompt (full prompt text). "
+            "Goal: reduce WARNINGS in future runs while maintaining correctness.\n\n"
+            "Rules:\n"
+            "- Output ONLY the updated prompt text (no JSON, no markdown, no commentary).\n"
+            "- Keep it general (no story-specific facts).\n"
+            "- Avoid redundancy; do not restate the same rule multiple times.\n"
+            "- Preserve strict format requirements (cast, scenes, indentation, delivery tags, PAUSE).\n"
+            "- If warnings are empty, output the same prompt text.\n"
+        )
+
+        new_prompt = _llm_sfml_call(improve_instructions, improve_req, temperature=0.2, max_tokens=1200)
+        new_prompt = _strip_fences(new_prompt)
+        new_prompt = _normalize_ws(new_prompt)
+        if len(new_prompt) > 20000:
+            new_prompt = new_prompt[:20000]
+
+        if (new_prompt or '').strip() == (cur_prompt or '').strip():
+            return {'ok': True, 'changed': False, 'version': int(cur_ver or 1)}
+
+        # Persist new prompt (bump version) + record version row
+        now = int(time.time())
+        connP = db_connect()
+        try:
+            db_init(connP)
+            curP = connP.cursor()
+            v2 = int(cur_ver or 1) + 1
+            sP = _sfml_prompt_defaults()
+            sP.update({k: s0.get(k) for k in ('enabled', 'version', 'text') if k in s0})
+            sP['enabled'] = bool(sP.get('enabled', False))
+            sP['version'] = int(v2)
+            sP['text'] = str(new_prompt or '')
+
+            try:
+                curP.execute(
+                    "INSERT INTO sf_prompt_versions (key,version,prompt_text,meta_json,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (key,version) DO NOTHING",
+                    (
+                        'sfml_prompt_text',
+                        int(v2),
+                        str(new_prompt or ''),
+                        json.dumps({'source': 'manual_iterate', 'story_id': story_id}, separators=(',', ':')),
+                        int(now),
+                    ),
+                )
+            except Exception:
+                pass
+
+            _settings_set(connP, 'sfml_prompt', sP)
+        finally:
+            try:
+                connP.close()
+            except Exception:
+                pass
+
+        return {'ok': True, 'changed': True, 'version': int(v2)}
+    except Exception as e:
+        return {'ok': False, 'error': f'sfml_prompt_iterate_failed: {type(e).__name__}: {str(e)[:200]}'}
+
+
 @app.post('/api/production/sfml_save')
 def api_production_sfml_save(payload: dict[str, Any] = Body(default={})):  # noqa: B008
     """Persist edited SFML text for a story."""
@@ -10195,24 +10398,27 @@ def api_settings_sfml_prompt_revert(payload: dict[str, Any] = Body(default={})):
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
-@app.get('/api/settings/sfml_prompt_preview')
-def api_settings_sfml_prompt_preview():
+@app.get('/api/settings/sfml_prompt_text')
+def api_settings_sfml_prompt_text_get(version: int = 0):
+    """Fetch prompt text for a specific version (used for UI diffs)."""
     try:
+        ver = int(version or 0)
+        if ver < 1:
+            return {'ok': False, 'error': 'bad_version'}
         conn = db_connect()
         try:
             db_init(conn)
-            s = _settings_get(conn, 'sfml_prompt')
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT prompt_text FROM sf_prompt_versions WHERE key=%s AND version=%s LIMIT 1',
+                ('sfml_prompt_text', ver),
+            )
+            row = cur.fetchone()
         finally:
             conn.close()
-        if not isinstance(s, dict):
-            s = {}
-        txt = str(s.get('text') or '').strip()
-        if not txt:
-            legacy_extra = str(s.get('extra') or '').strip()
-            txt = _sfml_prompt_default_text().strip()
-            if legacy_extra:
-                txt = txt + "\n\n" + legacy_extra + "\n"
-        return {'ok': True, 'full_prompt': txt}
+        if not row:
+            return {'ok': False, 'error': 'version_not_found'}
+        return {'ok': True, 'version': ver, 'text': str(row[0] or '')}
     except Exception as e:
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
