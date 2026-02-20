@@ -1514,7 +1514,11 @@ function showTab(name, opts){
     else if (name==='library') loadLibrary();
     else if (name==='voices') loadVoices();
     else if (name==='production') loadProduction();
-    else if (name==='advanced') { try{ notifLoad(); }catch(e){} try{ sfmlImproveRefresh(); }catch(e){} }
+    else if (name==='advanced') {
+      try{ reloadProviders(); }catch(e){}
+      try{ notifLoad(); }catch(e){}
+      try{ sfmlImproveRefresh(); }catch(e){}
+    }
   }catch(_e){}
 }
 

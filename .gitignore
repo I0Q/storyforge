@@ -30,3 +30,12 @@ __pycache__/
 
 /monitor/monitor.db
 /monitor/*.db
+
+# Local scratch (OpenClaw)
+.secrets/
+.todo_api_token
+TODO.md
+TODO_WORKFLOW.md
+tmp_script_*.js
+tmp_index_from_source.js
+ui_artifacts/
