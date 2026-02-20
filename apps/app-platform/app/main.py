@@ -1695,11 +1695,11 @@ function _jwAppendLines(lines){
     if(cur==='(no events yet)') cur='';
     var add = String(lines||'');
     if(!add) return;
-    if(cur && !cur.endsWith('\n')) cur += '\n';
+    if(cur && !cur.endsWith('\\n')) cur += '\\n';
     cur += add;
-    var parts = cur.split('\n');
+    var parts = cur.split('\\n');
     if(parts.length > 2200) parts = parts.slice(parts.length-2200);
-    pre.textContent = parts.join('\n');
+    pre.textContent = parts.join('\\n');
     try{ pre.scrollTop = pre.scrollHeight; }catch(_e){}
   }catch(e){}
 }
@@ -1725,18 +1725,18 @@ function startJobWatchStream(jobId){
           var e=evs[i]||{};
           var ts=_jwFmtTs(e.ts||0);
           var eng=String(e.engine||'').trim();
-          var txt=String(e.text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+          var txt=String(e.text||'').replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n');
           if(!txt) continue;
           var prefix='';
           if(ts) prefix += '['+ts+'] ';
           if(eng) prefix += '('+eng+') ';
-          var tlines = txt.split('\n');
+          var tlines = txt.split('\\n');
           for(var k=0;k<tlines.length;k++){
             if(!tlines[k]) continue;
             out.push((k===0?prefix:'   ') + tlines[k]);
           }
         }
-        _jwAppendLines(out.join('\n'));
+        _jwAppendLines(out.join('\\n'));
       }catch(e){}
     };
     jobWatchES.onerror = function(_e){
